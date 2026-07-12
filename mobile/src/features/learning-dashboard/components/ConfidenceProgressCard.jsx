@@ -1,0 +1,77 @@
+import React from "react";
+import { StyleSheet, Text, View } from "react-native";
+
+export default function ConfidenceProgressCard({
+  level = 2,
+  maxLevel = 8,
+  label = "Building Your Foundation"
+}) {
+  const safeLevel = Math.min(
+    Math.max(Number(level || 0), 0),
+    Number(maxLevel || 8)
+  );
+
+  return (
+    <View style={styles.card}>
+      <Text style={styles.title}>Investor Confidence</Text>
+      <Text style={styles.label}>{label}</Text>
+
+      <View style={styles.track}>
+        {Array.from({ length: maxLevel }).map((_, index) => (
+          <View
+            key={index}
+            style={[
+              styles.segment,
+              index < safeLevel && styles.activeSegment
+            ]}
+          />
+        ))}
+      </View>
+
+      <Text style={styles.footer}>
+        Level {safeLevel} of {maxLevel}
+      </Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: {
+    marginTop: 18,
+    backgroundColor: "#0f172a",
+    borderColor: "#1e293b",
+    borderWidth: 1,
+    borderRadius: 22,
+    padding: 18
+  },
+  title: {
+    color: "#67e8f9",
+    fontSize: 18,
+    fontWeight: "900"
+  },
+  label: {
+    color: "white",
+    fontSize: 16,
+    fontWeight: "800",
+    marginTop: 8
+  },
+  track: {
+    flexDirection: "row",
+    gap: 6,
+    marginTop: 16
+  },
+  segment: {
+    flex: 1,
+    height: 8,
+    borderRadius: 8,
+    backgroundColor: "#334155"
+  },
+  activeSegment: {
+    backgroundColor: "#9333ea"
+  },
+  footer: {
+    color: "#94a3b8",
+    fontSize: 12,
+    marginTop: 10
+  }
+});

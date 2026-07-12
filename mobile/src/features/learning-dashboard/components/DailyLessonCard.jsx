@@ -1,0 +1,62 @@
+import React from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+
+export default function DailyLessonCard({
+  title = "Why diversification matters",
+  summary = "Spreading your money across different investments can reduce dependence on one company.",
+  onPress
+}) {
+  return (
+    <Pressable style={styles.card} onPress={onPress}>
+      <View style={styles.header}>
+        <Text style={styles.label}>Today’s Lesson</Text>
+        <Text style={styles.duration}>90 sec</Text>
+      </View>
+
+      <Text style={styles.title}>{title}</Text>
+      <Text style={styles.summary}>{summary}</Text>
+      <Text style={styles.link}>Learn with Coach G →</Text>
+    </Pressable>
+  );
+}
+
+const styles = StyleSheet.create({
+  card: {
+    marginTop: 18,
+    backgroundColor: "rgba(147,51,234,.12)",
+    borderColor: "rgba(147,51,234,.35)",
+    borderWidth: 1,
+    borderRadius: 22,
+    padding: 18
+  },
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center"
+  },
+  label: {
+    color: "#c084fc",
+    fontSize: 13,
+    fontWeight: "900"
+  },
+  duration: {
+    color: "#94a3b8",
+    fontSize: 12
+  },
+  title: {
+    color: "white",
+    fontSize: 20,
+    fontWeight: "900",
+    marginTop: 12
+  },
+  summary: {
+    color: "#cbd5e1",
+    lineHeight: 21,
+    marginTop: 8
+  },
+  link: {
+    color: "#67e8f9",
+    fontWeight: "900",
+    marginTop: 14
+  }
+});
