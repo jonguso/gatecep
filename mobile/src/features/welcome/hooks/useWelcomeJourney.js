@@ -123,6 +123,25 @@ export function useWelcomeJourney() {
   }
 
   async function completeJourney() {
+  console.log("STEP 1");
+
+    console.log("STEP 2");
+
+    setLoading(true);
+
+    console.log("STEP 3");
+
+    const payload = toDNAApiPayload();
+
+    console.log("PAYLOAD", payload);
+
+    console.log("STEP 4");
+
+    const data = await createInvestorDNA(payload);
+
+    console.log("STEP 5");
+
+    console.log(data);
     try {
       setLoading(true);
 
@@ -174,9 +193,15 @@ export function useWelcomeJourney() {
 
       setResult(saved);
       setStep(7);
-    } catch (error) {
-      throw error;
-    } finally {
+    } catch(error){
+
+    console.log("FAILED");
+
+    console.log(error);
+
+    throw error;
+
+} finally {
       setLoading(false);
     }
   }

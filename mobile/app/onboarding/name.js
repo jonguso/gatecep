@@ -28,7 +28,7 @@ lastName:last
 });
 
 router.push(
-"/onboarding/goal"
+"/new-investor"
 );
 
 }
