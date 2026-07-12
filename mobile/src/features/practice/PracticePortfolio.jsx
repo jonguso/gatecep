@@ -41,7 +41,7 @@ const PRACTICE_SECURITIES = {
       symbol: "SCOM",
       name: "Safaricom",
       sector: "Telecommunication",
-      price: 30.6,
+      price: 34.6,
       reason:
         "Provides exposure to telecommunications, digital payments, and long-term business growth."
     },
@@ -49,7 +49,7 @@ const PRACTICE_SECURITIES = {
       symbol: "KEGN",
       name: "KenGen",
       sector: "Energy",
-      price: 45.5,
+      price: 9.85,
       reason:
         "Provides exposure to electricity generation and Kenya's long-term infrastructure needs."
     },
@@ -57,7 +57,7 @@ const PRACTICE_SECURITIES = {
       symbol: "EQTY",
       name: "Equity Group",
       sector: "Banking",
-      price: 48,
+      price: 85,
       reason:
         "Provides exposure to banking, regional growth, and financial services."
     }
@@ -68,7 +68,7 @@ const PRACTICE_SECURITIES = {
       symbol: "SCOM",
       name: "Safaricom",
       sector: "Telecommunication",
-      price: 30.6,
+      price: 34.6,
       reason:
         "A familiar company that may combine business growth with dividend income."
     },
@@ -76,7 +76,7 @@ const PRACTICE_SECURITIES = {
       symbol: "EABL",
       name: "East African Breweries",
       sector: "Manufacturing",
-      price: 248,
+      price: 270,
       reason:
         "Provides consumer-business exposure and may support an income-focused strategy."
     },
@@ -84,7 +84,7 @@ const PRACTICE_SECURITIES = {
       symbol: "COOP",
       name: "Co-operative Bank",
       sector: "Banking",
-      price: 16,
+      price: 35,
       reason:
         "Provides accessible banking exposure for a diversified practice portfolio."
     }
@@ -95,7 +95,7 @@ const PRACTICE_SECURITIES = {
       symbol: "GLD",
       name: "Gold ETF",
       sector: "ETF",
-      price: 5690,
+      price: 4995,
       reason:
         "Provides diversification beyond ordinary company shares."
     },
@@ -103,7 +103,7 @@ const PRACTICE_SECURITIES = {
       symbol: "SMWF",
       name: "Satrix MSCI World Feeder",
       sector: "ETF",
-      price: 950,
+      price: 945,
       reason:
         "Provides practice exposure to diversified global-market investing."
     }
@@ -114,7 +114,7 @@ const PRACTICE_SECURITIES = {
       symbol: "KCB",
       name: "KCB Group",
       sector: "Banking",
-      price: 45,
+      price: 80,
       reason:
         "Provides exposure to a large regional banking institution."
     },
@@ -122,7 +122,7 @@ const PRACTICE_SECURITIES = {
       symbol: "EQTY",
       name: "Equity Group",
       sector: "Banking",
-      price: 48,
+      price: 85,
       reason:
         "Provides exposure to retail banking and regional financial services."
     },
@@ -130,7 +130,7 @@ const PRACTICE_SECURITIES = {
       symbol: "COOP",
       name: "Co-operative Bank",
       sector: "Banking",
-      price: 16,
+      price: 35,
       reason:
         "Provides a lower-priced banking example for practice investing."
     }
