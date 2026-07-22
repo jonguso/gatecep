@@ -4,7 +4,7 @@ const DIVIDEND_MASTER = {
   BAT: { annualDividendPerShare: 55.0, frequency: "ANNUAL", nextDate: "2026-09-15" },
   EABL: { annualDividendPerShare: 7.5, frequency: "ANNUAL", nextDate: "2026-10-10" },
   EQTY: { annualDividendPerShare: 4.0, frequency: "ANNUAL", nextDate: "2026-07-30" },
-  COOP: { annualDividendPerShare: 1.5, frequency: "ANNUAL", nextDate: "2026-08-05" }
+  KAPC: { annualDividendPerShare: 25.5, frequency: "ANNUAL", nextDate: "2026-08-05" }
 };
 
 export function calculateDividendIntelligence(holdings = []) {

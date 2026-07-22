@@ -15,6 +15,7 @@ export const NSE_SECURITIES = [
   { symbol: "JUB", name: "Jubilee Insurance", sector: "Insurance" },
   { symbol: "KNRE", name: "Kenya Reinsurance", sector: "Insurance" },
   { symbol: "KPC", name: "Kenya Pipeline company", sector: "Energy" },
+  { symbol: "KAPC", name: "Kapchorua Tea Co.Ltd", sector: "Agriculture" },
   { symbol: "KQ", name: "Kenya Airways", sector: "Transport" },
   { symbol: "SBIC", name: "Stanbic Holdings", sector: "Banking" },
   { symbol: "SCBK", name: "Standard Chartered Bank Kenya", sector: "Banking" }

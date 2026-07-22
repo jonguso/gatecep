@@ -12,6 +12,7 @@ const DEFAULT_WATCHLIST = [
   { symbol: "KEGN" },
   { symbol: "KQ" },
   { symbol: "KPC" },
+  { symbol: "KAPC" },
   { symbol: "KPLC" },
   { symbol: "SBIC" },
   { symbol: "SMWF" },

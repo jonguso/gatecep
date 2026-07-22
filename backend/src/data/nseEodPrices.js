@@ -23,7 +23,7 @@ export const nseEodPrices = {
     { symbol: "KQ", price: 6.00, prevClose: 5.88, volume: 1200000 },
 
     { symbol: "KNRE", price: 3.40, prevClose: 3.34, volume: 950000 },
-    { symbol: "JUB", price: 380.00, prevClose: 380.00, volume: 950000 },
+    { symbol: "KAPC", price: 350.00, prevClose: 350.00, volume: 950000 },
 
     { symbol: "GLD", price: 5680.00, prevClose: 5650.00, volume: 10000 },
     { symbol: "SMWF", price: 945.00, prevClose: 940.00, volume: 15000 }
