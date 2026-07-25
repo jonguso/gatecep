@@ -22,6 +22,11 @@ import {
 } from "../storage/authStorage";
 
 import {
+  saveSession,
+  logout as clearUserSession
+} from "../../../auth/authStore";
+
+import {
   restorePortfolioFromCloud
 } from "../../portfolio/loadUserPortfolio";
 
@@ -50,28 +55,68 @@ export function AuthProvider({ children }) {
   }, []);
 
   async function clearUserScopedCaches() {
-    await AsyncStorage.multiRemove(USER_SCOPED_CACHE_KEYS);
+    await AsyncStorage.multiRemove(
+      USER_SCOPED_CACHE_KEYS
+    );
   }
 
   async function restoreSession() {
     try {
-      const token = await getStoredAccessToken();
-      const storedUser = await getStoredUser();
+      const token =
+        await getStoredAccessToken();
+
+      const storedUser =
+        await getStoredUser();
 
       if (!token) {
-        setLoading(false);
+        setAccessToken(null);
+        setUser(null);
         return;
       }
 
-      const currentUser = await getCurrentUser(token);
+      const currentUser =
+        await getCurrentUser(token);
 
+      const resolvedUser =
+        currentUser ||
+        storedUser;
+
+      if (!resolvedUser) {
+        throw new Error(
+          "Authenticated user could not be restored."
+        );
+      }
+
+      /*
+       * Restore the canonical API authentication session.
+       */
       setAccessToken(token);
-      setUser(currentUser || storedUser);
+      setUser(resolvedUser);
 
+      /*
+       * CRITICAL:
+       * Restore the legacy/user-storage namespace.
+       *
+       * userGetItem() and userSetItem() depend on
+       * gatecepSession -> userId.
+       */
+      await saveSession(resolvedUser);
+
+      /*
+       * Now user-scoped storage reads the correct
+       * investor namespace.
+       */
       await restorePortfolioFromCloud();
     } catch (error) {
+      console.error(
+        "Unable to restore authentication session:",
+        error
+      );
+
       await clearAuthSession();
+      await clearUserSession();
       await clearUserScopedCaches();
+
       setAccessToken(null);
       setUser(null);
     } finally {
@@ -80,21 +125,49 @@ export function AuthProvider({ children }) {
   }
 
   async function login(credentials) {
-    const previousUserId = await getStoredAuthUserId();
-    const result = await loginUser(credentials);
+    const previousUserId =
+      await getStoredAuthUserId();
 
-    if (previousUserId && previousUserId !== result.user.id) {
+    const result =
+      await loginUser(credentials);
+
+    if (
+      previousUserId &&
+      previousUserId !== result.user.id
+    ) {
       await clearUserScopedCaches();
     }
 
+    /*
+     * Save API authentication.
+     */
     await saveAuthSession({
       accessToken: result.accessToken,
       user: result.user
     });
 
-    setAccessToken(result.accessToken);
-    setUser(result.user);
+    /*
+     * CRITICAL:
+     * Save the user namespace used by userStorage.
+     *
+     * This restores:
+     * gatecepSession
+     * gatecepCurrentUserId
+     * gatecepIsLoggedIn
+     */
+    await saveSession(result.user);
 
+    setAccessToken(
+      result.accessToken
+    );
+
+    setUser(
+      result.user
+    );
+
+    /*
+     * Must happen after saveSession().
+     */
     await restorePortfolioFromCloud();
 
     return result;
@@ -105,7 +178,12 @@ export function AuthProvider({ children }) {
   }
 
   async function logout() {
+    /*
+     * Clear both authentication systems.
+     */
     await clearAuthSession();
+    await clearUserSession();
+
     await clearUserScopedCaches();
 
     setAccessToken(null);
@@ -118,7 +196,8 @@ export function AuthProvider({ children }) {
         loading,
         accessToken,
         user,
-        isAuthenticated: Boolean(accessToken && user),
+        isAuthenticated:
+          Boolean(accessToken && user),
         login,
         register,
         logout,
@@ -131,10 +210,13 @@ export function AuthProvider({ children }) {
 }
 
 export function useAuth() {
-  const value = useContext(AuthContext);
+  const value =
+    useContext(AuthContext);
 
   if (!value) {
-    throw new Error("useAuth must be used inside AuthProvider");
+    throw new Error(
+      "useAuth must be used inside AuthProvider"
+    );
   }
 
   return value;

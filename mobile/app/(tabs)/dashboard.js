@@ -38,14 +38,15 @@ export default function Dashboard() {
   const { user } = useAuth();
 
   const [loading, setLoading] = useState(true);
-  const [marketIntel, setMarketIntel] = useState(null);
-  const [coach, setCoach] = useState(null);
-  const [brokers, setBrokers] = useState([]);
-  const [portfolioResult, setPortfolioResult] = useState(null);
-  const [investorProfile, setInvestorProfile] = useState(null);
-  const [decisionJournal, setDecisionJournal] = useState([]);
-  const [lastUpdated, setLastUpdated] = useState("");
-  const [investorContext, setInvestorContext] = useState(null);
+const [marketIntel, setMarketIntel] = useState(null);
+const [coach, setCoach] = useState(null);
+const [brokers, setBrokers] = useState([]);
+const [portfolioResult, setPortfolioResult] = useState(null);
+const [investorProfile, setInvestorProfile] = useState(null);
+const [practicePortfolio, setPracticePortfolio] = useState(null);
+const [decisionJournal, setDecisionJournal] = useState([]);
+const [lastUpdated, setLastUpdated] = useState("");
+const [investorContext, setInvestorContext] = useState(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -630,51 +631,57 @@ const blueprintCreated =
         </Pressable>
       </View>
 
-      <View style={styles.quickSection}>
-        <Text style={styles.quickTitle}>
-          Continue Your Journey
-        </Text>
+     <View style={styles.quickSection}>
+  <Text style={styles.quickTitle}>
+    Continue Your Journey
+  </Text>
 
-        <View style={styles.quickGrid}>
-          <Quick
-            title="Practice Portfolio"
-            route="/starter-plan"
-          />
-       
-         <Quick
-  title="Investment Journal"
-  route="/decision-journal"
-/>
+  <View style={styles.quickGrid}>
+    <Quick
+      title="Practice Portfolio"
+      route="/starter-plan"
+    />
 
-          <Quick
-            title="Portfolio Hub"
-            route="/portfolio-hub"
-          />
+    <Quick
+      title="Practice Decision"
+      route="/practice-decision"
+    />
 
-          <Quick
-            title="Coach G"
-            route="/coach-dashboard"
-          />
+    <Quick
+      title="Investment Journal"
+      route="/decision-journal"
+    />
 
-          <Quick
-            title="Markets"
-            route="/(tabs)/markets"
-          />
+    <Quick
+      title="Portfolio Hub"
+      route="/portfolio-hub"
+    />
 
-          <Quick
-            title="My Profile"
-            route="/my-profile"
-          />
+    <Quick
+      title="Coach G"
+      route="/coach-dashboard"
+    />
 
-          {brokerConnected ? (
-            <Quick
-              title="Live Dashboard"
-              route="/live-dashboard"
-            />
-          ) : null}
-        </View>
-      </View>
-    </ScrollView>
+    <Quick
+      title="Markets"
+      route="/(tabs)/markets"
+    />
+
+    <Quick
+      title="My Profile"
+      route="/my-profile"
+    />
+
+    {brokerConnected ? (
+      <Quick
+        title="Live Investing"
+        route="/live-dashboard"
+      />
+    ) : null}
+   </View>
+</View>
+
+</ScrollView>
   );
 }
 
@@ -720,26 +727,53 @@ function buildPortfolioSummary({
   );
 
   const gainFromHoldings = safeHoldings.reduce(
-    (sum, holding) =>
-      sum +
-      Number(
-        holding.profitLoss ||
-        (
-          Number(
-            holding.marketValue ||
-            holding.value ||
-            0
-          ) -
-          Number(
-            holding.investedValue ||
-            holding.costValue ||
-            0
-          )
-        ) ||
-        0
-      ),
-    0
-  );
+  (sum, holding) => {
+    /*
+     * A profit/loss of 0 is a valid value.
+     * Do not use || because it treats zero as missing.
+     */
+    if (
+      holding.profitLoss !== undefined &&
+      holding.profitLoss !== null
+    ) {
+      return sum + Number(holding.profitLoss);
+    }
+
+    const quantity = Number(
+      holding.quantity || 0
+    );
+
+    const marketValue = Number(
+      holding.marketValue ??
+      holding.value ??
+      (
+        quantity *
+        Number(
+          holding.marketPrice ??
+          holding.price ??
+          0
+        )
+      )
+    );
+
+    const investedValue = Number(
+      holding.investedValue ??
+      holding.costValue ??
+      (
+        quantity *
+        Number(
+          holding.averageCost ??
+          holding.averagePrice ??
+          holding.price ??
+          0
+        )
+      )
+    );
+
+    return sum + (marketValue - investedValue);
+  },
+  0
+);
 
   const dayChangeFromHoldings = safeHoldings.reduce(
     (sum, holding) =>

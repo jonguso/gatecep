@@ -20,6 +20,9 @@ import {
   PORTFOLIO_TABS,
   buildPortfolioHub
 } from "../src/portfolio/portfolioHubData";
+import {
+  loadInvestorContext
+} from "../src/features/investor/investorContextStore";
 
 const COLORS = [
   "#06b6d4",
@@ -42,6 +45,7 @@ export default function PortfolioHub() {
 });
   const [accountModalOpen, setAccountModalOpen] = useState(false);
   const [selectedSector, setSelectedSector] = useState(null);
+  const [practicePortfolio, setPracticePortfolio] = useState(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -51,15 +55,92 @@ export default function PortfolioHub() {
 
   async function load(account = selectedAccount) {
   try {
-    const [portfolioResult, accountResult] = await Promise.all([
-      loadUnifiedPortfolio({ broker: account?.broker || "ALL" }),
-      loadPortfolioAccounts()
-    ]);
+    const [accountResult, investorContext] =
+      await Promise.all([
+        loadPortfolioAccounts().catch((error) => {
+          console.log(
+            "Portfolio account load error:",
+            error.message
+          );
 
-    setPortfolio(portfolioResult?.holdings || []);
-    setAccounts(accountResult?.accounts || []);
+          return {
+            accounts: []
+          };
+        }),
+
+        loadInvestorContext().catch((error) => {
+          console.log(
+            "Investor context load error:",
+            error.message
+          );
+
+          return null;
+        })
+      ]);
+
+    const practice =
+      investorContext?.practicePortfolio || null;
+
+    setPracticePortfolio(practice);
+
+    /*
+     * Add the Practice Portfolio as its own explicit
+     * portfolio source when one exists.
+     */
+    const liveAccounts = Array.isArray(
+      accountResult?.accounts
+    )
+      ? accountResult.accounts
+      : [];
+
+    const sourceAccounts = [];
+
+    if (
+      Array.isArray(practice?.holdings) &&
+      practice.holdings.length > 0
+    ) {
+      sourceAccounts.push({
+        broker: "PRACTICE",
+        label: "Practice Portfolio",
+        type: "PRACTICE"
+      });
+    }
+
+    sourceAccounts.push(...liveAccounts);
+
+    setAccounts(sourceAccounts);
+
+    /*
+     * Practice Portfolio is never passed into the
+     * unified/live portfolio loader.
+     */
+    if (account?.type === "PRACTICE") {
+      setPortfolio(
+        Array.isArray(practice?.holdings)
+          ? practice.holdings
+          : []
+      );
+
+      return;
+    }
+
+    const portfolioResult =
+      await loadUnifiedPortfolio({
+        broker:
+          account?.broker || "ALL"
+      });
+
+    setPortfolio(
+      Array.isArray(portfolioResult?.holdings)
+        ? portfolioResult.holdings
+        : []
+    );
   } catch (error) {
-    console.log("PortfolioHub load error:", error.message);
+    console.log(
+      "PortfolioHub load error:",
+      error.message
+    );
+
     setPortfolio([]);
   }
 }
@@ -146,13 +227,22 @@ export default function PortfolioHub() {
   <View>
     <Text style={styles.accountLabel}>Portfolio Source</Text>
     <Text style={styles.accountName}>{selectedAccount.label}</Text>
+ {selectedAccount?.type === "PRACTICE" ? (
+  <Text style={styles.practiceSourceText}>
+    Simulated learning portfolio • No real money
+  </Text>
+) : null}   
   </View>
 
   <Text style={styles.accountChevron}>⌄</Text>
 </Pressable>
 
       <View style={styles.hero}>
-        <Text style={styles.heroLabel}>Total Portfolio Value</Text>
+        <Text style={styles.heroLabel}>
+  {selectedAccount?.type === "PRACTICE"
+    ? "Practice Portfolio Value"
+    : "Total Portfolio Value"}
+</Text>
         <Text style={styles.heroValue}>KES {money(hub.totalValue)}</Text>
 
         <Text
@@ -170,6 +260,14 @@ export default function PortfolioHub() {
             label="Invested"
             value={`KES ${money(hub.investedValue)}`}
           />
+          {selectedAccount?.type === "PRACTICE" ? (
+  <HeroMetric
+    label="Available Cash"
+    value={`KES ${money(
+      practicePortfolio?.availableCash
+    )}`}
+  />
+) : null}
           <HeroMetric label="Holdings" value={String(hub.holdingsCount)} />
           <HeroMetric
             label="Largest Sector"
@@ -470,8 +568,12 @@ export default function PortfolioHub() {
 </Text>
 
             <Text style={styles.accountOptionMeta}>
-  {account.type || account.broker || "BROKER"}
-  {account.totalValue !== undefined
+  {account.type === "PRACTICE"
+    ? "Practice • Simulated learning portfolio"
+    : account.type || account.broker || "BROKER"}
+
+  {account.type !== "PRACTICE" &&
+  account.totalValue !== undefined
     ? ` • KES ${money(account.totalValue)}`
     : ""}
 </Text>
@@ -1134,6 +1236,12 @@ pendingText: {
   fontSize: 11,
   fontWeight: "800",
   marginTop: 3
+},
+practiceSourceText: {
+  color: "#67e8f9",
+  fontSize: 11,
+  marginTop: 4,
+  fontWeight: "800"
 },
 settlementBadge: {
   color: "#facc15",

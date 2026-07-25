@@ -312,15 +312,12 @@ export default function PracticePortfolio() {
       );
 
       Alert.alert(
-        "Practice Portfolio Ready",
-        "Coach G has created your Practice Portfolio. No real money was used.",
-        [
-          {
-            text: "Continue",
-            onPress: () => router.replace("/(tabs)/dashboard")
-          }
-        ]
-      );
+  "Practice Portfolio Ready",
+  "Coach G has created your Practice Portfolio. No real money was used."
+);
+
+router.replace("/(tabs)/dashboard");
+
     } catch (error) {
       console.error("Unable to create Practice Portfolio:", error);
 
