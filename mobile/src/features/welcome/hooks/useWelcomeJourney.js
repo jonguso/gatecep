@@ -122,89 +122,104 @@ export function useWelcomeJourney() {
     };
   }
 
-  async function completeJourney() {
-  console.log("STEP 1");
-
-    console.log("STEP 2");
-
+ async function completeJourney() {
+  try {
     setLoading(true);
 
-    console.log("STEP 3");
+    const data = await createInvestorDNA(
+      toDNAApiPayload()
+    );
 
-    const payload = toDNAApiPayload();
+    const dna = data.dna;
+    const wealthBlueprint = data.wealthBlueprint;
 
-    console.log("PAYLOAD", payload);
+    const starterPlan =
+      buildStarterPlanFromBlueprint(
+        dna,
+        wealthBlueprint
+      );
 
-    console.log("STEP 4");
-
-    const data = await createInvestorDNA(payload);
-
-    console.log("STEP 5");
-
-    console.log(data);
-    try {
-      setLoading(true);
-
-      const data = await createInvestorDNA(toDNAApiPayload());
-      const dna = data.dna;
-      const wealthBlueprint = data.wealthBlueprint;
-
-      const starterPlan = buildStarterPlanFromBlueprint(dna, wealthBlueprint);
-
-      const saved = {
-        profile: {
-          ...answers,
-          dna,
-          wealthBlueprint,
-          risk: String(dna.riskProfile || "").toLowerCase(),
-          investorType: dna.investorType,
-          amount: Number(dna.amount || answers.amount || 0),
-          customerPath: "DEMO_INVESTOR",
-          questionnaireCompleted: true,
-          createdAt: dna.createdAt,
-          updatedAt: dna.updatedAt
-        },
-        broker: {
-          name: "GateCEP Demo Broker",
-          beginnerScore: 100,
-          feeScore: 100,
-          researchScore: 100,
-          supportScore: 100,
-          onboardingScore: 100,
-          reason: "Practice safely before connecting a real broker.",
-          reasons: [
-            "No real money required",
-            "Built for learning first",
-            "Coach G explains before action",
-            "You decide when to connect a broker"
-          ]
-        },
-        starterPlan,
-        investorDNA: dna,
+    const saved = {
+      profile: {
+        ...answers,
+        dna,
         wealthBlueprint,
-        coachG: data.coachG
-      };
+        risk: String(
+          dna.riskProfile || ""
+        ).toLowerCase(),
+        investorType: dna.investorType,
+        amount: Number(
+          dna.amount ||
+          answers.amount ||
+          0
+        ),
+        customerPath: "DEMO_INVESTOR",
+        questionnaireCompleted: true,
+        createdAt: dna.createdAt,
+        updatedAt: dna.updatedAt
+      },
 
-      await userSetItem("investorProfile", JSON.stringify(saved));
-      await userSetItem("investorDNA", JSON.stringify(dna));
-      await userSetItem("wealthBlueprint", JSON.stringify(wealthBlueprint));
-      await userSetItem("onboardingCompleted", "false");
-      await userSetItem("questionnaireCompleted", "true");
+      broker: {
+        name: "GateCEP Demo Broker",
+        beginnerScore: 100,
+        feeScore: 100,
+        researchScore: 100,
+        supportScore: 100,
+        onboardingScore: 100,
+        reason:
+          "Practice safely before connecting a real broker.",
+        reasons: [
+          "No real money required",
+          "Built for learning first",
+          "Coach G explains before action",
+          "You decide when to connect a broker"
+        ]
+      },
 
-      setResult(saved);
-      setStep(7);
-    } catch(error){
+      starterPlan,
+      investorDNA: dna,
+      wealthBlueprint,
+      coachG: data.coachG
+    };
 
-    console.log("FAILED");
+    await userSetItem(
+      "investorProfile",
+      JSON.stringify(saved)
+    );
 
-    console.log(error);
+    await userSetItem(
+      "investorDNA",
+      JSON.stringify(dna)
+    );
+
+    await userSetItem(
+      "wealthBlueprint",
+      JSON.stringify(wealthBlueprint)
+    );
+
+    await userSetItem(
+      "onboardingCompleted",
+      "false"
+    );
+
+    await userSetItem(
+      "questionnaireCompleted",
+      "true"
+    );
+
+    setResult(saved);
+    setStep(7);
+  } catch (error) {
+    console.error(
+      "Welcome Journey completion failed:",
+      error
+    );
 
     throw error;
-
-} finally {
-      setLoading(false);
-    }
+  } finally {
+    setLoading(false);
   }
+}
 
   function goToStarterPlan() {
     router.push("/starter-plan");

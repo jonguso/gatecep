@@ -17,14 +17,17 @@ import { APP_VERSION } from "../../src/version/versionRegistry";
 import { getMarketIntelligenceHome } from "../../src/features/market/api/marketIntelligenceApi";
 import { getCoachDashboard } from "../../src/features/coach/api/coachApi";
 import { getUserBrokers } from "../../src/features/brokers/api/userBrokerApi";
+import {
+  loadDecisionJournal
+} from "../../src/features/decision-journal/decisionJournalStore";
 
 import {
   loadUnifiedPortfolio
 } from "../../src/portfolio/unifiedPortfolioApi";
 
 import {
-  userGetItem
-} from "../../src/auth/userStorage";
+  loadInvestorContext
+} from "../../src/features/investor/investorContextStore";
 
 import CoachReflectionCard from "../../src/features/learning-dashboard/components/CoachReflectionCard";
 import DailyLessonCard from "../../src/features/learning-dashboard/components/DailyLessonCard";
@@ -40,8 +43,9 @@ export default function Dashboard() {
   const [brokers, setBrokers] = useState([]);
   const [portfolioResult, setPortfolioResult] = useState(null);
   const [investorProfile, setInvestorProfile] = useState(null);
-  const [practicePortfolio, setPracticePortfolio] = useState(null);
+  const [decisionJournal, setDecisionJournal] = useState([]);
   const [lastUpdated, setLastUpdated] = useState("");
+  const [investorContext, setInvestorContext] = useState(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -53,46 +57,88 @@ export default function Dashboard() {
     try {
       setLoading(true);
 
-      const [
-        unifiedResult,
-        marketResult,
-        coachResult,
-        brokerResult,
-        profileRaw,
-        practiceRaw
-      ] = await Promise.all([
-        loadUnifiedPortfolio({ broker: "ALL" }).catch((error) => {
-          console.log("Unified portfolio load error:", error.message);
-          return null;
-        }),
+ const [
+  unifiedResult,
+  marketResult,
+  coachResult,
+  brokerResult,
+  investorContextResult,
+  journalResult
+] = await Promise.all([
+  loadUnifiedPortfolio({ broker: "ALL" }).catch((error) => {
+    console.log(
+      "Unified portfolio load error:",
+      error.message
+    );
+    return null;
+  }),
 
-        getMarketIntelligenceHome().catch((error) => {
-          console.log("Market intelligence load error:", error.message);
-          return null;
-        }),
+  getMarketIntelligenceHome().catch((error) => {
+    console.log(
+      "Market intelligence load error:",
+      error.message
+    );
+    return null;
+  }),
 
-        getCoachDashboard().catch((error) => {
-          console.log("Coach dashboard load error:", error.message);
-          return null;
-        }),
+  getCoachDashboard().catch((error) => {
+    console.log(
+      "Coach dashboard load error:",
+      error.message
+    );
+    return null;
+  }),
 
-        getUserBrokers().catch((error) => {
-          console.log("Broker load error:", error.message);
-          return { brokers: [] };
-        }),
+  getUserBrokers().catch((error) => {
+    console.log(
+      "Broker load error:",
+      error.message
+    );
 
-        userGetItem("investorProfile").catch(() => null),
+    return {
+      brokers: []
+    };
+  }),
 
-        userGetItem("practicePortfolio").catch(() => null)
-      ]);
+  loadInvestorContext().catch((error) => {
+    console.log(
+      "Investor context load error:",
+      error.message
+    );
+    return null;
+  }),
 
-      setPortfolioResult(unifiedResult);
-      setMarketIntel(marketResult);
-      setCoach(coachResult);
-      setBrokers(brokerResult?.brokers || []);
-      setInvestorProfile(parseStoredValue(profileRaw));
-      setPracticePortfolio(parseStoredValue(practiceRaw));
-      setLastUpdated(new Date().toLocaleString());
+  loadDecisionJournal().catch((error) => {
+    console.log(
+      "Investment Journal load error:",
+      error.message
+    );
+    return [];
+  })
+]);
+
+setPortfolioResult(unifiedResult);
+setMarketIntel(marketResult);
+setCoach(coachResult);
+setBrokers(brokerResult?.brokers || []);
+
+setInvestorContext(investorContextResult);
+
+setInvestorProfile(
+  investorContextResult?.storedProfile || null
+);
+
+setPracticePortfolio(
+  investorContextResult?.practicePortfolio || null
+);
+setDecisionJournal(
+  Array.isArray(journalResult)
+    ? journalResult
+    : []
+);
+
+setLastUpdated(new Date().toLocaleString());
+
     } catch (error) {
       console.log("Dashboard load error:", error.message);
     } finally {
@@ -144,14 +190,11 @@ export default function Dashboard() {
   const profile = investorProfile?.profile || investorProfile || {};
 
   const investorDNA =
-    investorProfile?.investorDNA ||
-    profile?.dna ||
-    {};
+  investorContext?.investorDNA || {};
 
   const investorType =
-    profile?.investorType ||
-    investorDNA?.investorType ||
-    "Developing Investor";
+  investorContext?.investor?.investorType ||
+  "Developing Investor";
 
   const firstName =
     profile?.firstName ||
@@ -160,20 +203,18 @@ export default function Dashboard() {
     "Investor";
 
   const practiceCreated =
-    Boolean(practicePortfolio?.holdings?.length) ||
-    Boolean(investorProfile?.starterPlan);
+  Boolean(investorContext?.journey?.hasPracticePortfolio);
 
   const dnaCreated =
-    Boolean(investorProfile?.investorDNA) ||
-    Boolean(profile?.dna);
+  Boolean(investorContext?.journey?.hasInvestorDNA);
 
-  const blueprintCreated =
-    Boolean(investorProfile?.wealthBlueprint) ||
-    Boolean(profile?.wealthBlueprint);
+const blueprintCreated =
+  Boolean(investorContext?.journey?.hasWealthBlueprint);
 
-  const firstPracticeOrder =
-    Array.isArray(practicePortfolio?.transactions) &&
-    practicePortfolio.transactions.length > 0;
+  const firstPracticeDecision =
+  decisionJournal.some(
+    (entry) => entry?.isPractice !== false
+  );
 
   const brokerConnected = brokers.length > 0;
 
@@ -199,10 +240,11 @@ export default function Dashboard() {
       complete: practiceCreated
     },
     {
-      label: "Completed First Practice Decision",
-      description: "Review and record why you chose an investment.",
-      complete: firstPracticeOrder
-    },
+  label: "Completed First Practice Decision",
+  description:
+    "Paused, reflected, and recorded why an investment interested you.",
+  complete: firstPracticeDecision
+},
     {
       label: "Connected a Live Broker",
       description: "Connect only when you are ready to invest with real money.",
@@ -598,6 +640,11 @@ export default function Dashboard() {
             title="Practice Portfolio"
             route="/starter-plan"
           />
+       
+         <Quick
+  title="Investment Journal"
+  route="/decision-journal"
+/>
 
           <Quick
             title="Portfolio Hub"

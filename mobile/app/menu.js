@@ -16,10 +16,10 @@ import { BUILD_INFO } from "../src/config/buildInfo";
 
 const items = [
   {
-    title: "Dashboard",
-    detail: "Portfolio health and Coach G summary",
-    route: "/dashboard"
-  },
+  title: "My Journey",
+  detail: "Learning progress, Coach G guidance, goals, and portfolio summary",
+  route: "/(tabs)/dashboard"
+},
 
    {
   title: "My Profile",
@@ -49,7 +49,7 @@ const items = [
   route: "/transactions"
 },
 {
-  title: "Coach G Dashboard",
+  title: "Coach G",
   detail: "Personalized portfolio, cash, risk, and wealth recommendations",
   route: "/coach-dashboard"
 },

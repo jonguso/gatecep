@@ -141,37 +141,83 @@ export default function PracticePortfolio() {
   const [savedProfile, setSavedProfile] = useState(null);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
+  const [wealthBlueprint, setWealthBlueprint] = useState(null);
 
   useEffect(() => {
     loadProfile();
   }, []);
 
   async function loadProfile() {
-    try {
-      setLoading(true);
+  try {
+    setLoading(true);
 
-      const raw = await userGetItem("investorProfile");
+    const [profileRaw, blueprintRaw] = await Promise.all([
+      userGetItem("investorProfile"),
+      userGetItem("wealthBlueprint")
+    ]);
 
-      if (!raw) {
-        setSavedProfile(null);
-        return;
-      }
+    const parsedProfile = profileRaw
+      ? typeof profileRaw === "string"
+        ? JSON.parse(profileRaw)
+        : profileRaw
+      : null;
 
-      const parsed = typeof raw === "string" ? JSON.parse(raw) : raw;
-      setSavedProfile(parsed);
-    } catch (error) {
-      console.error("Unable to load investor profile:", error);
-      setSavedProfile(null);
-    } finally {
-      setLoading(false);
-    }
+    const parsedBlueprint = blueprintRaw
+      ? typeof blueprintRaw === "string"
+        ? JSON.parse(blueprintRaw)
+        : blueprintRaw
+      : null;
+
+    setSavedProfile(parsedProfile);
+    setWealthBlueprint(parsedBlueprint);
+  } catch (error) {
+    console.error("Unable to load Practice Portfolio data:", error);
+    setSavedProfile(null);
+    setWealthBlueprint(null);
+  } finally {
+    setLoading(false);
   }
+}
 
   const allocations = useMemo(() => {
-    return Array.isArray(savedProfile?.starterPlan?.allocations)
-      ? savedProfile.starterPlan.allocations
-      : [];
-  }, [savedProfile]);
+  const allocation = wealthBlueprint?.allocation;
+
+  if (allocation) {
+    const equityName =
+      savedProfile?.investorDNA?.riskProfile === "GROWTH" ||
+      savedProfile?.investorDNA?.riskProfile === "AGGRESSIVE"
+        ? "Growth Stocks"
+        : "ETF / Diversifier";
+
+    return [
+      {
+        name: equityName,
+        weight: Number(allocation.equity || 0),
+        amount:
+          Number(savedProfile?.profile?.amount || 0) *
+          (Number(allocation.equity || 0) / 100)
+      },
+      {
+        name: "Dividend Stocks",
+        weight: Number(allocation.income || 0),
+        amount:
+          Number(savedProfile?.profile?.amount || 0) *
+          (Number(allocation.income || 0) / 100)
+      },
+      {
+        name: "Cash Reserve",
+        weight: Number(allocation.cash || 0),
+        amount:
+          Number(savedProfile?.profile?.amount || 0) *
+          (Number(allocation.cash || 0) / 100)
+      }
+    ];
+  }
+
+  return Array.isArray(savedProfile?.starterPlan?.allocations)
+    ? savedProfile.starterPlan.allocations
+    : [];
+}, [wealthBlueprint, savedProfile]);
 
   const practiceHoldings = useMemo(() => {
     return buildPracticeHoldings(allocations);
@@ -319,11 +365,13 @@ export default function PracticePortfolio() {
         </CoachInsightCard>
 
         <Pressable
-          style={styles.primary}
-          onPress={() => router.replace("/new-investor")}
-        >
-          <Text style={styles.primaryText}>Meet Coach G</Text>
-        </Pressable>
+  style={styles.secondary}
+  onPress={() => router.push("/investor-dna-review")}
+>
+  <Text style={styles.secondaryText}>
+    Review My Investor DNA
+  </Text>
+</Pressable>
       </ScrollView>
     );
   }
@@ -480,13 +528,13 @@ export default function PracticePortfolio() {
       </Pressable>
 
       <Pressable
-        style={styles.secondary}
-        onPress={() => router.replace("/new-investor")}
-      >
-        <Text style={styles.secondaryText}>
-          Review My Investor DNA
-        </Text>
-      </Pressable>
+  style={styles.secondary}
+  onPress={() => router.push("/investor-dna-review")}
+>
+  <Text style={styles.secondaryText}>
+    Review My Investor DNA
+  </Text>
+</Pressable>
     </ScrollView>
   );
 }

@@ -11,8 +11,8 @@ import {
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 
-import { userGetItem } from "../../auth/userStorage";
 import { loadUnifiedPortfolio } from "../../portfolio/unifiedPortfolioApi";
+import { loadInvestorContext } from "../investor/investorContextStore";
 
 import {
   addDecisionJournalEntry
@@ -94,8 +94,11 @@ export default function PracticeDecision() {
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [profile, setProfile] = useState(null);
+
+  const [investorContext, setInvestorContext] = useState(null);
   const [holdings, setHoldings] = useState([]);
+  const [portfolioSource, setPortfolioSource] = useState("PRACTICE");
+
   const [selectedHolding, setSelectedHolding] = useState(null);
 
   const [reason, setReason] = useState("");
@@ -112,50 +115,101 @@ export default function PracticeDecision() {
     try {
       setLoading(true);
 
-      const [profileRaw, portfolioResult] = await Promise.all([
-        userGetItem("investorProfile").catch(() => null),
-        loadUnifiedPortfolio({ broker: "ALL" }).catch(() => null)
+      const [contextResult, unifiedResult] = await Promise.all([
+        loadInvestorContext().catch((error) => {
+          console.log(
+            "Investor context load error:",
+            error.message
+          );
+
+          return null;
+        }),
+
+        loadUnifiedPortfolio({ broker: "ALL" }).catch((error) => {
+          console.log(
+            "Unified portfolio load error:",
+            error.message
+          );
+
+          return null;
+        })
       ]);
 
-      const parsedProfile = parseStoredValue(profileRaw);
-      const portfolioHoldings = Array.isArray(portfolioResult?.holdings)
-        ? portfolioResult.holdings
-        : [];
+      setInvestorContext(contextResult);
 
-      setProfile(parsedProfile);
-      setHoldings(portfolioHoldings);
+      const unifiedHoldings =
+        Array.isArray(unifiedResult?.holdings)
+          ? unifiedResult.holdings
+          : [];
 
-      const requestedSymbol = String(params?.symbol || "").toUpperCase();
+      const practiceHoldings =
+        Array.isArray(
+          contextResult?.practicePortfolio?.holdings
+        )
+          ? contextResult.practicePortfolio.holdings
+          : [];
+
+     /*
+ * This is the Practice Decision experience.
+ *
+ * Prefer the investor's GateCEP Practice Portfolio.
+ * Only fall back to the unified/live portfolio when
+ * a Practice Portfolio is not available.
+ */
+const availableHoldings =
+  practiceHoldings.length > 0
+    ? practiceHoldings
+    : unifiedHoldings;
+
+setHoldings(availableHoldings);
+
+setPortfolioSource(
+  practiceHoldings.length > 0
+    ? "PRACTICE"
+    : "UNIFIED"
+);
+
+      const requestedSymbol = String(
+        params?.symbol || ""
+      ).toUpperCase();
 
       const requestedHolding = requestedSymbol
-        ? portfolioHoldings.find(
+        ? availableHoldings.find(
             (holding) =>
-              String(holding.symbol || "").toUpperCase() === requestedSymbol
+              String(
+                holding.symbol || ""
+              ).toUpperCase() === requestedSymbol
           )
         : null;
 
-      setSelectedHolding(requestedHolding || portfolioHoldings[0] || null);
+      setSelectedHolding(
+        requestedHolding ||
+        availableHoldings[0] ||
+        null
+      );
     } catch (error) {
-      console.error("Unable to load practice decision:", error);
+      console.error(
+        "Unable to load practice decision:",
+        error
+      );
+
+      setHoldings([]);
+      setSelectedHolding(null);
     } finally {
       setLoading(false);
     }
   }
 
-  const investorProfile = profile?.profile || profile || {};
-
   const investorDNA =
-    profile?.investorDNA ||
-    investorProfile?.dna ||
-    {};
+    investorContext?.investorDNA || {};
 
   const investorGoal =
-    investorProfile?.goal ||
+    investorContext?.investor?.goal ||
     investorDNA?.goal ||
     null;
 
   const investorType =
-    investorProfile?.investorType ||
+    investorContext?.investor?.investorType ||
     investorDNA?.investorType ||
     null;
 
@@ -165,7 +219,11 @@ export default function PracticeDecision() {
       investorGoal,
       investorType
     });
-  }, [selectedHolding, investorGoal, investorType]);
+  }, [
+    selectedHolding,
+    investorGoal,
+    investorType
+  ]);
 
   async function saveDecision() {
     if (!selectedHolding) {
@@ -173,6 +231,7 @@ export default function PracticeDecision() {
         "Choose an Investment",
         "Select an investment before recording your practice decision."
       );
+
       return;
     }
 
@@ -181,6 +240,7 @@ export default function PracticeDecision() {
         "Tell Coach G Why",
         "Choose the reason that best explains why this investment interests you."
       );
+
       return;
     }
 
@@ -189,50 +249,73 @@ export default function PracticeDecision() {
         "Expected Outcome",
         "Choose what you expect this investment to contribute to your plan."
       );
+
       return;
     }
 
     try {
       setSaving(true);
 
-      const reasonOption = DECISION_REASONS.find(
-        (item) => item.value === reason
-      );
+      const reasonOption =
+        DECISION_REASONS.find(
+          (item) => item.value === reason
+        );
 
-      const outcomeOption = EXPECTED_OUTCOMES.find(
-        (item) => item.value === expectedOutcome
-      );
+      const outcomeOption =
+        EXPECTED_OUTCOMES.find(
+          (item) =>
+            item.value === expectedOutcome
+        );
 
-      const saved = await addDecisionJournalEntry({
-        symbol: selectedHolding.symbol,
-        companyName:
-          selectedHolding.name ||
-          selectedHolding.companyName ||
-          selectedHolding.symbol,
-        decision: "CONSIDER_BUY",
-        reason: reasonOption?.title || reason,
-        expectedOutcome:
-          outcomeOption?.title || expectedOutcome,
-        confidence,
-        investorGoal,
-        investorType,
-        priceAtDecision:
-          selectedHolding.marketPrice ||
-          selectedHolding.price ||
-          selectedHolding.averagePrice ||
-          0,
-        quantity: 0,
-        notes,
-        isPractice: true,
-        status: "RECORDED",
-        reviewStatus: "PENDING"
-      });
+      const saved =
+        await addDecisionJournalEntry({
+          symbol: selectedHolding.symbol,
+
+          companyName:
+            selectedHolding.name ||
+            selectedHolding.companyName ||
+            selectedHolding.symbol,
+
+          decision: "CONSIDER_BUY",
+
+          reason:
+            reasonOption?.title ||
+            reason,
+
+          expectedOutcome:
+            outcomeOption?.title ||
+            expectedOutcome,
+
+          confidence,
+
+          investorGoal,
+          investorType,
+
+          priceAtDecision:
+            selectedHolding.marketPrice ||
+            selectedHolding.price ||
+            selectedHolding.averagePrice ||
+            selectedHolding.averageCost ||
+            0,
+
+          quantity: 0,
+
+          notes,
+
+          isPractice: true,
+
+          portfolioSource,
+
+          status: "RECORDED",
+          reviewStatus: "PENDING"
+        });
 
       setSavedDecision(saved);
     } catch (error) {
       Alert.alert(
         "Coach G",
-        error.message || "Unable to save your practice decision."
+        error.message ||
+          "Unable to save your practice decision."
       );
     } finally {
       setSaving(false);
@@ -242,7 +325,11 @@ export default function PracticeDecision() {
   if (loading) {
     return (
       <View style={styles.centerScreen}>
-        <ActivityIndicator size="large" color="#67e8f9" />
+        <ActivityIndicator
+          size="large"
+          color="#67e8f9"
+        />
+
         <Text style={styles.loadingTitle}>
           Coach G is preparing your decision...
         </Text>
@@ -256,20 +343,31 @@ export default function PracticeDecision() {
         style={styles.screen}
         contentContainerStyle={styles.content}
       >
-        <Text style={styles.eyebrow}>Practice Decision</Text>
-        <Text style={styles.title}>No practice holdings yet</Text>
+        <Text style={styles.eyebrow}>
+          Practice Decision
+        </Text>
+
+        <Text style={styles.title}>
+          No practice holdings yet
+        </Text>
 
         <View style={styles.coachCard}>
-          <Text style={styles.coachLabel}>Coach G</Text>
+          <Text style={styles.coachLabel}>
+            Coach G
+          </Text>
+
           <Text style={styles.coachText}>
-            Build your Practice Portfolio first. Then we can study one
-            investment and record why it may fit your plan.
+            Build your Practice Portfolio first.
+            Then we can study one investment and
+            record why it may fit your plan.
           </Text>
         </View>
 
         <Pressable
           style={styles.primary}
-          onPress={() => router.replace("/starter-plan")}
+          onPress={() =>
+            router.replace("/starter-plan")
+          }
         >
           <Text style={styles.primaryText}>
             Build Practice Portfolio
@@ -285,42 +383,64 @@ export default function PracticeDecision() {
         style={styles.screen}
         contentContainerStyle={styles.content}
       >
-        <Text style={styles.eyebrow}>Decision Recorded</Text>
+        <Text style={styles.eyebrow}>
+          Decision Recorded
+        </Text>
+
         <Text style={styles.title}>
           You paused and thought before acting.
         </Text>
 
         <View style={styles.coachCard}>
-          <Text style={styles.coachLabel}>Coach G</Text>
+          <Text style={styles.coachLabel}>
+            Coach G
+          </Text>
+
           <Text style={styles.coachText}>
-            This is how thoughtful investing begins. We did not place an
-            order. We recorded what you understood, what you expected,
-            and how confident you felt.
+            This is how thoughtful investing
+            begins. We did not place an order.
+            We recorded what you understood,
+            what you expected, and how confident
+            you felt.
           </Text>
         </View>
 
         <DecisionSummaryCard
           symbol={savedDecision.symbol}
-          companyName={savedDecision.companyName}
+          companyName={
+            savedDecision.companyName
+          }
           reason={savedDecision.reason}
-          expectedOutcome={savedDecision.expectedOutcome}
-          confidence={savedDecision.confidence}
-          price={savedDecision.priceAtDecision}
+          expectedOutcome={
+            savedDecision.expectedOutcome
+          }
+          confidence={
+            savedDecision.confidence
+          }
+          price={
+            savedDecision.priceAtDecision
+          }
           decision="Consider Buy"
         />
 
         <Pressable
           style={styles.primary}
-          onPress={() => router.push("/decision-journal")}
+          onPress={() =>
+            router.push("/decision-journal")
+          }
         >
           <Text style={styles.primaryText}>
-            Open My Decision Journal
+            Open My Investment Journal
           </Text>
         </Pressable>
 
         <Pressable
           style={styles.secondary}
-          onPress={() => router.replace("/(tabs)/dashboard")}
+          onPress={() =>
+            router.replace(
+              "/(tabs)/dashboard"
+            )
+          }
         >
           <Text style={styles.secondaryText}>
             Return to My Journey
@@ -335,20 +455,36 @@ export default function PracticeDecision() {
       style={styles.screen}
       contentContainerStyle={styles.content}
     >
-      <Text style={styles.eyebrow}>First Practice Decision</Text>
+      <Text style={styles.eyebrow}>
+        First Practice Decision
+      </Text>
 
       <Text style={styles.title}>
         Let’s think before we act.
       </Text>
 
       <Text style={styles.subtitle}>
-        No real order will be submitted. This exercise helps Coach G
-        understand how you make investment decisions.
+        No real order will be submitted. This
+        exercise helps Coach G understand how
+        you make investment decisions.
       </Text>
 
+      <View style={styles.sourceBadge}>
+        <Text style={styles.sourceBadgeText}>
+          {portfolioSource === "UNIFIED"
+            ? "Current Portfolio"
+            : "GateCEP Practice Portfolio"}
+        </Text>
+      </View>
+
       <View style={styles.coachCard}>
-        <Text style={styles.coachLabel}>Coach G</Text>
-        <Text style={styles.coachText}>{coachExplanation}</Text>
+        <Text style={styles.coachLabel}>
+          Coach G
+        </Text>
+
+        <Text style={styles.coachText}>
+          {coachExplanation}
+        </Text>
       </View>
 
       <View style={styles.section}>
@@ -357,55 +493,92 @@ export default function PracticeDecision() {
         </Text>
 
         <Text style={styles.sectionIntro}>
-          Select one holding from your current practice or unified
-          portfolio.
+          Select one holding and think about the
+          role it could play in your investing
+          plan.
         </Text>
 
         <View style={styles.holdingList}>
-          {holdings.map((holding, index) => {
-            const symbol = String(holding.symbol || `HOLDING-${index}`);
-            const selected =
-              selectedHolding?.symbol === holding.symbol;
+          {holdings.map(
+            (holding, index) => {
+              const symbol = String(
+                holding.symbol ||
+                  `HOLDING-${index}`
+              );
 
-            return (
-              <Pressable
-                key={`${symbol}-${index}`}
-                style={[
-                  styles.holdingCard,
-                  selected && styles.selectedHoldingCard
-                ]}
-                onPress={() => setSelectedHolding(holding)}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.holdingSymbol}>
-                    {holding.symbol || "N/A"}
-                  </Text>
+              const selected =
+                selectedHolding?.symbol ===
+                holding.symbol;
 
-                  <Text style={styles.holdingName}>
-                    {holding.name ||
-                      holding.companyName ||
-                      holding.sector ||
-                      "Practice Security"}
-                  </Text>
-                </View>
+              return (
+                <Pressable
+                  key={`${symbol}-${index}`}
+                  style={[
+                    styles.holdingCard,
+                    selected &&
+                      styles.selectedHoldingCard
+                  ]}
+                  onPress={() =>
+                    setSelectedHolding(
+                      holding
+                    )
+                  }
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text
+                      style={
+                        styles.holdingSymbol
+                      }
+                    >
+                      {holding.symbol ||
+                        "N/A"}
+                    </Text>
 
-                <View style={{ alignItems: "flex-end" }}>
-                  <Text style={styles.holdingPrice}>
-                    KES{" "}
-                    {money(
-                      holding.marketPrice ||
-                      holding.price ||
-                      holding.averagePrice
-                    )}
-                  </Text>
+                    <Text
+                      style={
+                        styles.holdingName
+                      }
+                    >
+                      {holding.name ||
+                        holding.companyName ||
+                        holding.sector ||
+                        "Practice Security"}
+                    </Text>
+                  </View>
 
-                  <Text style={styles.holdingSelect}>
-                    {selected ? "Selected" : "Choose"}
-                  </Text>
-                </View>
-              </Pressable>
-            );
-          })}
+                  <View
+                    style={{
+                      alignItems: "flex-end"
+                    }}
+                  >
+                    <Text
+                      style={
+                        styles.holdingPrice
+                      }
+                    >
+                      KES{" "}
+                      {money(
+                        holding.marketPrice ||
+                          holding.price ||
+                          holding.averagePrice ||
+                          holding.averageCost
+                      )}
+                    </Text>
+
+                    <Text
+                      style={
+                        styles.holdingSelect
+                      }
+                    >
+                      {selected
+                        ? "Selected"
+                        : "Choose"}
+                    </Text>
+                  </View>
+                </Pressable>
+              );
+            }
+          )}
         </View>
       </View>
 
@@ -415,8 +588,8 @@ export default function PracticeDecision() {
         </Text>
 
         <Text style={styles.sectionIntro}>
-          There is no perfect answer. Coach G wants to understand your
-          thinking.
+          There is no perfect answer. Coach G
+          wants to understand your thinking.
         </Text>
 
         {DECISION_REASONS.map((item) => (
@@ -425,8 +598,12 @@ export default function PracticeDecision() {
             icon={item.icon}
             title={item.title}
             description={item.description}
-            selected={reason === item.value}
-            onPress={() => setReason(item.value)}
+            selected={
+              reason === item.value
+            }
+            onPress={() =>
+              setReason(item.value)
+            }
           />
         ))}
       </View>
@@ -437,27 +614,35 @@ export default function PracticeDecision() {
         </Text>
 
         <View style={styles.outcomeWrap}>
-          {EXPECTED_OUTCOMES.map((item) => (
-            <Pressable
-              key={item.value}
-              style={[
-                styles.outcomeChip,
-                expectedOutcome === item.value &&
-                  styles.selectedOutcomeChip
-              ]}
-              onPress={() => setExpectedOutcome(item.value)}
-            >
-              <Text
+          {EXPECTED_OUTCOMES.map(
+            (item) => (
+              <Pressable
+                key={item.value}
                 style={[
-                  styles.outcomeText,
-                  expectedOutcome === item.value &&
-                    styles.selectedOutcomeText
+                  styles.outcomeChip,
+                  expectedOutcome ===
+                    item.value &&
+                    styles.selectedOutcomeChip
                 ]}
+                onPress={() =>
+                  setExpectedOutcome(
+                    item.value
+                  )
+                }
               >
-                {item.title}
-              </Text>
-            </Pressable>
-          ))}
+                <Text
+                  style={[
+                    styles.outcomeText,
+                    expectedOutcome ===
+                      item.value &&
+                      styles.selectedOutcomeText
+                  ]}
+                >
+                  {item.title}
+                </Text>
+              </Pressable>
+            )
+          )}
         </View>
       </View>
 
@@ -467,36 +652,45 @@ export default function PracticeDecision() {
         </Text>
 
         <Text style={styles.sectionIntro}>
-          Confidence is not certainty. It simply helps us understand how
-          comfortable you feel with your reasoning.
+          Confidence is not certainty. It helps
+          us understand how comfortable you feel
+          with your reasoning.
         </Text>
 
         <View style={styles.confidenceRow}>
-          {[1, 2, 3, 4, 5].map((value) => (
-            <Pressable
-              key={value}
-              style={[
-                styles.confidenceButton,
-                confidence === value &&
-                  styles.selectedConfidenceButton
-              ]}
-              onPress={() => setConfidence(value)}
-            >
-              <Text
+          {[1, 2, 3, 4, 5].map(
+            (value) => (
+              <Pressable
+                key={value}
                 style={[
-                  styles.confidenceText,
+                  styles.confidenceButton,
                   confidence === value &&
-                    styles.selectedConfidenceText
+                    styles.selectedConfidenceButton
                 ]}
+                onPress={() =>
+                  setConfidence(value)
+                }
               >
-                {value}
-              </Text>
-            </Pressable>
-          ))}
+                <Text
+                  style={[
+                    styles.confidenceText,
+                    confidence === value &&
+                      styles.selectedConfidenceText
+                  ]}
+                >
+                  {value}
+                </Text>
+              </Pressable>
+            )
+          )}
         </View>
 
-        <Text style={styles.confidenceLabel}>
-          {confidenceDescription(confidence)}
+        <Text
+          style={styles.confidenceLabel}
+        >
+          {confidenceDescription(
+            confidence
+          )}
         </Text>
       </View>
 
@@ -521,8 +715,9 @@ export default function PracticeDecision() {
         </Text>
 
         <Text style={styles.promiseText}>
-          Coach G has explained the investment and helped you reflect.
-          The decision remains yours.
+          Coach G has explained the investment
+          and helped you reflect. The decision
+          remains yours.
         </Text>
 
         <Text style={styles.promiseTagline}>
@@ -539,7 +734,9 @@ export default function PracticeDecision() {
         onPress={saveDecision}
       >
         {saving ? (
-          <ActivityIndicator />
+          <ActivityIndicator
+            color="white"
+          />
         ) : (
           <Text style={styles.primaryText}>
             Record My Practice Decision
@@ -549,7 +746,11 @@ export default function PracticeDecision() {
 
       <Pressable
         style={styles.secondary}
-        onPress={() => router.replace("/(tabs)/dashboard")}
+        onPress={() =>
+          router.replace(
+            "/(tabs)/dashboard"
+          )
+        }
       >
         <Text style={styles.secondaryText}>
           Not Ready Yet
@@ -568,7 +769,10 @@ function buildCoachExplanation({
     return "Choose one investment and I’ll help you think through why it may or may not fit your plan.";
   }
 
-  const symbol = holding.symbol || "this investment";
+  const symbol =
+    holding.symbol ||
+    "this investment";
+
   const company =
     holding.name ||
     holding.companyName ||
@@ -576,14 +780,18 @@ function buildCoachExplanation({
     symbol;
 
   const goalText = investorGoal
-    ? humanizeValue(investorGoal).toLowerCase()
+    ? humanizeValue(
+        investorGoal
+      ).toLowerCase()
     : "your current investing goal";
 
   const investorText = investorType
-    ? String(investorType).toLowerCase()
+    ? String(
+        investorType
+      ).toLowerCase()
     : "developing investor";
 
-  return `${company} (${symbol}) is already part of your portfolio. As a ${investorText}, the important question is not whether the price will rise tomorrow. The question is whether you understand how this investment may support ${goalText}, what risks it introduces, and what role it should play alongside your other holdings.`;
+  return `${company} (${symbol}) is part of the portfolio we are reviewing. As a ${investorText}, the important question is not whether the price will rise tomorrow. The question is whether you understand how this investment may support ${goalText}, what risks it introduces, and what role it should play alongside your other holdings.`;
 }
 
 function confidenceDescription(value) {
@@ -606,31 +814,21 @@ function confidenceDescription(value) {
   return "I feel very confident, but I remain open to learning.";
 }
 
-function parseStoredValue(value) {
-  if (!value) {
-    return null;
-  }
-
-  if (typeof value === "object") {
-    return value;
-  }
-
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
-  }
-}
-
 function humanizeValue(value) {
   return String(value || "")
     .replaceAll("_", " ")
     .toLowerCase()
-    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+    .replace(
+      /\b\w/g,
+      (letter) =>
+        letter.toUpperCase()
+    );
 }
 
 function money(value) {
-  return Number(value || 0).toLocaleString(undefined, {
+  return Number(
+    value || 0
+  ).toLocaleString(undefined, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   });
@@ -685,10 +883,31 @@ const styles = StyleSheet.create({
     marginTop: 10
   },
 
+  sourceBadge: {
+    alignSelf: "flex-start",
+    marginTop: 16,
+    backgroundColor:
+      "rgba(147,51,234,.12)",
+    borderColor:
+      "rgba(192,132,252,.35)",
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 11,
+    paddingVertical: 7
+  },
+
+  sourceBadgeText: {
+    color: "#c084fc",
+    fontSize: 11,
+    fontWeight: "900"
+  },
+
   coachCard: {
     marginTop: 20,
-    backgroundColor: "rgba(6,182,212,.10)",
-    borderColor: "rgba(6,182,212,.35)",
+    backgroundColor:
+      "rgba(6,182,212,.10)",
+    borderColor:
+      "rgba(6,182,212,.35)",
     borderWidth: 1,
     borderRadius: 22,
     padding: 18
@@ -748,7 +967,8 @@ const styles = StyleSheet.create({
 
   selectedHoldingCard: {
     borderColor: "#67e8f9",
-    backgroundColor: "rgba(6,182,212,.10)"
+    backgroundColor:
+      "rgba(6,182,212,.10)"
   },
 
   holdingSymbol: {
@@ -793,7 +1013,8 @@ const styles = StyleSheet.create({
 
   selectedOutcomeChip: {
     borderColor: "#67e8f9",
-    backgroundColor: "rgba(6,182,212,.10)"
+    backgroundColor:
+      "rgba(6,182,212,.10)"
   },
 
   outcomeText: {
@@ -855,8 +1076,10 @@ const styles = StyleSheet.create({
 
   promiseCard: {
     marginTop: 20,
-    backgroundColor: "rgba(245,158,11,.10)",
-    borderColor: "rgba(245,158,11,.35)",
+    backgroundColor:
+      "rgba(245,158,11,.10)",
+    borderColor:
+      "rgba(245,158,11,.35)",
     borderWidth: 1,
     borderRadius: 22,
     padding: 18
