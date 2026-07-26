@@ -1,149 +1,299 @@
 import React, { useEffect } from "react";
+
 import {
   ActivityIndicator,
   Text,
   View
 } from "react-native";
+
 import { router } from "expo-router";
 
-import { userGetItem } from "../src/auth/userStorage";
-import { useAuth } from "../src/features/auth/hooks/useAuth";
+import {
+  useAuth
+} from "../src/features/auth/hooks/useAuth";
+
+import {
+  loadInvestorContext
+} from "../src/features/investor/investorContextStore";
+
+import {
+  getCurrentUserId
+} from "../src/auth/authStore";
+import {
+  saveProfile
+} from "../src/utils/onboardingStorage";
+
+
+function delay(milliseconds) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
+}
+
+/*
+ * Authentication and namespace restoration happen asynchronously.
+ *
+ * Wait briefly for gatecepCurrentUserId before reading
+ * user-scoped investor data.
+ */
+async function waitForUserNamespace({
+  attempts = 20,
+  interval = 100
+} = {}) {
+  for (
+    let attempt = 0;
+    attempt < attempts;
+    attempt += 1
+  ) {
+    const userId =
+      await getCurrentUserId();
+
+    if (userId) {
+      return userId;
+    }
+
+    await delay(interval);
+  }
+
+  return null;
+}
 
 export default function Index() {
   const {
     loading,
-    isAuthenticated
+    isAuthenticated,
+    user
   } = useAuth();
 
   useEffect(() => {
-    if (!loading) {
-      routeUser();
-    }
-  }, [loading, isAuthenticated]);
+    let cancelled = false;
 
-  async function routeUser() {
-    if (loading) {
-      return;
-    }
-
-    if (!isAuthenticated) {
-      router.replace("/login");
-      return;
-    }
-
-    try {
-      const [
-        profileRaw,
-        dnaRaw,
-        practiceRaw
-      ] = await Promise.all([
-        userGetItem("investorProfile"),
-        userGetItem("investorDNA"),
-        userGetItem("practicePortfolio")
-      ]);
-
-      const profile = parseStoredValue(profileRaw);
-      const investorDNA = parseStoredValue(dnaRaw);
-      const practicePortfolio = parseStoredValue(practiceRaw);
-
-      /*
-       * Stage 1:
-       * Account exists but we do not yet know the investor's name.
-       */
-      const hasName =
-        Boolean(profile?.firstName) ||
-        Boolean(profile?.profile?.firstName);
-
-      if (!hasName) {
-        router.replace("/onboarding/name");
+    async function routeUser() {
+      if (loading) {
         return;
       }
 
-      /*
-       * Stage 2:
-       * We know the investor's name, but Investor DNA
-       * has not yet been completed.
-       */
-      const hasInvestorDNA =
-        Boolean(investorDNA) ||
-        Boolean(profile?.investorDNA) ||
-        Boolean(profile?.profile?.dna);
+      if (!isAuthenticated) {
+        if (!cancelled) {
+          router.replace("/login");
+        }
 
-      if (!hasInvestorDNA) {
-        router.replace("/new-investor");
         return;
       }
 
-      /*
-       * Stage 3:
-       * Investor DNA exists, but the Practice Portfolio
-       * has not yet been built.
-       */
-      const hasPracticePortfolio =
-        Boolean(practicePortfolio?.holdings?.length) ||
-        Boolean(profile?.practicePortfolioCreated);
+      try {
+        /*
+         * Do not read user-scoped storage until the
+         * authenticated namespace is available.
+         */
+        const namespaceUserId =
+          await waitForUserNamespace();
 
-      if (!hasPracticePortfolio) {
-        router.replace("/starter-plan");
-        return;
-      }
+        if (cancelled) {
+          return;
+        }
 
-      /*
-       * Stage 4:
-       * Discovery + practice foundation complete.
-       */
-      router.replace("/(tabs)/dashboard");
-    } catch (error) {
-      console.error(
-        "Unable to determine investor journey:",
-        error
-      );
+        console.log(
+          "STARTUP AUTH USER:",
+          user?.id || null
+        );
 
-      /*
-       * Safe fallback.
-       */
-      router.replace("/onboarding/name");
+        console.log(
+          "STARTUP NAMESPACE USER ID:",
+          namespaceUserId
+        );
+
+        if (!namespaceUserId) {
+          throw new Error(
+            "Authenticated user namespace was not restored."
+          );
+        }
+
+        /*
+         * Protect against reading another user's or guest
+         * namespace during startup.
+         */
+        if (
+          user?.id &&
+          namespaceUserId !== user.id
+        ) {
+          throw new Error(
+            `Namespace mismatch: expected ${user.id}, received ${namespaceUserId}`
+          );
+        }
+
+        const context =
+          await loadInvestorContext();
+
+        if (cancelled) {
+          return;
+        }
+
+        console.log(
+          "STARTUP INVESTOR CONTEXT:",
+          JSON.stringify(
+            {
+              namespaceUserId,
+              identity: context?.identity,
+              journey: context?.journey,
+              profileFirstName:
+                context?.profile?.firstName,
+              hasInvestorDNA:
+                Boolean(context?.investorDNA),
+              practiceStatus:
+                context?.practicePortfolio?.status,
+              practiceHoldings:
+                context?.practicePortfolio
+                  ?.holdings?.length || 0
+            },
+            null,
+            2
+          )
+        );
+
+        const profile =
+          context?.profile || {};
+
+        const investorDNA =
+          context?.investorDNA || null;
+
+        const practicePortfolio =
+          context?.practicePortfolio || null;
+
+        let firstName =
+  context?.identity?.firstName ||
+  profile?.firstName ||
+  null;
+
+let lastName =
+  context?.identity?.lastName ||
+  profile?.lastName ||
+  null;
+
+/*
+ * Migrate older completed investor records that were
+ * created before GateCEP started collecting names.
+ */
+if (
+  !firstName &&
+  context?.journey?.hasInvestorDNA &&
+  context?.journey?.hasPracticePortfolio &&
+  user?.username
+) {
+  const username =
+    String(user.username).trim();
+
+  const nameParts =
+    username.split(/\s+/);
+
+  firstName =
+    nameParts[0] || username;
+
+  lastName =
+    nameParts.slice(1).join(" ");
+
+  await saveProfile({
+    firstName,
+    lastName,
+    identityMigratedFromAuth: true
+  });
+
+  console.log(
+    "LEGACY INVESTOR NAME MIGRATED:",
+    {
+      firstName,
+      lastName
     }
-  }
+  );
+}
+
+const hasName =
+  Boolean(firstName);
+
+if (!hasName) {
+  router.replace("/onboarding/name");
+  return;
+}
+
+        const hasInvestorDNA =
+          Boolean(
+            context?.journey?.hasInvestorDNA
+          ) ||
+          Boolean(investorDNA);
+
+        if (!hasInvestorDNA) {
+          router.replace("/new-investor");
+          return;
+        }
+
+        const hasPracticePortfolio =
+          Boolean(
+            context?.journey
+              ?.hasPracticePortfolio
+          ) ||
+          Boolean(
+            practicePortfolio?.holdings?.length
+          ) ||
+          practicePortfolio?.status ===
+            "ACTIVE";
+
+        if (!hasPracticePortfolio) {
+          router.replace("/starter-plan");
+          return;
+        }
+
+        router.replace("/(tabs)/dashboard");
+      } catch (error) {
+        console.error(
+          "Unable to restore GateCEP investor journey:",
+          error
+        );
+
+        /*
+         * Do not send an authenticated user back through
+         * onboarding because of a temporary restoration race.
+         */
+        if (!cancelled) {
+          router.replace("/login");
+        }
+      }
+    }
+
+    routeUser();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    loading,
+    isAuthenticated,
+    user?.id
+  ]);
 
   return (
-    <View
-      style={{
-        flex: 1,
-        backgroundColor: "#020617",
-        justifyContent: "center",
-        alignItems: "center"
-      }}
-    >
+    <View style={styles.screen}>
       <ActivityIndicator
         size="large"
         color="#67e8f9"
       />
 
-      <Text
-        style={{
-          color: "#94a3b8",
-          marginTop: 12
-        }}
-      >
+      <Text style={styles.message}>
         Preparing your GateCEP journey...
       </Text>
     </View>
   );
 }
 
-function parseStoredValue(value) {
-  if (!value) {
-    return null;
-  }
+const styles = {
+  screen: {
+    flex: 1,
+    backgroundColor: "#020617",
+    justifyContent: "center",
+    alignItems: "center"
+  },
 
-  if (typeof value === "object") {
-    return value;
+  message: {
+    color: "#94a3b8",
+    marginTop: 12
   }
-
-  try {
-    return JSON.parse(value);
-  } catch {
-    return null;
-  }
-}
+};

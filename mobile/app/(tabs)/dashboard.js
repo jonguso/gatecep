@@ -163,19 +163,25 @@ setLastUpdated(new Date().toLocaleString());
     ? unifiedHoldings
     : practiceHoldings;
 
-  const portfolioSummary = useMemo(() => {
-    return buildPortfolioSummary({
-      holdings: activeHoldings,
-      portfolioResult,
-      practicePortfolio,
-      marketIntel
-    });
-  }, [
-    activeHoldings,
+  const usePracticePortfolio =
+  practiceHoldings.length > 0 &&
+  unifiedHoldings.length === 0;
+
+const portfolioSummary = useMemo(() => {
+  return buildPortfolioSummary({
+    holdings: activeHoldings,
     portfolioResult,
     practicePortfolio,
-    marketIntel
-  ]);
+    marketIntel,
+    usePracticePortfolio
+  });
+}, [
+  activeHoldings,
+  portfolioResult,
+  practicePortfolio,
+  marketIntel,
+  usePracticePortfolio
+]);
 
   const {
     currentValue,
@@ -689,7 +695,8 @@ function buildPortfolioSummary({
   holdings,
   portfolioResult,
   practicePortfolio,
-  marketIntel
+  marketIntel,
+  usePracticePortfolio
 }) {
   const safeHoldings = Array.isArray(holdings)
     ? holdings
@@ -793,6 +800,48 @@ function buildPortfolioSummary({
   const marketSummary =
     marketIntel?.summary ||
     {};
+
+  if (usePracticePortfolio) {
+  const currentValue = currentValueFromHoldings;
+
+  const investedValue = Number(
+    practicePortfolio?.investedAmount ??
+    investedValueFromHoldings
+  );
+
+  const totalCash = Number(
+    practicePortfolio?.availableCash ??
+    0
+  );
+
+  const totalGain =
+    currentValue - investedValue;
+
+  const totalGainPct =
+    investedValue > 0
+      ? (totalGain / investedValue) * 100
+      : 0;
+
+  const dayChange =
+    dayChangeFromHoldings;
+
+  const holdingsCount =
+    safeHoldings.length;
+
+  const netWorth =
+    currentValue + totalCash;
+
+  return {
+    currentValue,
+    investedValue,
+    totalCash,
+    netWorth,
+    totalGain,
+    totalGainPct,
+    dayChange,
+    holdingsCount
+  };
+}
 
   const currentValue = firstFiniteNumber(
     unifiedSummary.totalValue,

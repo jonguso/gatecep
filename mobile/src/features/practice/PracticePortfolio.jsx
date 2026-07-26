@@ -1,4 +1,9 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, {
+  useEffect,
+  useMemo,
+  useState
+} from "react";
+
 import {
   ActivityIndicator,
   Alert,
@@ -8,15 +13,25 @@ import {
   Text,
   View
 } from "react-native";
+
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 
-import { userGetItem, userSetItem } from "../../auth/userStorage";
+import {
+  userGetItem,
+  userSetItem
+} from "../../auth/userStorage";
 
 import CoachInsightCard from "./components/CoachInsightCard";
 import ConfidenceMeter from "./components/ConfidenceMeter";
 import LessonCard from "./components/LessonCard";
 import PortfolioAllocationCard from "./components/PortfolioAllocationCard";
+
+/*
+ * ============================================================
+ * ALLOCATION EDUCATION
+ * ============================================================
+ */
 
 const ALLOCATION_REASONS = {
   "Growth Stocks":
@@ -34,6 +49,15 @@ const ALLOCATION_REASONS = {
   "Cash Reserve":
     "Cash gives your portfolio flexibility and allows you to respond calmly when opportunities or unexpected needs arise."
 };
+
+/*
+ * ============================================================
+ * PRACTICE SECURITIES
+ * ============================================================
+ *
+ * These are educational/practice securities.
+ * No broker order is placed by this screen.
+ */
 
 const PRACTICE_SECURITIES = {
   "Growth Stocks": [
@@ -137,173 +161,415 @@ const PRACTICE_SECURITIES = {
   ]
 };
 
+/*
+ * ============================================================
+ * MAIN COMPONENT
+ * ============================================================
+ */
+
 export default function PracticePortfolio() {
-  const [savedProfile, setSavedProfile] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
-  const [wealthBlueprint, setWealthBlueprint] = useState(null);
+  const [
+    savedProfile,
+    setSavedProfile
+  ] = useState(null);
+
+  const [
+    wealthBlueprint,
+    setWealthBlueprint
+  ] = useState(null);
+
+  const [
+    existingPracticePortfolio,
+    setExistingPracticePortfolio
+  ] = useState(null);
+
+  const [
+    loading,
+    setLoading
+  ] = useState(true);
+
+  const [
+    creating,
+    setCreating
+  ] = useState(false);
+
+  /*
+   * ==========================================================
+   * LOAD USER-SCOPED DATA
+   * ==========================================================
+   */
 
   useEffect(() => {
     loadProfile();
   }, []);
 
   async function loadProfile() {
-  try {
-    setLoading(true);
+    try {
+      setLoading(true);
 
-    const [profileRaw, blueprintRaw] = await Promise.all([
-      userGetItem("investorProfile"),
-      userGetItem("wealthBlueprint")
-    ]);
+      const [
+        profileRaw,
+        blueprintRaw,
+        practiceRaw
+      ] = await Promise.all([
+        userGetItem("investorProfile"),
+        userGetItem("wealthBlueprint"),
+        userGetItem("practicePortfolio")
+      ]);
 
-    const parsedProfile = profileRaw
-      ? typeof profileRaw === "string"
-        ? JSON.parse(profileRaw)
-        : profileRaw
-      : null;
+      const parsedProfile =
+        parseStoredValue(profileRaw);
 
-    const parsedBlueprint = blueprintRaw
-      ? typeof blueprintRaw === "string"
-        ? JSON.parse(blueprintRaw)
-        : blueprintRaw
-      : null;
+      const parsedBlueprint =
+        parseStoredValue(blueprintRaw);
 
-    setSavedProfile(parsedProfile);
-    setWealthBlueprint(parsedBlueprint);
-  } catch (error) {
-    console.error("Unable to load Practice Portfolio data:", error);
-    setSavedProfile(null);
-    setWealthBlueprint(null);
-  } finally {
-    setLoading(false);
+      const parsedPractice =
+        parseStoredValue(practiceRaw);
+
+      setSavedProfile(
+        parsedProfile
+      );
+
+      setWealthBlueprint(
+        parsedBlueprint
+      );
+
+      setExistingPracticePortfolio(
+        parsedPractice
+      );
+    } catch (error) {
+      console.error(
+        "Unable to load Practice Portfolio data:",
+        error
+      );
+
+      setSavedProfile(null);
+      setWealthBlueprint(null);
+      setExistingPracticePortfolio(null);
+    } finally {
+      setLoading(false);
+    }
   }
-}
+
+  /*
+   * ==========================================================
+   * STARTING AMOUNT
+   * ==========================================================
+   *
+   * Use one source consistently throughout this screen.
+   */
+
+  const startingAmount = useMemo(() => {
+    return Number(
+      savedProfile?.starterPlan?.startingAmount ??
+      savedProfile?.profile?.amount ??
+      savedProfile?.investorDNA?.amount ??
+      0
+    );
+  }, [savedProfile]);
+
+  /*
+   * ==========================================================
+   * BUILD ALLOCATION
+   * ==========================================================
+   */
 
   const allocations = useMemo(() => {
-  const allocation = wealthBlueprint?.allocation;
+    const allocation =
+      wealthBlueprint?.allocation;
 
-  if (allocation) {
-    const equityName =
-      savedProfile?.investorDNA?.riskProfile === "GROWTH" ||
-      savedProfile?.investorDNA?.riskProfile === "AGGRESSIVE"
-        ? "Growth Stocks"
-        : "ETF / Diversifier";
+    if (allocation) {
+      const riskProfile =
+        savedProfile?.investorDNA?.riskProfile ||
+        savedProfile?.profile?.dna?.riskProfile ||
+        "";
 
-    return [
-      {
-        name: equityName,
-        weight: Number(allocation.equity || 0),
-        amount:
-          Number(savedProfile?.profile?.amount || 0) *
-          (Number(allocation.equity || 0) / 100)
-      },
-      {
-        name: "Dividend Stocks",
-        weight: Number(allocation.income || 0),
-        amount:
-          Number(savedProfile?.profile?.amount || 0) *
-          (Number(allocation.income || 0) / 100)
-      },
-      {
-        name: "Cash Reserve",
-        weight: Number(allocation.cash || 0),
-        amount:
-          Number(savedProfile?.profile?.amount || 0) *
-          (Number(allocation.cash || 0) / 100)
-      }
-    ];
-  }
+      const equityName =
+        riskProfile === "GROWTH" ||
+        riskProfile === "AGGRESSIVE"
+          ? "Growth Stocks"
+          : "ETF / Diversifier";
 
-  return Array.isArray(savedProfile?.starterPlan?.allocations)
-    ? savedProfile.starterPlan.allocations
-    : [];
-}, [wealthBlueprint, savedProfile]);
+      return [
+        {
+          name: equityName,
 
-  const practiceHoldings = useMemo(() => {
-    return buildPracticeHoldings(allocations);
-  }, [allocations]);
+          weight:
+            Number(
+              allocation.equity || 0
+            ),
 
-  const cashReserve = useMemo(() => {
-    return allocations
-      .filter((item) => item.name === "Cash Reserve")
-      .reduce((sum, item) => sum + Number(item.amount || 0), 0);
-  }, [allocations]);
+          amount:
+            startingAmount *
+            (
+              Number(
+                allocation.equity || 0
+              ) / 100
+            )
+        },
+
+        {
+          name: "Dividend Stocks",
+
+          weight:
+            Number(
+              allocation.income || 0
+            ),
+
+          amount:
+            startingAmount *
+            (
+              Number(
+                allocation.income || 0
+              ) / 100
+            )
+        },
+
+        {
+          name: "Cash Reserve",
+
+          weight:
+            Number(
+              allocation.cash || 0
+            ),
+
+          amount:
+            startingAmount *
+            (
+              Number(
+                allocation.cash || 0
+              ) / 100
+            )
+        }
+      ];
+    }
+
+    return Array.isArray(
+      savedProfile?.starterPlan?.allocations
+    )
+      ? savedProfile.starterPlan.allocations
+      : [];
+  }, [
+    wealthBlueprint,
+    savedProfile,
+    startingAmount
+  ]);
+
+  /*
+   * ==========================================================
+   * BUILD PRACTICE HOLDINGS
+   * ==========================================================
+   */
+
+  const practiceHoldings =
+    useMemo(() => {
+      return buildPracticeHoldings(
+        allocations
+      );
+    }, [allocations]);
+
+  /*
+   * ==========================================================
+   * CASH
+   * ==========================================================
+   */
+
+    /*
+   * ==========================================================
+   * PORTFOLIO ACCOUNTING
+   * ==========================================================
+   *
+   * Any money that cannot purchase a whole share
+   * remains available cash.
+   *
+   * Accounting invariant:
+   *
+   * startingAmount =
+   * investedAmount + availableCash
+   */
 
   const investedAmount = useMemo(() => {
     return practiceHoldings.reduce(
-      (sum, holding) => sum + Number(holding.marketValue || 0),
+      (sum, holding) =>
+        sum + Number(holding.marketValue || 0),
       0
     );
   }, [practiceHoldings]);
 
+  const cashReserve = useMemo(() => {
+    return Math.max(
+      0,
+      Number(
+        (
+          startingAmount - investedAmount
+        ).toFixed(2)
+      )
+    );
+  }, [
+    startingAmount,
+    investedAmount
+  ]);
+
+  /*
+   * ==========================================================
+   * CREATE PRACTICE PORTFOLIO
+   * ==========================================================
+   *
+   * IMPORTANT:
+   *
+   * A Practice Portfolio may only be created once for the
+   * current user unless we deliberately implement a future
+   * reset/rebuild workflow.
+   *
+   * Reopening this screen must NEVER keep increasing holdings.
+   */
+
   async function createPracticePortfolio() {
+    /*
+     * Existing portfolio protection.
+     */
+    if (
+      existingPracticePortfolio?.status ===
+        "ACTIVE" ||
+      existingPracticePortfolio?.holdings
+        ?.length
+    ) {
+      Alert.alert(
+        "Practice Portfolio Already Exists",
+        "Coach G has already created your Practice Portfolio. Your existing portfolio will be restored."
+      );
+
+      router.replace(
+        "/(tabs)/dashboard"
+      );
+
+      return;
+    }
+
+    /*
+     * Investor journey must exist.
+     */
     if (!savedProfile) {
       Alert.alert(
         "Investor DNA Required",
         "Complete the Welcome Journey before building a Practice Portfolio."
       );
+
       return;
     }
 
+    /*
+     * Holdings must exist.
+     */
     if (!practiceHoldings.length) {
       Alert.alert(
         "Portfolio Not Ready",
         "Coach G could not build practice holdings from the current Wealth Blueprint."
       );
+
       return;
     }
 
     try {
       setCreating(true);
 
+      const now =
+        new Date().toISOString();
+
       const practicePortfolio = {
-        type: "GATECEP_PRACTICE_PORTFOLIO",
-        status: "ACTIVE",
-        investorType: savedProfile?.profile?.investorType || null,
-        riskProfile:
-          savedProfile?.investorDNA?.riskProfile ||
-          savedProfile?.profile?.dna?.riskProfile ||
+        type:
+          "GATECEP_PRACTICE_PORTFOLIO",
+
+        status:
+          "ACTIVE",
+
+        investorType:
+          savedProfile?.investorDNA
+            ?.investorType ||
+          savedProfile?.profile
+            ?.investorType ||
+          savedProfile?.profile
+            ?.dna?.investorType ||
           null,
-        startingAmount: Number(
-          savedProfile?.starterPlan?.startingAmount ||
-            savedProfile?.profile?.amount ||
-            0
-        ),
+
+        riskProfile:
+          savedProfile?.investorDNA
+            ?.riskProfile ||
+          savedProfile?.profile
+            ?.dna?.riskProfile ||
+          savedProfile?.profile
+            ?.risk ||
+          null,
+
+        startingAmount,
+
         investedAmount,
-        availableCash: cashReserve,
-        holdings: practiceHoldings,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
+
+        availableCash:
+          cashReserve,
+
+        holdings:
+          practiceHoldings,
+
+        createdAt:
+          now,
+
+        updatedAt:
+          now
       };
 
       /*
-       * Canonical practice records.
+       * ------------------------------------------------------
+       * CANONICAL USER-SCOPED PORTFOLIO
+       * ------------------------------------------------------
        */
+
       await userSetItem(
         "practicePortfolio",
-        JSON.stringify(practicePortfolio)
+        JSON.stringify(
+          practicePortfolio
+        )
       );
 
       await userSetItem(
+        "practicePortfolioCreated",
+        "true"
+      );
+
+      /*
+       * ------------------------------------------------------
+       * USER-SCOPED LEGACY COMPATIBILITY
+       * ------------------------------------------------------
+       */
+
+      await userSetItem(
         "ManualPortfolio",
-        JSON.stringify(practiceHoldings)
+        JSON.stringify(
+          practiceHoldings
+        )
       );
 
       await userSetItem(
         "availableCash",
-        String(cashReserve)
+        String(
+          cashReserve
+        )
       );
 
-      await userSetItem("practicePortfolioCreated", "true");
-
       /*
-       * Temporary compatibility with screens that still read the legacy
-       * non-user-scoped AsyncStorage keys. These can be removed after
-       * the dashboard and simulator complete their storage migration.
+       * ------------------------------------------------------
+       * TEMPORARY GLOBAL LEGACY COMPATIBILITY
+       * ------------------------------------------------------
+       *
+       * Keep these until the remaining old screens have been
+       * migrated completely to userStorage.
        */
+
       await AsyncStorage.setItem(
         "gatecepManualPortfolio",
-        JSON.stringify(practiceHoldings)
+        JSON.stringify(
+          practiceHoldings
+        )
       );
 
       await AsyncStorage.setItem(
@@ -311,24 +577,46 @@ export default function PracticePortfolio() {
         "true"
       );
 
+      /*
+       * Immediately update component state.
+       *
+       * This prevents another click during the same session
+       * from rebuilding the portfolio.
+       */
+
+      setExistingPracticePortfolio(
+        practicePortfolio
+      );
+
       Alert.alert(
-  "Practice Portfolio Ready",
-  "Coach G has created your Practice Portfolio. No real money was used."
-);
+        "Practice Portfolio Ready",
+        "Coach G has created your Practice Portfolio. No real money was used."
+      );
 
-router.replace("/(tabs)/dashboard");
-
+      router.replace(
+        "/(tabs)/dashboard"
+      );
     } catch (error) {
-      console.error("Unable to create Practice Portfolio:", error);
+      console.error(
+        "Unable to create Practice Portfolio:",
+        error
+      );
 
       Alert.alert(
         "Coach G",
-        error.message || "Unable to create your Practice Portfolio."
+        error?.message ||
+          "Unable to create your Practice Portfolio."
       );
     } finally {
       setCreating(false);
     }
   }
+
+  /*
+   * ==========================================================
+   * LESSON
+   * ==========================================================
+   */
 
   function openLesson() {
     Alert.alert(
@@ -337,100 +625,228 @@ router.replace("/(tabs)/dashboard");
     );
   }
 
+  /*
+   * ==========================================================
+   * LOADING
+   * ==========================================================
+   */
+
   if (loading) {
     return (
-      <View style={styles.centerScreen}>
-        <ActivityIndicator size="large" />
-        <Text style={styles.loadingTitle}>
-          Coach G is preparing your plan...
+      <View
+        style={
+          styles.centerScreen
+        }
+      >
+        <ActivityIndicator
+          size="large"
+        />
+
+        <Text
+          style={
+            styles.loadingTitle
+          }
+        >
+          Coach G is preparing your
+          plan...
         </Text>
       </View>
     );
   }
 
+  /*
+   * ==========================================================
+   * NO INVESTOR PROFILE
+   * ==========================================================
+   */
+
   if (!savedProfile) {
     return (
       <ScrollView
         style={styles.screen}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={
+          styles.content
+        }
       >
-        <Text style={styles.title}>Practice Portfolio</Text>
+        <Text
+          style={styles.title}
+        >
+          Practice Portfolio
+        </Text>
 
         <CoachInsightCard>
-          I need to understand you before I can build a portfolio that fits
-          your goals. Let's complete your Welcome Journey first.
+          I need to understand you
+          before I can build a
+          portfolio that fits your
+          goals. Let's complete your
+          Welcome Journey first.
         </CoachInsightCard>
 
         <Pressable
-  style={styles.secondary}
-  onPress={() => router.push("/investor-dna-review")}
->
-  <Text style={styles.secondaryText}>
-    Review My Investor DNA
-  </Text>
-</Pressable>
+          style={
+            styles.secondary
+          }
+          onPress={() =>
+            router.push(
+              "/investor-dna-review"
+            )
+          }
+        >
+          <Text
+            style={
+              styles.secondaryText
+            }
+          >
+            Review My Investor DNA
+          </Text>
+        </Pressable>
       </ScrollView>
     );
   }
 
+  /*
+   * ==========================================================
+   * DISPLAY PROFILE
+   * ==========================================================
+   */
+
   const firstName =
+    savedProfile?.firstName ||
     savedProfile?.profile?.firstName ||
-    savedProfile?.profile?.name?.split?.(" ")?.[0] ||
+    savedProfile?.profile?.name
+      ?.split?.(" ")?.[0] ||
     "";
 
   const investorType =
-    savedProfile?.profile?.investorType ||
-    savedProfile?.investorDNA?.investorType ||
+    savedProfile?.investorDNA
+      ?.investorType ||
+    savedProfile?.profile
+      ?.investorType ||
+    savedProfile?.profile
+      ?.dna?.investorType ||
     "Developing Investor";
 
   const comfortProfile =
+    savedProfile?.investorDNA
+      ?.riskProfile ||
+    savedProfile?.profile
+      ?.dna?.riskProfile ||
     savedProfile?.profile?.risk ||
-    savedProfile?.investorDNA?.riskProfile ||
-    savedProfile?.profile?.dna?.riskProfile ||
     "balanced";
+
+  const alreadyCreated =
+    existingPracticePortfolio
+      ?.status === "ACTIVE" ||
+    Boolean(
+      existingPracticePortfolio
+        ?.holdings?.length
+    );
+
+  /*
+   * ==========================================================
+   * SCREEN
+   * ==========================================================
+   */
 
   return (
     <ScrollView
       style={styles.screen}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={
+        styles.content
+      }
     >
-      <Text style={styles.eyebrow}>Practice Investing</Text>
+      <Text
+        style={styles.eyebrow}
+      >
+        Practice Investing
+      </Text>
 
-      <Text style={styles.title}>
+      <Text
+        style={styles.title}
+      >
         {firstName
           ? `${firstName}, let's build your first portfolio.`
           : "Let's build your first portfolio."}
       </Text>
 
-      <Text style={styles.subtitle}>
-        This portfolio is for learning. No real money will be invested and no
-        live broker order will be placed.
+      <Text
+        style={styles.subtitle}
+      >
+        This portfolio is for
+        learning. No real money will
+        be invested and no live
+        broker order will be placed.
       </Text>
 
       <CoachInsightCard>
-        Based on what you've shared, I prepared a Practice Portfolio for a{" "}
-        {String(investorType).toLowerCase()} with a{" "}
-        {String(comfortProfile).toLowerCase()} comfort profile. I'll explain
-        why each part is included before you decide what to do.
+        Based on what you've shared,
+        I prepared a Practice
+        Portfolio for a{" "}
+        {String(
+          investorType
+        ).toLowerCase()}{" "}
+        with a{" "}
+        {String(
+          comfortProfile
+        ).toLowerCase()}{" "}
+        comfort profile. I'll explain
+        why each part is included
+        before you decide what to do.
       </CoachInsightCard>
 
-      <View style={styles.summaryCard}>
+      {alreadyCreated && (
+        <View
+          style={
+            styles.existingCard
+          }
+        >
+          <Text
+            style={
+              styles.existingTitle
+            }
+          >
+            Practice Portfolio
+            Already Created
+          </Text>
+
+          <Text
+            style={
+              styles.existingText
+            }
+          >
+            Coach G found your
+            existing Practice
+            Portfolio. It will not be
+            recreated or added to
+            again.
+          </Text>
+        </View>
+      )}
+
+      <View
+        style={
+          styles.summaryCard
+        }
+      >
         <Metric
           label="Starting Amount"
           value={`KES ${money(
-            savedProfile?.starterPlan?.startingAmount ||
-              savedProfile?.profile?.amount
+            startingAmount
           )}`}
         />
 
         <Metric
           label="Estimated Invested"
-          value={`KES ${money(investedAmount)}`}
+          value={`KES ${money(
+            investedAmount
+          )}`}
         />
 
         <Metric
           label="Cash Reserve"
-          value={`KES ${money(cashReserve)}`}
+          value={`KES ${money(
+            cashReserve
+          )}`}
         />
 
         <Metric
@@ -446,28 +862,52 @@ router.replace("/(tabs)/dashboard");
         onPress={openLesson}
       />
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>
+      <View
+        style={styles.section}
+      >
+        <Text
+          style={
+            styles.sectionTitle
+          }
+        >
           Your Practice Allocation
         </Text>
 
-        <Text style={styles.sectionIntro}>
-          Each allocation has a different role. Together, they form a more
-          balanced learning portfolio.
+        <Text
+          style={
+            styles.sectionIntro
+          }
+        >
+          Each allocation has a
+          different role. Together,
+          they form a more balanced
+          learning portfolio.
         </Text>
 
-        {allocations.map((allocation) => (
-          <PortfolioAllocationCard
-            key={allocation.name}
-            name={allocation.name}
-            weight={allocation.weight}
-            amount={allocation.amount}
-            reason={
-              ALLOCATION_REASONS[allocation.name] ||
-              "This allocation supports your current Wealth Blueprint."
-            }
-          />
-        ))}
+        {allocations.map(
+          (allocation) => (
+            <PortfolioAllocationCard
+              key={
+                allocation.name
+              }
+              name={
+                allocation.name
+              }
+              weight={
+                allocation.weight
+              }
+              amount={
+                allocation.amount
+              }
+              reason={
+                ALLOCATION_REASONS[
+                  allocation.name
+                ] ||
+                "This allocation supports your current Wealth Blueprint."
+              }
+            />
+          )
+        )}
       </View>
 
       <ConfidenceMeter
@@ -476,9 +916,16 @@ router.replace("/(tabs)/dashboard");
         label="Building Your Foundation"
       />
 
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>
-          What Coach G Wants You to Learn
+      <View
+        style={styles.section}
+      >
+        <Text
+          style={
+            styles.sectionTitle
+          }
+        >
+          What Coach G Wants You to
+          Learn
         </Text>
 
         {[
@@ -488,314 +935,604 @@ router.replace("/(tabs)/dashboard");
           "Why short-term price movement is not the whole story",
           "Why every investment decision should connect to a goal"
         ].map((item) => (
-          <Text key={item} style={styles.learningItem}>
+          <Text
+            key={item}
+            style={
+              styles.learningItem
+            }
+          >
             ✓ {item}
           </Text>
         ))}
       </View>
 
-      <View style={styles.promiseCard}>
-        <Text style={styles.promiseTitle}>The GateCEP Promise</Text>
-
-        <Text style={styles.promiseText}>
-          Coach G will explain the options. You remain in control of every
-          decision.
+      <View
+        style={
+          styles.promiseCard
+        }
+      >
+        <Text
+          style={
+            styles.promiseTitle
+          }
+        >
+          The GateCEP Promise
         </Text>
 
-        <Text style={styles.promiseTagline}>
+        <Text
+          style={
+            styles.promiseText
+          }
+        >
+          Coach G will explain the
+          options. You remain in
+          control of every decision.
+        </Text>
+
+        <Text
+          style={
+            styles.promiseTagline
+          }
+        >
           We advise. You decide.
         </Text>
       </View>
 
-      <Pressable
-        style={[
-          styles.primary,
-          creating && styles.buttonDisabled
-        ]}
-        disabled={creating}
-        onPress={createPracticePortfolio}
-      >
-        {creating ? (
-          <ActivityIndicator />
-        ) : (
-          <Text style={styles.primaryText}>
-            Build My Practice Portfolio
+      {alreadyCreated ? (
+        <Pressable
+          style={styles.primary}
+          onPress={() =>
+            router.replace(
+              "/(tabs)/dashboard"
+            )
+          }
+        >
+          <Text
+            style={
+              styles.primaryText
+            }
+          >
+            Open My Practice
+            Portfolio
           </Text>
-        )}
-      </Pressable>
+        </Pressable>
+      ) : (
+        <Pressable
+          style={[
+            styles.primary,
+            creating &&
+              styles.buttonDisabled
+          ]}
+          disabled={creating}
+          onPress={
+            createPracticePortfolio
+          }
+        >
+          {creating ? (
+            <ActivityIndicator />
+          ) : (
+            <Text
+              style={
+                styles.primaryText
+              }
+            >
+              Build My Practice
+              Portfolio
+            </Text>
+          )}
+        </Pressable>
+      )}
 
       <Pressable
-  style={styles.secondary}
-  onPress={() => router.push("/investor-dna-review")}
->
-  <Text style={styles.secondaryText}>
-    Review My Investor DNA
-  </Text>
-</Pressable>
+        style={styles.secondary}
+        onPress={() =>
+          router.push(
+            "/investor-dna-review"
+          )
+        }
+      >
+        <Text
+          style={
+            styles.secondaryText
+          }
+        >
+          Review My Investor DNA
+        </Text>
+      </Pressable>
     </ScrollView>
   );
 }
 
-function buildPracticeHoldings(allocations = []) {
+/*
+ * ============================================================
+ * PRACTICE HOLDINGS BUILDER
+ * ============================================================
+ */
+
+function buildPracticeHoldings(
+  allocations = []
+) {
   const holdings = [];
 
-  allocations.forEach((allocation) => {
-    if (allocation.name === "Cash Reserve") {
-      return;
-    }
-
-    const securities = PRACTICE_SECURITIES[allocation.name] || [];
-    const allocationAmount = Number(allocation.amount || 0);
-
-    if (!securities.length || allocationAmount <= 0) {
-      return;
-    }
-
-    const amountPerSecurity = allocationAmount / securities.length;
-
-    securities.forEach((security) => {
-      const quantity = Math.floor(
-        amountPerSecurity / Number(security.price || 1)
-      );
-
-      if (quantity <= 0) {
+  allocations.forEach(
+    (allocation) => {
+      if (
+        allocation.name ===
+        "Cash Reserve"
+      ) {
         return;
       }
 
-      const marketValue = quantity * Number(security.price || 0);
+      const securities =
+        PRACTICE_SECURITIES[
+          allocation.name
+        ] || [];
 
-      holdings.push({
-        symbol: security.symbol,
-        name: security.name,
-        sector: security.sector,
-        quantity: String(quantity),
-        averagePrice: String(security.price),
-        marketPrice: String(security.price),
-        marketValue,
-        profitLoss: 0,
-        reason: security.reason,
-        source: "GATECEP_PRACTICE_PORTFOLIO",
-        isPractice: true
-      });
-    });
-  });
+      const allocationAmount =
+        Number(
+          allocation.amount || 0
+        );
 
-  return combineDuplicateHoldings(holdings);
-}
+      if (
+        !securities.length ||
+        allocationAmount <= 0
+      ) {
+        return;
+      }
 
-function combineDuplicateHoldings(holdings = []) {
-  const combined = new Map();
+      const amountPerSecurity =
+        allocationAmount /
+        securities.length;
 
-  holdings.forEach((holding) => {
-    const existing = combined.get(holding.symbol);
+      securities.forEach(
+        (security) => {
+          const price =
+            Number(
+              security.price || 0
+            );
 
-    if (!existing) {
-      combined.set(holding.symbol, { ...holding });
-      return;
+          if (price <= 0) {
+            return;
+          }
+
+          const quantity =
+            Math.floor(
+              amountPerSecurity /
+                price
+            );
+
+          if (quantity <= 0) {
+            return;
+          }
+
+          const marketValue =
+            quantity * price;
+
+          holdings.push({
+            symbol:
+              security.symbol,
+
+            name:
+              security.name,
+
+            sector:
+              security.sector,
+
+            quantity:
+              String(quantity),
+
+            averagePrice:
+              String(price),
+
+            marketPrice:
+              String(price),
+
+            marketValue,
+
+            profitLoss:
+              0,
+
+            reason:
+              security.reason,
+
+            source:
+              "GATECEP_PRACTICE_PORTFOLIO",
+
+            isPractice:
+              true
+          });
+        }
+      );
     }
+  );
 
-    const existingQuantity = Number(existing.quantity || 0);
-    const incomingQuantity = Number(holding.quantity || 0);
-    const totalQuantity = existingQuantity + incomingQuantity;
-
-    const existingValue = Number(existing.marketValue || 0);
-    const incomingValue = Number(holding.marketValue || 0);
-    const totalValue = existingValue + incomingValue;
-
-    combined.set(holding.symbol, {
-      ...existing,
-      quantity: String(totalQuantity),
-      averagePrice:
-        totalQuantity > 0
-          ? String(totalValue / totalQuantity)
-          : existing.averagePrice,
-      marketValue: totalValue
-    });
-  });
-
-  return Array.from(combined.values());
+  return combineDuplicateHoldings(
+    holdings
+  );
 }
 
-function Metric({ label, value }) {
+/*
+ * ============================================================
+ * DUPLICATE SECURITY CONSOLIDATION
+ * ============================================================
+ *
+ * Example:
+ *
+ * SCOM can appear in Growth Stocks and Dividend Stocks.
+ *
+ * It must appear as one holding in the resulting portfolio.
+ */
+
+function combineDuplicateHoldings(
+  holdings = []
+) {
+  const combined =
+    new Map();
+
+  holdings.forEach(
+    (holding) => {
+      const existing =
+        combined.get(
+          holding.symbol
+        );
+
+      if (!existing) {
+        combined.set(
+          holding.symbol,
+          { ...holding }
+        );
+
+        return;
+      }
+
+      const existingQuantity =
+        Number(
+          existing.quantity || 0
+        );
+
+      const incomingQuantity =
+        Number(
+          holding.quantity || 0
+        );
+
+      const totalQuantity =
+        existingQuantity +
+        incomingQuantity;
+
+      const existingValue =
+        Number(
+          existing.marketValue || 0
+        );
+
+      const incomingValue =
+        Number(
+          holding.marketValue || 0
+        );
+
+      const totalValue =
+        existingValue +
+        incomingValue;
+
+      combined.set(
+        holding.symbol,
+        {
+          ...existing,
+
+          quantity:
+            String(
+              totalQuantity
+            ),
+
+          averagePrice:
+            totalQuantity > 0
+              ? String(
+                  totalValue /
+                    totalQuantity
+                )
+              : existing.averagePrice,
+
+          marketValue:
+            totalValue
+        }
+      );
+    }
+  );
+
+  return Array.from(
+    combined.values()
+  );
+}
+
+/*
+ * ============================================================
+ * STORAGE PARSER
+ * ============================================================
+ */
+
+function parseStoredValue(
+  value
+) {
+  if (!value) {
+    return null;
+  }
+
+  if (
+    typeof value ===
+    "object"
+  ) {
+    return value;
+  }
+
+  try {
+    return JSON.parse(
+      value
+    );
+  } catch {
+    return null;
+  }
+}
+
+/*
+ * ============================================================
+ * METRIC
+ * ============================================================
+ */
+
+function Metric({
+  label,
+  value
+}) {
   return (
-    <View style={styles.metric}>
-      <Text style={styles.metricLabel}>{label}</Text>
-      <Text style={styles.metricValue}>
-        {String(value || "N/A")}
+    <View
+      style={styles.metric}
+    >
+      <Text
+        style={
+          styles.metricLabel
+        }
+      >
+        {label}
+      </Text>
+
+      <Text
+        style={
+          styles.metricValue
+        }
+      >
+        {String(
+          value || "N/A"
+        )}
       </Text>
     </View>
   );
 }
 
+/*
+ * ============================================================
+ * MONEY
+ * ============================================================
+ */
+
 function money(value) {
-  return Number(value || 0).toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  });
+  return Number(
+    value || 0
+  ).toLocaleString(
+    undefined,
+    {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2
+    }
+  );
 }
 
-const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: "#020617"
-  },
+/*
+ * ============================================================
+ * STYLES
+ * ============================================================
+ */
 
-  content: {
-    padding: 22,
-    paddingTop: 70,
-    paddingBottom: 110
-  },
+const styles =
+  StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor:
+        "#020617"
+    },
 
-  centerScreen: {
-    flex: 1,
-    backgroundColor: "#020617",
-    justifyContent: "center",
-    alignItems: "center",
-    padding: 24
-  },
+    content: {
+      padding: 22,
+      paddingTop: 70,
+      paddingBottom: 110
+    },
 
-  loadingTitle: {
-    color: "white",
-    fontSize: 18,
-    fontWeight: "900",
-    marginTop: 18,
-    textAlign: "center"
-  },
+    centerScreen: {
+      flex: 1,
+      backgroundColor:
+        "#020617",
+      justifyContent:
+        "center",
+      alignItems:
+        "center",
+      padding: 24
+    },
 
-  eyebrow: {
-    color: "#c084fc",
-    fontSize: 13,
-    fontWeight: "900",
-    textTransform: "uppercase",
-    letterSpacing: 1.2
-  },
+    loadingTitle: {
+      color: "white",
+      fontSize: 18,
+      fontWeight: "900",
+      marginTop: 18,
+      textAlign: "center"
+    },
 
-  title: {
-    color: "white",
-    fontSize: 32,
-    fontWeight: "900",
-    marginTop: 8
-  },
+    eyebrow: {
+      color: "#c084fc",
+      fontSize: 13,
+      fontWeight: "900",
+      textTransform:
+        "uppercase",
+      letterSpacing: 1.2
+    },
 
-  subtitle: {
-    color: "#94a3b8",
-    marginTop: 12,
-    lineHeight: 22
-  },
+    title: {
+      color: "white",
+      fontSize: 32,
+      fontWeight: "900",
+      marginTop: 8
+    },
 
-  summaryCard: {
-    marginTop: 22,
-    backgroundColor: "#0f172a",
-    borderColor: "#1e293b",
-    borderWidth: 1,
-    borderRadius: 22,
-    padding: 18,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10
-  },
+    subtitle: {
+      color: "#94a3b8",
+      marginTop: 12,
+      lineHeight: 22
+    },
 
-  metric: {
-    width: "47%",
-    backgroundColor: "#020617",
-    borderColor: "#334155",
-    borderWidth: 1,
-    borderRadius: 16,
-    padding: 14
-  },
+    existingCard: {
+      marginTop: 22,
+      backgroundColor:
+        "rgba(34,197,94,.10)",
+      borderColor:
+        "rgba(34,197,94,.35)",
+      borderWidth: 1,
+      borderRadius: 22,
+      padding: 18
+    },
 
-  metricLabel: {
-    color: "#94a3b8",
-    fontSize: 12
-  },
+    existingTitle: {
+      color: "#86efac",
+      fontSize: 17,
+      fontWeight: "900"
+    },
 
-  metricValue: {
-    color: "white",
-    fontWeight: "900",
-    marginTop: 6
-  },
+    existingText: {
+      color: "#bbf7d0",
+      lineHeight: 21,
+      marginTop: 8
+    },
 
-  section: {
-    marginTop: 22,
-    backgroundColor: "#0f172a",
-    borderColor: "#1e293b",
-    borderWidth: 1,
-    borderRadius: 22,
-    padding: 18
-  },
+    summaryCard: {
+      marginTop: 22,
+      backgroundColor:
+        "#0f172a",
+      borderColor:
+        "#1e293b",
+      borderWidth: 1,
+      borderRadius: 22,
+      padding: 18,
+      flexDirection:
+        "row",
+      flexWrap: "wrap",
+      gap: 10
+    },
 
-  sectionTitle: {
-    color: "#67e8f9",
-    fontSize: 18,
-    fontWeight: "900"
-  },
+    metric: {
+      width: "47%",
+      backgroundColor:
+        "#020617",
+      borderColor:
+        "#334155",
+      borderWidth: 1,
+      borderRadius: 16,
+      padding: 14
+    },
 
-  sectionIntro: {
-    color: "#94a3b8",
-    lineHeight: 21,
-    marginTop: 8
-  },
+    metricLabel: {
+      color: "#94a3b8",
+      fontSize: 12
+    },
 
-  learningItem: {
-    color: "#cbd5e1",
-    lineHeight: 21,
-    marginTop: 10
-  },
+    metricValue: {
+      color: "white",
+      fontWeight: "900",
+      marginTop: 6
+    },
 
-  promiseCard: {
-    marginTop: 22,
-    backgroundColor: "rgba(245,158,11,.10)",
-    borderColor: "rgba(245,158,11,.35)",
-    borderWidth: 1,
-    borderRadius: 22,
-    padding: 18
-  },
+    section: {
+      marginTop: 22,
+      backgroundColor:
+        "#0f172a",
+      borderColor:
+        "#1e293b",
+      borderWidth: 1,
+      borderRadius: 22,
+      padding: 18
+    },
 
-  promiseTitle: {
-    color: "#fde68a",
-    fontSize: 18,
-    fontWeight: "900"
-  },
+    sectionTitle: {
+      color: "#67e8f9",
+      fontSize: 18,
+      fontWeight: "900"
+    },
 
-  promiseText: {
-    color: "#fef3c7",
-    lineHeight: 22,
-    marginTop: 10
-  },
+    sectionIntro: {
+      color: "#94a3b8",
+      lineHeight: 21,
+      marginTop: 8
+    },
 
-  promiseTagline: {
-    color: "white",
-    fontWeight: "900",
-    marginTop: 14
-  },
+    learningItem: {
+      color: "#cbd5e1",
+      lineHeight: 21,
+      marginTop: 10
+    },
 
-  primary: {
-    backgroundColor: "#9333ea",
-    padding: 18,
-    borderRadius: 18,
-    marginTop: 24
-  },
+    promiseCard: {
+      marginTop: 22,
+      backgroundColor:
+        "rgba(245,158,11,.10)",
+      borderColor:
+        "rgba(245,158,11,.35)",
+      borderWidth: 1,
+      borderRadius: 22,
+      padding: 18
+    },
 
-  buttonDisabled: {
-    opacity: 0.65
-  },
+    promiseTitle: {
+      color: "#fde68a",
+      fontSize: 18,
+      fontWeight: "900"
+    },
 
-  primaryText: {
-    color: "white",
-    textAlign: "center",
-    fontWeight: "900"
-  },
+    promiseText: {
+      color: "#fef3c7",
+      lineHeight: 22,
+      marginTop: 10
+    },
 
-  secondary: {
-    backgroundColor: "#1e293b",
-    padding: 16,
-    borderRadius: 18,
-    marginTop: 14
-  },
+    promiseTagline: {
+      color: "white",
+      fontWeight: "900",
+      marginTop: 14
+    },
 
-  secondaryText: {
-    color: "#67e8f9",
-    textAlign: "center",
-    fontWeight: "900"
-  }
-});
+    primary: {
+      backgroundColor:
+        "#9333ea",
+      padding: 18,
+      borderRadius: 18,
+      marginTop: 24
+    },
+
+    buttonDisabled: {
+      opacity: 0.65
+    },
+
+    primaryText: {
+      color: "white",
+      textAlign: "center",
+      fontWeight: "900"
+    },
+
+    secondary: {
+      backgroundColor:
+        "#1e293b",
+      padding: 16,
+      borderRadius: 18,
+      marginTop: 14
+    },
+
+    secondaryText: {
+      color: "#67e8f9",
+      textAlign: "center",
+      fontWeight: "900"
+    }
+  });

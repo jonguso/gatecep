@@ -29,15 +29,39 @@ export async function loadInvestorContext() {
     userGetItem("practicePortfolio").catch(() => null)
   ]);
 
-  const storedProfile = parseStoredValue(profileRaw);
-  const canonicalDNA = parseStoredValue(dnaRaw);
-  const canonicalBlueprint = parseStoredValue(blueprintRaw);
-  const canonicalPracticePortfolio = parseStoredValue(practiceRaw);
+  const storedProfile =
+    parseStoredValue(profileRaw) || {};
 
-  const profile =
-    storedProfile?.profile ||
-    storedProfile ||
-    {};
+  const canonicalDNA =
+    parseStoredValue(dnaRaw);
+
+  const canonicalBlueprint =
+    parseStoredValue(blueprintRaw);
+
+  const canonicalPracticePortfolio =
+    parseStoredValue(practiceRaw);
+
+  /*
+   * Older GateCEP records may store identity fields
+   * at the root while questionnaire fields are stored
+   * inside the nested profile object.
+   */
+  const nestedProfile =
+    storedProfile?.profile &&
+    typeof storedProfile.profile === "object"
+      ? storedProfile.profile
+      : {};
+
+  /*
+   * Create one normalized profile object for consumers.
+   *
+   * Nested questionnaire values are preserved, while
+   * root identity and compatibility values remain available.
+   */
+  const profile = {
+    ...storedProfile,
+    ...nestedProfile
+  };
 
   /*
    * Canonical sources first.
@@ -46,53 +70,74 @@ export async function loadInvestorContext() {
   const investorDNA =
     canonicalDNA ||
     storedProfile?.investorDNA ||
-    profile?.dna ||
+    nestedProfile?.investorDNA ||
+    nestedProfile?.dna ||
     null;
 
   const wealthBlueprint =
     canonicalBlueprint ||
     storedProfile?.wealthBlueprint ||
-    profile?.wealthBlueprint ||
+    nestedProfile?.wealthBlueprint ||
     null;
 
   const practicePortfolio =
     canonicalPracticePortfolio ||
+    storedProfile?.practicePortfolio ||
+    nestedProfile?.practicePortfolio ||
     null;
 
+  /*
+   * Identity may exist at either the root or nested level.
+   */
   const firstName =
-    profile?.firstName ||
+    storedProfile?.firstName ||
+    nestedProfile?.firstName ||
     null;
 
   const lastName =
-    profile?.lastName ||
+    storedProfile?.lastName ||
+    nestedProfile?.lastName ||
     null;
 
   const investorType =
     investorDNA?.investorType ||
-    profile?.investorType ||
+    storedProfile?.investorType ||
+    nestedProfile?.investorType ||
     null;
 
   const goal =
     investorDNA?.goal ||
-    profile?.goal ||
+    storedProfile?.goal ||
+    nestedProfile?.goal ||
     null;
 
   const riskProfile =
     investorDNA?.riskProfile ||
-    profile?.risk ||
+    storedProfile?.riskProfile ||
+    storedProfile?.risk ||
+    nestedProfile?.riskProfile ||
+    nestedProfile?.risk ||
     null;
 
-  const hasInvestorDNA = Boolean(investorDNA);
+  const hasInvestorDNA =
+    Boolean(investorDNA);
 
-  const hasWealthBlueprint = Boolean(wealthBlueprint);
+  const hasWealthBlueprint =
+    Boolean(wealthBlueprint);
 
   const hasPracticePortfolio =
     Boolean(practicePortfolio?.holdings?.length) ||
-    Boolean(practicePortfolio?.status === "ACTIVE");
+    practicePortfolio?.status === "ACTIVE";
 
   return {
     storedProfile,
-    profile,
+
+    profile: {
+      ...profile,
+      firstName,
+      lastName
+    },
+
     investorDNA,
     wealthBlueprint,
     practicePortfolio,

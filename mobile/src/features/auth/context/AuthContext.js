@@ -61,117 +61,208 @@ export function AuthProvider({ children }) {
   }
 
   async function restoreSession() {
+  try {
+    const token =
+      await getStoredAccessToken();
+
+    const storedUser =
+      await getStoredUser();
+
+    if (!token) {
+      setAccessToken(null);
+      setUser(null);
+      return;
+    }
+
+    /*
+     * Begin with the locally stored authenticated user.
+     *
+     * A temporary failure from /auth/me must not destroy
+     * an otherwise valid local session.
+     */
+    let resolvedUser = storedUser;
+
     try {
-      const token =
-        await getStoredAccessToken();
-
-      const storedUser =
-        await getStoredUser();
-
-      if (!token) {
-        setAccessToken(null);
-        setUser(null);
-        return;
-      }
-
       const currentUser =
         await getCurrentUser(token);
 
-      const resolvedUser =
-        currentUser ||
-        storedUser;
-
-      if (!resolvedUser) {
-        throw new Error(
-          "Authenticated user could not be restored."
-        );
+      if (currentUser) {
+        /*
+         * Support APIs that return either:
+         *
+         * { id, email, username }
+         *
+         * or:
+         *
+         * { ok: true, user: {...} }
+         */
+        resolvedUser =
+          currentUser?.user ||
+          currentUser;
       }
-
-      /*
-       * Restore the canonical API authentication session.
-       */
-      setAccessToken(token);
-      setUser(resolvedUser);
-
-      /*
-       * CRITICAL:
-       * Restore the legacy/user-storage namespace.
-       *
-       * userGetItem() and userSetItem() depend on
-       * gatecepSession -> userId.
-       */
-      await saveSession(resolvedUser);
-
-      /*
-       * Now user-scoped storage reads the correct
-       * investor namespace.
-       */
-      await restorePortfolioFromCloud();
-    } catch (error) {
-      console.error(
-        "Unable to restore authentication session:",
-        error
+    } catch (currentUserError) {
+      console.warn(
+        "Current-user refresh failed; using stored session:",
+        currentUserError?.message ||
+          currentUserError
       );
-
-      await clearAuthSession();
-      await clearUserSession();
-      await clearUserScopedCaches();
-
-      setAccessToken(null);
-      setUser(null);
-    } finally {
-      setLoading(false);
     }
-  }
 
-  async function login(credentials) {
-    const previousUserId =
-      await getStoredAuthUserId();
+    if (!resolvedUser) {
+      throw new Error(
+        "Authenticated user could not be restored."
+      );
+    }
 
-    const result =
-      await loginUser(credentials);
+    const canonicalUserId =
+      resolvedUser?.id ||
+      resolvedUser?.userId;
 
-    if (
-      previousUserId &&
-      previousUserId !== result.user.id
-    ) {
-      await clearUserScopedCaches();
+    if (!canonicalUserId) {
+      throw new Error(
+        "Restored authenticated user has no user ID."
+      );
     }
 
     /*
-     * Save API authentication.
+     * Rewrite the canonical authentication record in case
+     * the API returned fresher user information.
      */
     await saveAuthSession({
-      accessToken: result.accessToken,
-      user: result.user
+      accessToken: token,
+      user: resolvedUser
     });
 
     /*
-     * CRITICAL:
-     * Save the user namespace used by userStorage.
-     *
-     * This restores:
-     * gatecepSession
-     * gatecepCurrentUserId
-     * gatecepIsLoggedIn
+     * Restore the namespace before any user-scoped reads.
      */
-    await saveSession(result.user);
+    await saveSession(resolvedUser);
 
-    setAccessToken(
-      result.accessToken
-    );
-
-    setUser(
-      result.user
-    );
+    setAccessToken(token);
+    setUser(resolvedUser);
 
     /*
-     * Must happen after saveSession().
+     * Portfolio restoration is useful, but it must not
+     * invalidate authentication if the portfolio API fails.
      */
-    await restorePortfolioFromCloud();
+    try {
+      await restorePortfolioFromCloud();
+    } catch (portfolioError) {
+      console.warn(
+        "Portfolio restoration skipped:",
+        portfolioError?.message ||
+          portfolioError
+      );
+    }
+  } catch (error) {
+    console.error(
+      "Unable to restore authentication session:",
+      error
+    );
 
-    return result;
+    await clearAuthSession();
+    await clearUserSession();
+    await clearUserScopedCaches();
+
+    setAccessToken(null);
+    setUser(null);
+  } finally {
+    setLoading(false);
   }
+}
+
+ async function login(credentials) {
+  const previousUserId =
+    await getStoredAuthUserId();
+
+  const result =
+    await loginUser(credentials);
+
+  /*
+   * Support either login response structure:
+   *
+   * {
+   *   accessToken,
+   *   user
+   * }
+   *
+   * or:
+   *
+   * {
+   *   data: {
+   *     accessToken,
+   *     user
+   *   }
+   * }
+   */
+  const loginData =
+    result?.data || result;
+
+  const nextAccessToken =
+    loginData?.accessToken ||
+    loginData?.token;
+
+  const nextUser =
+    loginData?.user;
+
+  if (!nextAccessToken) {
+    throw new Error(
+      "Login response did not include an access token."
+    );
+  }
+
+  if (!nextUser) {
+    throw new Error(
+      "Login response did not include a user."
+    );
+  }
+
+  const nextUserId =
+    nextUser?.id ||
+    nextUser?.userId;
+
+  if (!nextUserId) {
+    throw new Error(
+      "Login response user did not include an ID."
+    );
+  }
+
+  if (
+    previousUserId &&
+    previousUserId !== nextUserId
+  ) {
+    await clearUserScopedCaches();
+  }
+
+  await saveAuthSession({
+    accessToken: nextAccessToken,
+    user: nextUser
+  });
+
+  /*
+   * Must happen before screens use userGetItem().
+   */
+  await saveSession(nextUser);
+
+  setAccessToken(nextAccessToken);
+  setUser(nextUser);
+
+  try {
+    await restorePortfolioFromCloud();
+  } catch (portfolioError) {
+    console.warn(
+      "Portfolio restoration skipped after login:",
+      portfolioError?.message ||
+        portfolioError
+    );
+  }
+
+  return {
+    ...loginData,
+    accessToken: nextAccessToken,
+    user: nextUser
+  };
+}
 
   async function register(payload) {
     return await registerUser(payload);

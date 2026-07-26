@@ -12,39 +12,38 @@ export function buildUserId(username = "") {
 }
 
 export async function saveSession(user = {}) {
-  const userId = buildUserId(
-    user.username || user.email || "demo"
-  );
+  /*
+   * Backend user ID is the canonical namespace.
+   * Never derive it from username/email.
+   */
+  const userId =
+    String(
+      user.id ||
+      user.userId ||
+      ""
+    ).trim();
+
+  if (!userId) {
+    throw new Error(
+      "Authenticated user is missing an id."
+    );
+  }
 
   const session = {
     userId,
-    username: user.username || userId,
+    username: user.username || "",
     email: user.email || "",
     loggedIn: true,
     demo: !!user.demo,
     loggedInAt: new Date().toISOString()
   };
 
-  await AsyncStorage.setItem(
-    "gatecepSession",
-    JSON.stringify(session)
-  );
-
-  await AsyncStorage.setItem(
-    "gatecepCurrentUserId",
-    userId
-  );
-
-  await AsyncStorage.setItem(
-    "gatecepIsLoggedIn",
-    "true"
-  );
-
-  // legacy compatibility
-  await AsyncStorage.setItem(
-    "gatecepAuth",
-    JSON.stringify(session)
-  );
+  await AsyncStorage.multiSet([
+    ["gatecepSession", JSON.stringify(session)],
+    ["gatecepCurrentUserId", userId],
+    ["gatecepIsLoggedIn", "true"],
+    ["gatecepAuth", JSON.stringify(session)]
+  ]);
 
   return session;
 }
