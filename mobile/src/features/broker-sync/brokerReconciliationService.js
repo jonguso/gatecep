@@ -415,27 +415,39 @@ export async function buildBrokerReconciliation() {
     },
 
     brokerMirror: {
-      broker:
-        brokerMirror?.broker ||
-        null,
+  broker:
+    brokerMirror?.broker ||
+    null,
 
-      holdingsValue:
-        brokerValue,
+  accountName:
+    brokerMirror?.accountName ||
+    null,
 
-      cashBalance:
-        brokerCash,
+  brokerAccountId:
+    brokerMirror?.brokerAccountId ||
+    null,
 
-      totalValue:
-        brokerTotal,
+  currency:
+    brokerMirror?.currency ||
+    "KES",
 
-      holdingsCount:
-        brokerHoldings.length,
+  holdingsValue:
+    brokerValue,
 
-      syncedAt:
-        brokerMirror
-          ?.syncedAt ||
-        null
-    },
+  cashBalance:
+    brokerCash,
+
+  totalValue:
+    brokerTotal,
+
+  holdingsCount:
+    brokerHoldings.length,
+
+  syncedAt:
+    brokerMirror
+      ?.syncedAt ||
+    null
+},
 
     holdings:
       holdingResults,

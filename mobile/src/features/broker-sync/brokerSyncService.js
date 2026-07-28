@@ -342,67 +342,87 @@ export async function syncMockBrokerAccount() {
     cashBalance:
       1655.35,
 
-    holdings: [
-      {
-        symbol:
-          "SCOM",
+   holdings: [
+  {
+    symbol:
+      "SCOM",
 
-        name:
-          "Safaricom",
+    name:
+      "Safaricom",
 
-        sector:
-          "Telecommunication",
+    sector:
+      "Telecommunication",
 
-        quantity:
-          81,
+    quantity:
+      81,
 
-        averagePrice:
-          34.6,
+    averagePrice:
+      34.6,
 
-        marketPrice:
-          34.6
-      },
+    marketPrice:
+      34.6
+  },
 
-      {
-        symbol:
-          "KEGN",
+  {
+    symbol:
+      "KEGN",
 
-        name:
-          "KenGen",
+    name:
+      "KenGen",
 
-        sector:
-          "Energy",
+    sector:
+      "Energy",
 
-        quantity:
-          253,
+    quantity:
+      253,
 
-        averagePrice:
-          9.85,
+    averagePrice:
+      9.85,
 
-        marketPrice:
-          9.85
-      },
+    marketPrice:
+      9.85
+  },
 
-      {
-        symbol:
-          "EQTY",
+  {
+    symbol:
+      "EQTY",
 
-        name:
-          "Equity Group",
+    name:
+      "Equity Group",
 
-        sector:
-          "Banking",
+    sector:
+      "Banking",
 
-        quantity:
-          29,
+    quantity:
+      29,
 
-        averagePrice:
-          85,
+    averagePrice:
+      85,
 
-        marketPrice:
-          85
-      }
-    ]
+    marketPrice:
+      85
+  },
+
+  {
+    symbol:
+      "COOP",
+
+    name:
+      "Co-operative Bank",
+
+    sector:
+      "Banking",
+
+    quantity:
+      9,
+
+    averagePrice:
+      35,
+
+    marketPrice:
+      35
+  }
+]
   };
 
   return saveBrokerMirror(

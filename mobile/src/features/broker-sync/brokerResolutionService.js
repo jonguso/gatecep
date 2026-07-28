@@ -10,9 +10,15 @@ import {
 import {
   addBrokerSyncAuditEvent
 } from "./brokerSyncAuditStore";
+
 import {
   addBrokerResolutionLedgerEvent
 } from "./brokerResolutionLedgerStore";
+
+import {
+  getActiveBrokerReconciliationCase,
+  resolveBrokerReconciliationCaseIssue
+} from "./brokerReconciliationCaseStore";
 
 export const RESOLUTION_OPTIONS = [
   {
@@ -381,6 +387,50 @@ export async function resolveBrokerDiscrepancy({
         "RESOLVED"
     });
 
+  /*
+ * ============================================================
+ * PC-012 ACTIVE CASE UPDATE
+ * ============================================================
+ *
+ * A PC-010 resolution must also update the currently active
+ * reconciliation case.
+ *
+ * This does not change broker holdings or GateCEP holdings.
+ * It only records that the case discrepancy has been explained.
+ */
+
+const activeCase =
+  await getActiveBrokerReconciliationCase();
+
+let updatedCase =
+  null;
+
+if (
+  activeCase &&
+  discrepancy?.symbol
+) {
+  updatedCase =
+    await resolveBrokerReconciliationCaseIssue(
+      activeCase.id,
+      discrepancy.symbol,
+      {
+        resolutionCode:
+          option.code,
+
+        resolutionLabel:
+          option.label,
+
+        resolutionDecisionId:
+          ledgerEvent?.id ||
+          null,
+
+        resolvedAt:
+          ledgerEvent?.createdAt ||
+          new Date().toISOString()
+      }
+    );
+}
+
   const updatedWorkflow =
     await buildBrokerResolutionWorkflow();
 
@@ -500,14 +550,16 @@ export async function resolveBrokerDiscrepancy({
         )
   });
 
-  return {
-    ...updatedWorkflow,
+ return {
+  ...updatedWorkflow,
 
-    resolutionResult: {
-      savedResolution,
-      ledgerEvent
-    }
-  };
+  resolutionResult: {
+    savedResolution,
+    ledgerEvent,
+    reconciliationCase:
+      updatedCase
+  }
+};
 }
 
 function buildHoldingTitle(
