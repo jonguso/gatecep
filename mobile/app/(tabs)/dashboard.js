@@ -673,9 +673,14 @@ const blueprintCreated =
       route="/(tabs)/markets"
     />
 
-    <Quick
+     <Quick
       title="My Profile"
       route="/my-profile"
+    />
+
+    <Quick
+      title="Fundamental Hub"
+      route="/fundamental-data-hub"
     />
 
     {brokerConnected ? (

@@ -340,7 +340,7 @@ export async function syncMockBrokerAccount() {
       "KES",
 
     cashBalance:
-      1655.35,
+      1365.35,
 
    holdings: [
   {
@@ -421,6 +421,46 @@ export async function syncMockBrokerAccount() {
 
     marketPrice:
       35
+  },
+
+  {
+    symbol:
+      "EABL",
+
+    name:
+      "East African Breweries",
+
+    sector:
+      "Manufacturing",
+
+    quantity:
+      1,
+
+    averagePrice:
+      270,
+
+    marketPrice:
+      270
+  },
+
+  {
+    symbol:
+      "ABSA",
+
+    name:
+      "Absa Bank Kenya",
+
+    sector:
+      "Banking",
+
+    quantity:
+      10,
+
+    averagePrice:
+      29,
+
+    marketPrice:
+      29
   }
 ]
   };

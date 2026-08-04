@@ -1,0 +1,1842 @@
+import React, {
+  useMemo,
+  useState
+} from "react";
+
+import {
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
+} from "react-native";
+
+import {
+  router
+} from "expo-router";
+
+import {
+  buildFilingExtractionWorkspace,
+  buildFilingReadyJson
+} from "../src/features/fundamentals/extraction/filingExtractionService";
+
+import {
+  submitExtractionWorkspaceToFilings
+} from "../src/features/fundamentals/extraction/extractionSubmissionHandoff";
+
+/*
+ * ============================================================
+ * PC-025D
+ * FILING-TO-FUNDAMENTAL EXTRACTION WORKSPACE
+ * ============================================================
+ *
+ * Structured annual-report entry with:
+ *
+ * - company and filing metadata,
+ * - annual period financial values,
+ * - source-page references,
+ * - reconciliation checks,
+ * - filing-ready JSON generation.
+ * ============================================================
+ */
+
+const PERIOD_FIELDS = [
+  "revenue",
+  "grossProfit",
+  "operatingIncome",
+  "ebitda",
+  "netIncome",
+  "totalAssets",
+  "totalLiabilities",
+  "totalEquity",
+  "cashAndEquivalents",
+  "totalDebt",
+  "currentAssets",
+  "currentLiabilities",
+  "operatingCashFlow",
+  "capitalExpenditure",
+  "freeCashFlow",
+  "sharesOutstanding",
+  "earningsPerShare",
+  "bookValuePerShare",
+  "dividendPerShare"
+];
+
+export default function FilingExtractionScreen() {
+  const [
+    symbol,
+    setSymbol
+  ] = useState("SCOM");
+
+  const [
+    companyName,
+    setCompanyName
+  ] = useState(
+    "Safaricom PLC"
+  );
+
+  const [
+    filingType,
+    setFilingType
+  ] = useState(
+    "ANNUAL_REPORT"
+  );
+
+  const [
+    fiscalYear,
+    setFiscalYear
+  ] = useState("");
+
+  const [
+    periodEnd,
+    setPeriodEnd
+  ] = useState("");
+
+  const [
+    sourceName,
+    setSourceName
+  ] = useState("");
+
+  const [
+    sourceUrl,
+    setSourceUrl
+  ] = useState("");
+
+  const [
+    fileName,
+    setFileName
+  ] = useState("");
+
+  const [
+    values,
+    setValues
+  ] = useState(
+    buildEmptyValues()
+  );
+
+  const [
+    references,
+    setReferences
+  ] = useState(
+    buildEmptyReferences()
+  );
+
+  const [
+    result,
+    setResult
+  ] = useState(null);
+
+  const [
+    outputJson,
+    setOutputJson
+  ] = useState("");
+
+  const [
+    submitting,
+    setSubmitting
+  ] = useState(false);
+
+  const [
+    submitForReview,
+    setSubmitForReview
+  ] = useState(false);
+
+  const [
+    allowDuplicate,
+    setAllowDuplicate
+  ] = useState(false);
+
+  const [
+    submissionResult,
+    setSubmissionResult
+  ] = useState(null);
+
+  const period =
+    useMemo(
+      () => ({
+        fiscalYear:
+          parseNumber(
+            fiscalYear
+          ),
+
+        periodType:
+          "ANNUAL",
+
+        periodEnd:
+          periodEnd ||
+          null,
+
+        currency:
+          "KES",
+
+        ...Object.fromEntries(
+          PERIOD_FIELDS.map(
+            (field) => [
+              field,
+              parseNumber(
+                values?.[field]
+              )
+            ]
+          )
+        )
+      }),
+      [
+        fiscalYear,
+        periodEnd,
+        values
+      ]
+    );
+
+  const sourceReferences =
+    useMemo(
+      () =>
+        PERIOD_FIELDS
+          .map(
+            (field) => ({
+              field,
+
+              section:
+                references
+                  ?.[field]
+                  ?.section ||
+                null,
+
+              page:
+                parseNumber(
+                  references
+                    ?.[field]
+                    ?.page
+                ),
+
+              note:
+                references
+                  ?.[field]
+                  ?.note ||
+                null,
+
+              fiscalYear:
+                parseNumber(
+                  fiscalYear
+                )
+            })
+          )
+          .filter(
+            (reference) =>
+              reference.page !==
+                null ||
+              reference.section ||
+              reference.note
+          ),
+      [
+        references,
+        fiscalYear
+      ]
+    );
+
+  function runValidation() {
+    const workspace =
+      buildFilingExtractionWorkspace({
+        filing: {
+          symbol,
+
+          companyName,
+
+          filingType,
+
+          fiscalYear:
+            parseNumber(
+              fiscalYear
+            ),
+
+          periodEnd:
+            periodEnd ||
+            null,
+
+          sourceDocument: {
+            fileName:
+              fileName ||
+              null,
+
+            mimeType:
+              "application/pdf",
+
+            source: {
+              name:
+                sourceName ||
+                null,
+
+              type:
+                "COMPANY_FILING",
+
+              authoritative:
+                true,
+
+              verified:
+                true,
+
+              url:
+                sourceUrl ||
+                null
+            }
+          },
+
+          company: {
+            symbol,
+
+            name:
+              companyName,
+
+            exchange:
+              "NSE",
+
+            currency:
+              "KES"
+          }
+        },
+
+        periods: [
+          period
+        ],
+
+        sourceReferences
+      });
+
+    setResult(
+      workspace
+    );
+
+    setOutputJson(
+      JSON.stringify(
+        buildFilingReadyJson({
+          workspace
+        }),
+        null,
+        2
+      )
+    );
+  }
+
+  async function submitToVerifiedFilings() {
+    try {
+      setSubmitting(true);
+      setSubmissionResult(null);
+
+      if (!outputJson) {
+        throw new Error(
+          "Validate the extraction before submitting."
+        );
+      }
+
+      const result =
+        await submitExtractionWorkspaceToFilings({
+          filingReadyJson:
+            JSON.parse(outputJson),
+
+          workspaceType:
+            "SINGLE_PERIOD",
+
+          actor: {
+            id:
+              "gatecep-extraction-user",
+
+            name:
+              "Gatecep Extraction User"
+          },
+
+          submitForReview,
+
+          allowDuplicate,
+
+          note:
+            "Submitted directly from the PC-025D extraction workspace."
+        });
+
+      setSubmissionResult(
+        result
+      );
+    } catch (
+      submitError
+    ) {
+      setSubmissionResult({
+        submitted:
+          false,
+
+        status:
+          "FAILED",
+
+        error:
+          submitError?.message ||
+          "Submission failed."
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function clearWorkspace() {
+    setValues(
+      buildEmptyValues()
+    );
+
+    setReferences(
+      buildEmptyReferences()
+    );
+
+    setResult(null);
+    setOutputJson("");
+    setSubmissionResult(null);
+  }
+
+  return (
+    <ScrollView
+      style={
+        styles.screen
+      }
+      contentContainerStyle={
+        styles.content
+      }
+      keyboardShouldPersistTaps="handled"
+    >
+      <Text
+        style={
+          styles.eyebrow
+        }
+      >
+        PC-025D
+      </Text>
+
+      <Text
+        style={
+          styles.title
+        }
+      >
+        Filing Extraction Workspace
+      </Text>
+
+      <Text
+        style={
+          styles.subtitle
+        }
+      >
+        Enter verified annual-report values, attach source-page
+        references, run accounting checks, and generate filing-ready
+        JSON for PC-025B review.
+      </Text>
+
+      <Section
+        title="Filing Information"
+        description="Identify the company, fiscal period, and source document."
+      >
+        <Field
+          label="Symbol"
+          value={
+            symbol
+          }
+          onChangeText={
+            setSymbol
+          }
+        />
+
+        <Field
+          label="Company Name"
+          value={
+            companyName
+          }
+          onChangeText={
+            setCompanyName
+          }
+        />
+
+        <Field
+          label="Filing Type"
+          value={
+            filingType
+          }
+          onChangeText={
+            setFilingType
+          }
+        />
+
+        <Field
+          label="Fiscal Year"
+          value={
+            fiscalYear
+          }
+          onChangeText={
+            setFiscalYear
+          }
+          keyboardType="numeric"
+        />
+
+        <Field
+          label="Period End"
+          value={
+            periodEnd
+          }
+          onChangeText={
+            setPeriodEnd
+          }
+          placeholder="YYYY-MM-DD"
+        />
+
+        <Field
+          label="Source Name"
+          value={
+            sourceName
+          }
+          onChangeText={
+            setSourceName
+          }
+        />
+
+        <Field
+          label="Source URL"
+          value={
+            sourceUrl
+          }
+          onChangeText={
+            setSourceUrl
+          }
+        />
+
+        <Field
+          label="File Name"
+          value={
+            fileName
+          }
+          onChangeText={
+            setFileName
+          }
+        />
+      </Section>
+
+      <Section
+        title="Annual Financial Values"
+        description="Use figures exactly as supported by the filing. Leave unsupported values blank."
+      >
+        {PERIOD_FIELDS.map(
+          (field) => (
+            <FinancialField
+              key={
+                field
+              }
+              field={
+                field
+              }
+              value={
+                values?.[field] ||
+                ""
+              }
+              reference={
+                references
+                  ?.[field] ||
+                {}
+              }
+              onValueChange={
+                (next) =>
+                  setValues(
+                    (current) => ({
+                      ...current,
+
+                      [field]:
+                        next
+                    })
+                  )
+              }
+              onReferenceChange={
+                (next) =>
+                  setReferences(
+                    (current) => ({
+                      ...current,
+
+                      [field]: {
+                        ...(current
+                          ?.[field] ||
+                        {}),
+
+                        ...next
+                      }
+                    })
+                  )
+              }
+            />
+          )
+        )}
+      </Section>
+
+      <View
+        style={
+          styles.inlineButtons
+        }
+      >
+        <Pressable
+          style={
+            styles.primaryButton
+          }
+          onPress={
+            runValidation
+          }
+        >
+          <Text
+            style={
+              styles.primaryButtonText
+            }
+          >
+            Validate and Generate JSON
+          </Text>
+        </Pressable>
+
+        <Pressable
+          style={
+            styles.secondaryButtonInline
+          }
+          onPress={
+            clearWorkspace
+          }
+        >
+          <Text
+            style={
+              styles.secondaryButtonText
+            }
+          >
+            Clear Values
+          </Text>
+        </Pressable>
+      </View>
+
+      {result ? (
+        <>
+          <Section
+            title="Extraction Validation"
+            description="Review completeness, errors, warnings, and reconciliation checks."
+          >
+            <View
+              style={
+                styles.metricGrid
+              }
+            >
+              <Metric
+                label="Status"
+                value={
+                  formatLabel(
+                    result?.status
+                  )
+                }
+              />
+
+              <Metric
+                label="Completeness"
+                value={`${Number(
+                  result
+                    ?.completenessPercentage ||
+                  0
+                ).toFixed(2)}%`}
+              />
+
+              <Metric
+                label="Errors"
+                value={
+                  result
+                    ?.errors
+                    ?.length ||
+                  0
+                }
+              />
+
+              <Metric
+                label="Warnings"
+                value={
+                  result
+                    ?.warnings
+                    ?.length ||
+                  0
+                }
+              />
+            </View>
+
+            {result
+              ?.periods?.[0]
+              ?.checks?.map(
+                (
+                  check,
+                  index
+                ) => (
+                  <CheckCard
+                    key={
+                      check?.code ||
+                      index
+                    }
+                    check={
+                      check
+                    }
+                  />
+                )
+              )}
+          </Section>
+
+          <Section
+            title="Filing-Ready JSON"
+            description="Review the generated record, then create a draft or submit it directly for filing review."
+          >
+            <TextInput
+              style={
+                styles.output
+              }
+              multiline
+              editable={
+                false
+              }
+              textAlignVertical="top"
+              value={
+                outputJson
+              }
+            />
+
+            <View
+              style={
+                styles.submissionOptions
+              }
+            >
+              <Pressable
+                style={[
+                  styles.toggleButton,
+
+                  submitForReview &&
+                    styles.toggleButtonActive
+                ]}
+                onPress={() =>
+                  setSubmitForReview(
+                    (current) =>
+                      !current
+                  )
+                }
+              >
+                <Text
+                  style={
+                    styles.toggleButtonText
+                  }
+                >
+                  Submit For Review:{" "}
+                  {submitForReview
+                    ? "Yes"
+                    : "No"}
+                </Text>
+              </Pressable>
+
+              <Pressable
+                style={[
+                  styles.toggleButton,
+
+                  allowDuplicate &&
+                    styles.toggleButtonWarning
+                ]}
+                onPress={() =>
+                  setAllowDuplicate(
+                    (current) =>
+                      !current
+                  )
+                }
+              >
+                <Text
+                  style={
+                    styles.toggleButtonText
+                  }
+                >
+                  Duplicate Override:{" "}
+                  {allowDuplicate
+                    ? "Yes"
+                    : "No"}
+                </Text>
+              </Pressable>
+            </View>
+
+            <Pressable
+              disabled={
+                submitting ||
+                !outputJson
+              }
+              style={[
+                styles.primaryButton,
+                {
+                  marginTop:
+                    14
+                },
+
+                submitting &&
+                  {
+                    opacity:
+                      0.55
+                  }
+              ]}
+              onPress={
+                submitToVerifiedFilings
+              }
+            >
+              <Text
+                style={
+                  styles.primaryButtonText
+                }
+              >
+                {submitting
+                  ? "Submitting..."
+                  : submitForReview
+                    ? "Send Directly For Review"
+                    : "Create Draft In Verified Filings"}
+              </Text>
+            </Pressable>
+
+            {submissionResult ? (
+              <SubmissionReceipt
+                result={
+                  submissionResult
+                }
+              />
+            ) : null}
+          </Section>
+        </>
+      ) : null}
+
+      <View
+        style={
+          styles.protectionCard
+        }
+      >
+        <Text
+          style={
+            styles.protectionTitle
+          }
+        >
+          Source-Controlled Extraction
+        </Text>
+
+        <Text
+          style={
+            styles.protectionText
+          }
+        >
+          This workspace validates structured entries but does not
+          infer or manufacture missing financial facts. Filing approval
+          still occurs in PC-025C.
+        </Text>
+      </View>
+
+      <Pressable
+        style={
+          styles.secondaryButton
+        }
+        onPress={() =>
+          router.back()
+        }
+      >
+        <Text
+          style={
+            styles.secondaryButtonText
+          }
+        >
+          Back
+        </Text>
+      </Pressable>
+    </ScrollView>
+  );
+}
+
+function FinancialField({
+  field,
+  value,
+  reference,
+  onValueChange,
+  onReferenceChange
+}) {
+  return (
+    <View
+      style={
+        styles.financialCard
+      }
+    >
+      <Text
+        style={
+          styles.cardTitle
+        }
+      >
+        {formatLabel(
+          field
+        )}
+      </Text>
+
+      <TextInput
+        style={
+          styles.input
+        }
+        keyboardType="numeric"
+        placeholder="Financial value"
+        placeholderTextColor="#64748b"
+        value={
+          value
+        }
+        onChangeText={
+          onValueChange
+        }
+      />
+
+      <View
+        style={
+          styles.referenceRow
+        }
+      >
+        <TextInput
+          style={
+            styles.referenceInput
+          }
+          keyboardType="numeric"
+          placeholder="Page"
+          placeholderTextColor="#64748b"
+          value={
+            reference?.page ||
+            ""
+          }
+          onChangeText={
+            (page) =>
+              onReferenceChange({
+                page
+              })
+          }
+        />
+
+        <TextInput
+          style={
+            styles.referenceInputWide
+          }
+          placeholder="Section"
+          placeholderTextColor="#64748b"
+          value={
+            reference?.section ||
+            ""
+          }
+          onChangeText={
+            (section) =>
+              onReferenceChange({
+                section
+              })
+          }
+        />
+      </View>
+    </View>
+  );
+}
+
+function CheckCard({
+  check
+}) {
+  return (
+    <View
+      style={[
+        styles.checkCard,
+
+        check?.passed
+          ? styles.checkPassed
+          : check?.severity ===
+              "ERROR"
+            ? styles.checkError
+            : styles.checkWarning
+      ]}
+    >
+      <Text
+        style={
+          styles.cardTitle
+        }
+      >
+        {formatLabel(
+          check?.code
+        )}
+      </Text>
+
+      <Text
+        style={
+          styles.cardText
+        }
+      >
+        {check?.message}
+      </Text>
+
+      {check
+        ?.differencePercentage !==
+        null &&
+      check
+        ?.differencePercentage !==
+        undefined ? (
+        <Text
+          style={
+            styles.metaText
+          }
+        >
+          Difference:{" "}
+          {
+            check
+              .differencePercentage
+          }
+          %
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+function SubmissionReceipt({
+  result
+}) {
+  const filingId =
+    result
+      ?.receipt
+      ?.filingId ||
+    result
+      ?.filing
+      ?.id ||
+    null;
+
+  return (
+    <View
+      style={[
+        styles.receiptCard,
+
+        result?.submitted
+          ? styles.receiptSuccess
+          : styles.receiptWarning
+      ]}
+    >
+      <Text
+        style={
+          styles.receiptTitle
+        }
+      >
+        Submission Receipt
+      </Text>
+
+      <Text
+        style={
+          styles.receiptText
+        }
+      >
+        Status:{" "}
+        {result?.status ||
+        "Unknown"}
+      </Text>
+
+      <Text
+        style={
+          styles.receiptText
+        }
+      >
+        Filing ID:{" "}
+        {filingId ||
+        "Not created"}
+      </Text>
+
+      <Text
+        style={
+          styles.receiptText
+        }
+      >
+        Filing Status:{" "}
+        {result
+          ?.receipt
+          ?.status ||
+        result
+          ?.filing
+          ?.status ||
+        "Not available"}
+      </Text>
+
+      {result?.error ? (
+        <Text
+          style={
+            styles.receiptError
+          }
+        >
+          {result.error}
+        </Text>
+      ) : null}
+
+      {filingId ? (
+        <Pressable
+          style={
+            styles.openFilingButton
+          }
+          onPress={() =>
+            router.push({
+              pathname:
+                "/verified-filings",
+
+              params: {
+                filingId
+              }
+            })
+          }
+        >
+          <Text
+            style={
+              styles.openFilingButtonText
+            }
+          >
+            Open Created Filing
+          </Text>
+        </Pressable>
+      ) : null}
+    </View>
+  );
+}
+
+function Section({
+  title,
+  description,
+  children
+}) {
+  return (
+    <View
+      style={
+        styles.section
+      }
+    >
+      <Text
+        style={
+          styles.sectionTitle
+        }
+      >
+        {title}
+      </Text>
+
+      <Text
+        style={
+          styles.sectionDescription
+        }
+      >
+        {description}
+      </Text>
+
+      {children}
+    </View>
+  );
+}
+
+function Field({
+  label,
+  ...props
+}) {
+  return (
+    <>
+      <Text
+        style={
+          styles.fieldLabel
+        }
+      >
+        {label}
+      </Text>
+
+      <TextInput
+        style={
+          styles.input
+        }
+        placeholderTextColor="#64748b"
+        {...props}
+      />
+    </>
+  );
+}
+
+function Metric({
+  label,
+  value
+}) {
+  return (
+    <View
+      style={
+        styles.metricCard
+      }
+    >
+      <Text
+        style={
+          styles.metricLabel
+        }
+      >
+        {label}
+      </Text>
+
+      <Text
+        style={
+          styles.metricValue
+        }
+      >
+        {String(
+          value
+        )}
+      </Text>
+    </View>
+  );
+}
+
+function buildEmptyValues() {
+  return Object.fromEntries(
+    PERIOD_FIELDS.map(
+      (field) => [
+        field,
+        ""
+      ]
+    )
+  );
+}
+
+function buildEmptyReferences() {
+  return Object.fromEntries(
+    PERIOD_FIELDS.map(
+      (field) => [
+        field,
+        {
+          page:
+            "",
+
+          section:
+            "",
+
+          note:
+            ""
+        }
+      ]
+    )
+  );
+}
+
+function parseNumber(value) {
+  if (
+    value === null ||
+    value === undefined ||
+    String(value).trim() ===
+      ""
+  ) {
+    return null;
+  }
+
+  const parsed =
+    Number(
+      String(value)
+        .replaceAll(",", "")
+        .trim()
+    );
+
+  return Number.isFinite(
+    parsed
+  )
+    ? parsed
+    : null;
+}
+
+function formatLabel(value) {
+  return String(
+    value ||
+    ""
+  )
+    .replaceAll(
+      "_",
+      " "
+    )
+    .replace(
+      /([a-z])([A-Z])/g,
+      "$1 $2"
+    )
+    .toLowerCase()
+    .replace(
+      /\b\w/g,
+      (letter) =>
+        letter.toUpperCase()
+    );
+}
+
+const styles =
+  StyleSheet.create({
+    screen: {
+      flex:
+        1,
+
+      backgroundColor:
+        "#020617"
+    },
+
+    content: {
+      padding:
+        22,
+
+      paddingTop:
+        70,
+
+      paddingBottom:
+        110
+    },
+
+    eyebrow: {
+      color:
+        "#22d3ee",
+
+      fontWeight:
+        "900"
+    },
+
+    title: {
+      color:
+        "white",
+
+      fontSize:
+        31,
+
+      fontWeight:
+        "900",
+
+      marginTop:
+        8
+    },
+
+    subtitle: {
+      color:
+        "#94a3b8",
+
+      lineHeight:
+        22,
+
+      marginTop:
+        10
+    },
+
+    section: {
+      backgroundColor:
+        "#0f172a",
+
+      borderColor:
+        "#1e293b",
+
+      borderWidth:
+        1,
+
+      borderRadius:
+        20,
+
+      padding:
+        17,
+
+      marginTop:
+        20
+    },
+
+    sectionTitle: {
+      color:
+        "#67e8f9",
+
+      fontSize:
+        19,
+
+      fontWeight:
+        "900"
+    },
+
+    sectionDescription: {
+      color:
+        "#94a3b8",
+
+      lineHeight:
+        20,
+
+      marginTop:
+        7,
+
+      marginBottom:
+        5
+    },
+
+    fieldLabel: {
+      color:
+        "#cbd5e1",
+
+      fontWeight:
+        "900",
+
+      marginTop:
+        14
+    },
+
+    input: {
+      backgroundColor:
+        "#020617",
+
+      borderColor:
+        "#334155",
+
+      borderWidth:
+        1,
+
+      borderRadius:
+        13,
+
+      padding:
+        13,
+
+      color:
+        "white",
+
+      marginTop:
+        7
+    },
+
+    financialCard: {
+      backgroundColor:
+        "#020617",
+
+      borderColor:
+        "#1e293b",
+
+      borderWidth:
+        1,
+
+      borderRadius:
+        14,
+
+      padding:
+        14,
+
+      marginTop:
+        12
+    },
+
+    cardTitle: {
+      color:
+        "#67e8f9",
+
+      fontWeight:
+        "900"
+    },
+
+    cardText: {
+      color:
+        "#cbd5e1",
+
+      lineHeight:
+        20,
+
+      marginTop:
+        7
+    },
+
+    referenceRow: {
+      flexDirection:
+        "row",
+
+      gap:
+        8,
+
+      marginTop:
+        8
+    },
+
+    referenceInput: {
+      width:
+        "28%",
+
+      backgroundColor:
+        "#0f172a",
+
+      borderColor:
+        "#334155",
+
+      borderWidth:
+        1,
+
+      borderRadius:
+        11,
+
+      padding:
+        11,
+
+      color:
+        "white"
+    },
+
+    referenceInputWide: {
+      flex:
+        1,
+
+      backgroundColor:
+        "#0f172a",
+
+      borderColor:
+        "#334155",
+
+      borderWidth:
+        1,
+
+      borderRadius:
+        11,
+
+      padding:
+        11,
+
+      color:
+        "white"
+    },
+
+    inlineButtons: {
+      flexDirection:
+        "row",
+
+      flexWrap:
+        "wrap",
+
+      gap:
+        10,
+
+      marginTop:
+        18
+    },
+
+    primaryButton: {
+      flex:
+        1,
+
+      minWidth:
+        190,
+
+      backgroundColor:
+        "#0891b2",
+
+      padding:
+        16,
+
+      borderRadius:
+        15
+    },
+
+    primaryButtonText: {
+      color:
+        "white",
+
+      textAlign:
+        "center",
+
+      fontWeight:
+        "900"
+    },
+
+    secondaryButtonInline: {
+      backgroundColor:
+        "#334155",
+
+      padding:
+        16,
+
+      borderRadius:
+        15
+    },
+
+    secondaryButton: {
+      backgroundColor:
+        "#1e293b",
+
+      padding:
+        16,
+
+      borderRadius:
+        17,
+
+      marginTop:
+        14
+    },
+
+    secondaryButtonText: {
+      color:
+        "#67e8f9",
+
+      textAlign:
+        "center",
+
+      fontWeight:
+        "900"
+    },
+
+    metricGrid: {
+      flexDirection:
+        "row",
+
+      flexWrap:
+        "wrap",
+
+      gap:
+        10,
+
+      marginTop:
+        12
+    },
+
+    metricCard: {
+      width:
+        "47%",
+
+      backgroundColor:
+        "#020617",
+
+      borderRadius:
+        13,
+
+      padding:
+        13
+    },
+
+    metricLabel: {
+      color:
+        "#94a3b8",
+
+      fontSize:
+        11
+    },
+
+    metricValue: {
+      color:
+        "white",
+
+      fontWeight:
+        "900",
+
+      marginTop:
+        5
+    },
+
+    checkCard: {
+      backgroundColor:
+        "#020617",
+
+      borderWidth:
+        1,
+
+      borderRadius:
+        13,
+
+      padding:
+        13,
+
+      marginTop:
+        10
+    },
+
+    checkPassed: {
+      borderColor:
+        "rgba(34,197,94,.45)"
+    },
+
+    checkWarning: {
+      borderColor:
+        "rgba(245,158,11,.50)"
+    },
+
+    checkError: {
+      borderColor:
+        "rgba(239,68,68,.55)"
+    },
+
+    metaText: {
+      color:
+        "#94a3b8",
+
+      fontSize:
+        11,
+
+      marginTop:
+        6
+    },
+
+    output: {
+      minHeight:
+        360,
+
+      backgroundColor:
+        "#020617",
+
+      borderColor:
+        "#334155",
+
+      borderWidth:
+        1,
+
+      borderRadius:
+        14,
+
+      padding:
+        14,
+
+      color:
+        "#e2e8f0",
+
+      fontFamily:
+        "monospace",
+
+      fontSize:
+        12,
+
+      lineHeight:
+        18,
+
+      marginTop:
+        12
+    },
+
+    submissionOptions: {
+      flexDirection:
+        "row",
+
+      flexWrap:
+        "wrap",
+
+      gap:
+        9,
+
+      marginTop:
+        13
+    },
+
+    toggleButton: {
+      backgroundColor:
+        "#334155",
+
+      borderRadius:
+        12,
+
+      padding:
+        12
+    },
+
+    toggleButtonActive: {
+      backgroundColor:
+        "#15803d"
+    },
+
+    toggleButtonWarning: {
+      backgroundColor:
+        "#b45309"
+    },
+
+    toggleButtonText: {
+      color:
+        "white",
+
+      fontWeight:
+        "900"
+    },
+
+    receiptCard: {
+      backgroundColor:
+        "#020617",
+
+      borderWidth:
+        1,
+
+      borderRadius:
+        14,
+
+      padding:
+        14,
+
+      marginTop:
+        14
+    },
+
+    receiptSuccess: {
+      borderColor:
+        "rgba(34,197,94,.55)"
+    },
+
+    receiptWarning: {
+      borderColor:
+        "rgba(245,158,11,.55)"
+    },
+
+    receiptTitle: {
+      color:
+        "#67e8f9",
+
+      fontWeight:
+        "900"
+    },
+
+    receiptText: {
+      color:
+        "#cbd5e1",
+
+      marginTop:
+        7
+    },
+
+    receiptError: {
+      color:
+        "#fca5a5",
+
+      marginTop:
+        8
+    },
+
+    openFilingButton: {
+      backgroundColor:
+        "#7c3aed",
+
+      padding:
+        13,
+
+      borderRadius:
+        12,
+
+      marginTop:
+        12
+    },
+
+    openFilingButtonText: {
+      color:
+        "white",
+
+      textAlign:
+        "center",
+
+      fontWeight:
+        "900"
+    },
+
+    protectionCard: {
+      backgroundColor:
+        "rgba(245,158,11,.10)",
+
+      borderColor:
+        "rgba(245,158,11,.35)",
+
+      borderWidth:
+        1,
+
+      borderRadius:
+        18,
+
+      padding:
+        17,
+
+      marginTop:
+        20
+    },
+
+    protectionTitle: {
+      color:
+        "#fde68a",
+
+      fontWeight:
+        "900"
+    },
+
+    protectionText: {
+      color:
+        "#fef3c7",
+
+      lineHeight:
+        21,
+
+      marginTop:
+        7
+    }
+  });

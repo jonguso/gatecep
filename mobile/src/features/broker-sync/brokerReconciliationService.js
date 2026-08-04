@@ -264,18 +264,38 @@ export async function buildBrokerReconciliation() {
     );
 
   const practiceValue =
-    roundMoney(
-      practicePortfolio
-        ?.investedAmount ||
-      practiceHoldings.reduce(
-        (sum, holding) =>
-          sum +
+  roundMoney(
+    practiceHoldings.reduce(
+      (sum, holding) => {
+        const quantity =
           number(
-            holding?.marketValue
-          ),
-        0
-      )
-    );
+            holding?.quantity
+          );
+
+        const marketPrice =
+          number(
+            holding?.marketPrice ??
+            holding?.price
+          );
+
+        const marketValue =
+          number(
+            holding?.marketValue ??
+            holding?.value
+          );
+
+        return (
+          sum +
+          (
+            marketValue ||
+            quantity *
+              marketPrice
+          )
+        );
+      },
+      0
+    )
+  );
 
   const practiceCash =
     roundMoney(
@@ -364,26 +384,48 @@ export async function buildBrokerReconciliation() {
       practiceTotal
     );
 
-  const fullyMatched =
-    mismatchedHoldings.length ===
-      0 &&
-    Math.abs(
-      cashDifference
-    ) < 0.01 &&
-    Math.abs(
-      totalDifference
-    ) < 0.01;
+  const holdingsFullyMatched =
+  mismatchedHoldings.length ===
+  0;
 
-  const partiallyMatched =
-    matchedHoldings.length >
-    0;
+const cashFullyMatched =
+  Math.abs(
+    cashDifference
+  ) < 0.01;
 
-  const status =
-    fullyMatched
-      ? "MATCHED"
-      : partiallyMatched
-      ? "PARTIAL_MATCH"
-      : "OUT_OF_SYNC";
+const totalFullyMatched =
+  Math.abs(
+    totalDifference
+  ) < 0.01;
+
+const fullyMatched =
+  holdingsFullyMatched &&
+  cashFullyMatched &&
+  totalFullyMatched;
+
+const partiallyMatched =
+  matchedHoldings.length > 0 &&
+  mismatchedHoldings.length > 0;
+
+let status;
+
+if (fullyMatched) {
+  status =
+    "MATCHED";
+} else if (
+  holdingsFullyMatched
+) {
+  status =
+    "HOLDINGS_MATCH";
+} else if (
+  partiallyMatched
+) {
+  status =
+    "PARTIAL_MATCH";
+} else {
+  status =
+    "OUT_OF_SYNC";
+}
 
   return {
     status,
@@ -499,24 +541,30 @@ function buildStatusMessage({
   matched,
   mismatched
 }) {
-  if (
-    status === "MATCHED"
-  ) {
-    return (
-      "The broker mirror matches the GateCEP portfolio."
-    );
-  }
+  switch (status) {
+    case "MATCHED":
+      return (
+        "The broker account and GateCEP portfolio are fully reconciled."
+      );
 
-  if (
-    status ===
-    "PARTIAL_MATCH"
-  ) {
-    return (
-      `${matched} holdings match, while ${mismatched} require reconciliation.`
-    );
-  }
+    case "HOLDINGS_MATCH":
+      return (
+        `${matched} holdings match, but the cash balance or total account value still requires reconciliation.`
+      );
 
-  return (
-    "The broker mirror is currently out of sync with the GateCEP portfolio."
-  );
+    case "PARTIAL_MATCH":
+      return (
+        `${matched} holdings match, while ${mismatched} require reconciliation.`
+      );
+
+    case "OUT_OF_SYNC":
+      return (
+        "The broker mirror is currently out of sync with the GateCEP portfolio."
+      );
+
+    default:
+      return (
+        "The broker reconciliation status requires review."
+      );
+  }
 }

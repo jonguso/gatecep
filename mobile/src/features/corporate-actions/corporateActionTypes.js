@@ -1,0 +1,117 @@
+export const CORPORATE_ACTION_TYPES = {
+  BONUS_SHARE:
+    "BONUS_SHARE",
+
+  STOCK_SPLIT:
+    "STOCK_SPLIT",
+
+  REVERSE_SPLIT:
+    "REVERSE_SPLIT",
+
+  RIGHTS_ISSUE:
+    "RIGHTS_ISSUE",
+
+  SPIN_OFF:
+    "SPIN_OFF",
+
+  MERGER:
+    "MERGER",
+
+  SYMBOL_CHANGE:
+    "SYMBOL_CHANGE",
+
+  DELISTING:
+    "DELISTING"
+};
+
+export const CORPORATE_ACTION_STATUSES = {
+  DRAFT:
+    "DRAFT",
+
+  ANNOUNCED:
+    "ANNOUNCED",
+
+  UNDER_REVIEW:
+    "UNDER_REVIEW",
+
+  APPROVED:
+    "APPROVED",
+
+  REJECTED:
+    "REJECTED",
+
+  EXECUTED:
+    "EXECUTED",
+
+  CANCELLED:
+    "CANCELLED",
+
+  FAILED:
+    "FAILED"
+};
+
+export const CORPORATE_ACTION_CATEGORIES = {
+  SHARE_ADJUSTMENT:
+    "SHARE_ADJUSTMENT",
+
+  ENTITLEMENT:
+    "ENTITLEMENT",
+
+  REORGANIZATION:
+    "REORGANIZATION",
+
+  SECURITY_LIFECYCLE:
+    "SECURITY_LIFECYCLE"
+};
+
+export function getCorporateActionCategory(
+  actionType
+) {
+  switch (actionType) {
+    case CORPORATE_ACTION_TYPES.BONUS_SHARE:
+    case CORPORATE_ACTION_TYPES.STOCK_SPLIT:
+    case CORPORATE_ACTION_TYPES.REVERSE_SPLIT:
+      return CORPORATE_ACTION_CATEGORIES
+        .SHARE_ADJUSTMENT;
+
+    case CORPORATE_ACTION_TYPES.RIGHTS_ISSUE:
+      return CORPORATE_ACTION_CATEGORIES
+        .ENTITLEMENT;
+
+    case CORPORATE_ACTION_TYPES.SPIN_OFF:
+    case CORPORATE_ACTION_TYPES.MERGER:
+      return CORPORATE_ACTION_CATEGORIES
+        .REORGANIZATION;
+
+    case CORPORATE_ACTION_TYPES.SYMBOL_CHANGE:
+    case CORPORATE_ACTION_TYPES.DELISTING:
+      return CORPORATE_ACTION_CATEGORIES
+        .SECURITY_LIFECYCLE;
+
+    default:
+      return CORPORATE_ACTION_CATEGORIES
+        .REORGANIZATION;
+  }
+}
+
+export function corporateActionRequiresCash(
+  actionType
+) {
+  return (
+    actionType ===
+    CORPORATE_ACTION_TYPES.RIGHTS_ISSUE
+  );
+}
+
+export function corporateActionRequiresTargetSecurity(
+  actionType
+) {
+  return (
+    actionType ===
+      CORPORATE_ACTION_TYPES.SPIN_OFF ||
+    actionType ===
+      CORPORATE_ACTION_TYPES.MERGER ||
+    actionType ===
+      CORPORATE_ACTION_TYPES.SYMBOL_CHANGE
+  );
+}

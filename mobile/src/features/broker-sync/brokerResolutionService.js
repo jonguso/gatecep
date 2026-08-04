@@ -17,8 +17,13 @@ import {
 
 import {
   getActiveBrokerReconciliationCase,
+  loadBrokerReconciliationCases,
   resolveBrokerReconciliationCaseIssue
 } from "./brokerReconciliationCaseStore";
+
+import {
+  createRecommendedBrokerAction
+} from "./brokerReconciliationActionService";
 
 export const RESOLUTION_OPTIONS = [
   {
@@ -387,31 +392,45 @@ export async function resolveBrokerDiscrepancy({
         "RESOLVED"
     });
 
-  /*
+ /*
  * ============================================================
- * PC-012 ACTIVE CASE UPDATE
+ * PC-012 ACTIVE / MATCHING CASE UPDATE
  * ============================================================
- *
- * A PC-010 resolution must also update the currently active
- * reconciliation case.
- *
- * This does not change broker holdings or GateCEP holdings.
- * It only records that the case discrepancy has been explained.
  */
 
 const activeCase =
   await getActiveBrokerReconciliationCase();
 
+const allCases =
+  await loadBrokerReconciliationCases();
+
+const matchingCase =
+  activeCase ||
+  (
+    Array.isArray(allCases)
+      ? allCases.find(
+          (item) =>
+            Array.isArray(item?.issues) &&
+            item.issues.some(
+              (issue) =>
+                issue?.discrepancyKey ===
+                discrepancy?.discrepancyKey
+            )
+        )
+      : null
+  );
+
 let updatedCase =
+  matchingCase ||
   null;
 
 if (
-  activeCase &&
+  matchingCase &&
   discrepancy?.symbol
 ) {
   updatedCase =
     await resolveBrokerReconciliationCaseIssue(
-      activeCase.id,
+      matchingCase.id,
       discrepancy.symbol,
       {
         resolutionCode:
@@ -431,7 +450,61 @@ if (
     );
 }
 
-  const updatedWorkflow =
+/*
+ * ============================================================
+ * PC-013 CREATE FOLLOW-UP ACTION
+ * ============================================================
+ */
+
+let recommendedAction =
+  null;
+
+if (
+  updatedCase &&
+  discrepancy?.discrepancyKey
+) {
+  const resolvedIssue =
+    Array.isArray(
+      updatedCase?.issues
+    )
+      ? updatedCase.issues.find(
+          (issue) =>
+            issue?.discrepancyKey ===
+            discrepancy.discrepancyKey
+        )
+      : null;
+
+  if (resolvedIssue) {
+    recommendedAction =
+      await createRecommendedBrokerAction({
+        reconciliationCase:
+          updatedCase,
+
+        issue:
+          resolvedIssue,
+
+        resolution: {
+          resolutionCode:
+            option.code,
+
+          resolutionLabel:
+            option.label
+        }
+      });
+
+    console.log(
+      "PC-013 ACTION RESULT:",
+      recommendedAction
+    );
+  } else {
+    console.warn(
+      "PC-013 could not find case issue:",
+      discrepancy.discrepancyKey
+    );
+  }
+}
+
+const updatedWorkflow =
     await buildBrokerResolutionWorkflow();
 
   /*
@@ -557,7 +630,8 @@ if (
     savedResolution,
     ledgerEvent,
     reconciliationCase:
-      updatedCase
+      updatedCase,
+    recommendedAction
   }
 };
 }

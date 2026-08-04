@@ -1,4 +1,7 @@
-import { userGetItem } from "../../auth/userStorage";
+import {
+  userGetItem,
+  userSetItem
+} from "../../auth/userStorage";
 
 function parseStoredValue(value) {
   if (!value) {
@@ -159,4 +162,98 @@ export async function loadInvestorContext() {
       hasPracticePortfolio
     }
   };
+}
+
+/*
+ * ============================================================
+ * SAVE PRACTICE PORTFOLIO
+ * ============================================================
+ */
+
+export async function savePracticePortfolio(
+  portfolio = {}
+) {
+  const now =
+    new Date().toISOString();
+
+  const holdings =
+    Array.isArray(
+      portfolio?.holdings
+    )
+      ? portfolio.holdings
+      : [];
+
+  const investedAmount =
+    holdings.reduce(
+      (total, holding) =>
+        total +
+        Number(
+          holding?.quantity ||
+          0
+        ) *
+        Number(
+          holding?.averagePrice ||
+          holding?.averageCost ||
+          0
+        ),
+      0
+    );
+
+  const holdingsValue =
+    holdings.reduce(
+      (total, holding) =>
+        total +
+        Number(
+          holding?.quantity ||
+          0
+        ) *
+        Number(
+          holding?.marketPrice ||
+          holding?.price ||
+          0
+        ),
+      0
+    );
+
+  const availableCash =
+    Number(
+      portfolio?.availableCash ||
+      0
+    );
+
+  const normalized = {
+    ...portfolio,
+
+    holdings,
+
+    investedAmount,
+
+    holdingsValue,
+
+    availableCash,
+
+    totalValue:
+      holdingsValue +
+      availableCash,
+
+    status:
+      portfolio?.status ||
+      "ACTIVE",
+
+    createdAt:
+      portfolio?.createdAt ||
+      now,
+
+    updatedAt:
+      now
+  };
+
+  await userSetItem(
+    "practicePortfolio",
+    JSON.stringify(
+      normalized
+    )
+  );
+
+  return normalized;
 }

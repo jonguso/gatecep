@@ -1,0 +1,3649 @@
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState
+} from "react";
+
+import {
+  ActivityIndicator,
+  Alert,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TextInput,
+  View
+} from "react-native";
+
+import {
+  router,
+  useLocalSearchParams
+} from "expo-router";
+
+import {
+  VERIFIED_FILING_DUPLICATE_STATUSES,
+  VERIFIED_FILING_REVIEW_ACTIONS,
+  VERIFIED_FILING_STATUSES,
+  approveVerifiedFiling,
+  buildVerifiedFilingSummary,
+  createVerifiedFiling,
+  createVerifiedFilingRevision,
+  loadDuplicateVerifiedFilings,
+  loadVerifiedFilings,
+  promoteApprovedVerifiedFiling,
+  rejectVerifiedFiling,
+  submitVerifiedFilingForReview,
+  verifyVerifiedFiling
+} from "../src/features/fundamentals/filings/verifiedFilingDatasetManager";
+
+import {
+  buildVerifiedFilingReviewQueue
+} from "../src/features/fundamentals/filings/verifiedFilingReviewService";
+
+/*
+ * ============================================================
+ * PC-025C
+ * VERIFIED FILING REVIEW DASHBOARD
+ * ============================================================
+ *
+ * Provides:
+ *
+ * - filing intake,
+ * - status filtering,
+ * - pending verification queue,
+ * - pending approval queue,
+ * - duplicate warnings,
+ * - approval and rejection controls,
+ * - filing revision creation,
+ * - source-document details,
+ * - review notes and audit history,
+ * - approved filing promotion into the main repository.
+ *
+ * Safeguards:
+ *
+ * - only approved filings may be promoted,
+ * - duplicate and revision status remains visible,
+ * - rejected and superseded records remain auditable,
+ * - no financial facts are invented.
+ * ============================================================
+ */
+
+const STATUS_FILTERS = [
+  "ALL",
+  VERIFIED_FILING_STATUSES
+    .DRAFT,
+  VERIFIED_FILING_STATUSES
+    .PENDING_REVIEW,
+  VERIFIED_FILING_STATUSES
+    .VERIFIED,
+  VERIFIED_FILING_STATUSES
+    .APPROVED,
+  VERIFIED_FILING_STATUSES
+    .REJECTED,
+  VERIFIED_FILING_STATUSES
+    .SUPERSEDED,
+  VERIFIED_FILING_STATUSES
+    .ARCHIVED
+];
+
+const DETAIL_TABS = [
+  "OVERVIEW",
+  "SOURCE",
+  "FINANCIALS",
+  "REVIEW",
+  "AUDIT"
+];
+
+export default function VerifiedFilingsScreen() {
+  const {
+    filingId:
+      routeFilingId
+  } =
+    useLocalSearchParams();
+
+  const [
+    loading,
+    setLoading
+  ] = useState(true);
+
+  const [
+    refreshing,
+    setRefreshing
+  ] = useState(false);
+
+  const [
+    working,
+    setWorking
+  ] = useState(false);
+
+  const [
+    error,
+    setError
+  ] = useState("");
+
+  const [
+    filings,
+    setFilings
+  ] = useState([]);
+
+  const [
+    summary,
+    setSummary
+  ] = useState(null);
+
+  const [
+    reviewQueue,
+    setReviewQueue
+  ] = useState(null);
+
+  const [
+    duplicates,
+    setDuplicates
+  ] = useState([]);
+
+  const [
+    statusFilter,
+    setStatusFilter
+  ] = useState("ALL");
+
+  const [
+    selectedFilingId,
+    setSelectedFilingId
+  ] = useState(null);
+
+  const [
+    detailTab,
+    setDetailTab
+  ] = useState("OVERVIEW");
+
+  const [
+    reviewerName,
+    setReviewerName
+  ] = useState("Gatecep Reviewer");
+
+  const [
+    reviewNote,
+    setReviewNote
+  ] = useState("");
+
+  const [
+    rejectionReason,
+    setRejectionReason
+  ] = useState("");
+
+  const [
+    intakeJson,
+    setIntakeJson
+  ] = useState("");
+
+  const loadData =
+    useCallback(
+      async ({
+        fullLoader = false
+      } = {}) => {
+        try {
+          if (fullLoader) {
+            setLoading(true);
+          } else {
+            setRefreshing(true);
+          }
+
+          setError("");
+
+          const [
+            storedFilings,
+            filingSummary,
+            queue,
+            duplicateRecords
+          ] =
+            await Promise.all([
+              loadVerifiedFilings(),
+              buildVerifiedFilingSummary(),
+              buildVerifiedFilingReviewQueue(),
+              loadDuplicateVerifiedFilings()
+            ]);
+
+          setFilings(
+            Array.isArray(
+              storedFilings
+            )
+              ? storedFilings
+              : []
+          );
+
+          setSummary(
+            filingSummary
+          );
+
+          setReviewQueue(
+            queue
+          );
+
+          setDuplicates(
+            Array.isArray(
+              duplicateRecords
+            )
+              ? duplicateRecords
+              : []
+          );
+
+          setSelectedFilingId(
+            (current) => {
+              const requestedId =
+                Array.isArray(
+                  routeFilingId
+                )
+                  ? routeFilingId[0]
+                  : routeFilingId;
+
+              const requestedExists =
+                requestedId &&
+                storedFilings.some(
+                  (filing) =>
+                    filing?.id ===
+                    requestedId
+                );
+
+              return requestedExists
+                ? requestedId
+                : current ||
+                  storedFilings?.[0]
+                    ?.id ||
+                  null;
+            }
+          );
+        } catch (
+          loadError
+        ) {
+          console.error(
+            "Unable to load verified filing data:",
+            loadError
+          );
+
+          setError(
+            loadError?.message ||
+            "Unable to load verified filing records."
+          );
+        } finally {
+          setLoading(false);
+          setRefreshing(false);
+        }
+      },
+      [
+        routeFilingId
+      ]
+    );
+
+  useEffect(
+    () => {
+      loadData({
+        fullLoader:
+          true
+      });
+    },
+    [
+      loadData
+    ]
+  );
+
+  const visibleFilings =
+    useMemo(
+      () => {
+        if (
+          statusFilter ===
+          "ALL"
+        ) {
+          return filings;
+        }
+
+        return filings.filter(
+          (filing) =>
+            filing?.status ===
+            statusFilter
+        );
+      },
+      [
+        filings,
+        statusFilter
+      ]
+    );
+
+  const selectedFiling =
+    useMemo(
+      () =>
+        filings.find(
+          (filing) =>
+            filing?.id ===
+            selectedFilingId
+        ) ||
+        filings[0] ||
+        null,
+      [
+        filings,
+        selectedFilingId
+      ]
+    );
+
+  const actor =
+    useMemo(
+      () => ({
+        id:
+          reviewerName
+            .trim() ||
+          "reviewer",
+
+        name:
+          reviewerName
+            .trim() ||
+          "Gatecep Reviewer"
+      }),
+      [
+        reviewerName
+      ]
+    );
+
+  const executeAction =
+    useCallback(
+      async (
+        action
+      ) => {
+        if (!selectedFiling) {
+          return;
+        }
+
+        try {
+          setWorking(true);
+          setError("");
+
+          if (
+            action ===
+            VERIFIED_FILING_REVIEW_ACTIONS
+              .SUBMIT
+          ) {
+            await submitVerifiedFilingForReview({
+              filingId:
+                selectedFiling.id,
+
+              reviewer:
+                actor,
+
+              note:
+                reviewNote
+            });
+          } else if (
+            action ===
+            VERIFIED_FILING_REVIEW_ACTIONS
+              .VERIFY
+          ) {
+            await verifyVerifiedFiling({
+              filingId:
+                selectedFiling.id,
+
+              reviewer:
+                actor,
+
+              note:
+                reviewNote
+            });
+          } else if (
+            action ===
+            VERIFIED_FILING_REVIEW_ACTIONS
+              .APPROVE
+          ) {
+            await approveVerifiedFiling({
+              filingId:
+                selectedFiling.id,
+
+              reviewer:
+                actor,
+
+              note:
+                reviewNote,
+
+              promote:
+                true
+            });
+          } else if (
+            action ===
+            VERIFIED_FILING_REVIEW_ACTIONS
+              .REJECT
+          ) {
+            if (
+              !rejectionReason
+                .trim()
+            ) {
+              throw new Error(
+                "Enter a rejection reason before rejecting the filing."
+              );
+            }
+
+            await rejectVerifiedFiling({
+              filingId:
+                selectedFiling.id,
+
+              reviewer:
+                actor,
+
+              reason:
+                rejectionReason,
+
+              note:
+                reviewNote
+            });
+          }
+
+          setReviewNote("");
+          setRejectionReason("");
+
+          await loadData();
+
+          Alert.alert(
+            "Filing Updated",
+            `${formatLabel(
+              action
+            )} completed successfully.`
+          );
+        } catch (
+          actionError
+        ) {
+          setError(
+            actionError?.message ||
+            "Unable to update the filing."
+          );
+        } finally {
+          setWorking(false);
+        }
+      },
+      [
+        actor,
+        loadData,
+        rejectionReason,
+        reviewNote,
+        selectedFiling
+      ]
+    );
+
+  const createRevision =
+    useCallback(
+      async () => {
+        if (!selectedFiling) {
+          return;
+        }
+
+        try {
+          setWorking(true);
+          setError("");
+
+          const result =
+            await createVerifiedFilingRevision({
+              filingId:
+                selectedFiling.id,
+
+              revisedFiling: {
+                ...selectedFiling,
+
+                id:
+                  undefined,
+
+                status:
+                  VERIFIED_FILING_STATUSES
+                    .DRAFT,
+
+                review: {
+                  notes:
+                    []
+                },
+
+                auditTrail:
+                  []
+              },
+
+              actor,
+
+              note:
+                reviewNote ||
+                "Revision created from the filing review dashboard."
+            });
+
+          setSelectedFilingId(
+            result
+              ?.revision
+              ?.id ||
+            null
+          );
+
+          setDetailTab(
+            "OVERVIEW"
+          );
+
+          await loadData();
+        } catch (
+          revisionError
+        ) {
+          setError(
+            revisionError?.message ||
+            "Unable to create the filing revision."
+          );
+        } finally {
+          setWorking(false);
+        }
+      },
+      [
+        actor,
+        loadData,
+        reviewNote,
+        selectedFiling
+      ]
+    );
+
+  const promoteFiling =
+    useCallback(
+      async () => {
+        if (!selectedFiling) {
+          return;
+        }
+
+        try {
+          setWorking(true);
+          setError("");
+
+          await promoteApprovedVerifiedFiling({
+            filingId:
+              selectedFiling.id
+          });
+
+          Alert.alert(
+            "Repository Promotion Complete",
+            `${selectedFiling.symbol} was merged into the main fundamental repository.`
+          );
+
+          await loadData();
+        } catch (
+          promoteError
+        ) {
+          setError(
+            promoteError?.message ||
+            "Unable to promote the approved filing."
+          );
+        } finally {
+          setWorking(false);
+        }
+      },
+      [
+        loadData,
+        selectedFiling
+      ]
+    );
+
+  const createFromJson =
+    useCallback(
+      async () => {
+        try {
+          setWorking(true);
+          setError("");
+
+          if (
+            !intakeJson.trim()
+          ) {
+            throw new Error(
+              "Paste a filing JSON record before creating the filing."
+            );
+          }
+
+          const parsed =
+            JSON.parse(
+              intakeJson
+            );
+
+          const filing =
+            await createVerifiedFiling({
+              filing:
+                parsed,
+
+              actor
+            });
+
+          setSelectedFilingId(
+            filing.id
+          );
+
+          setIntakeJson("");
+
+          await loadData();
+
+          Alert.alert(
+            "Filing Created",
+            `${filing.symbol || "The filing"} was added as a draft.`
+          );
+        } catch (
+          intakeError
+        ) {
+          setError(
+            intakeError?.message ||
+            "Unable to create the filing from JSON."
+          );
+        } finally {
+          setWorking(false);
+        }
+      },
+      [
+        actor,
+        intakeJson,
+        loadData
+      ]
+    );
+
+  const loadTemplate =
+    useCallback(
+      () => {
+        setIntakeJson(
+          JSON.stringify(
+            buildFilingTemplate(),
+            null,
+            2
+          )
+        );
+      },
+      []
+    );
+
+  if (loading) {
+    return (
+      <View
+        style={
+          styles.centerScreen
+        }
+      >
+        <ActivityIndicator
+          size="large"
+          color="#22d3ee"
+        />
+
+        <Text
+          style={
+            styles.loadingText
+          }
+        >
+          Loading verified filing records...
+        </Text>
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView
+      style={
+        styles.screen
+      }
+      contentContainerStyle={
+        styles.content
+      }
+      keyboardShouldPersistTaps="handled"
+    >
+      <Text
+        style={
+          styles.eyebrow
+        }
+      >
+        PC-025C
+      </Text>
+
+      <Text
+        style={
+          styles.title
+        }
+      >
+        Verified Filing Review
+      </Text>
+
+      <Text
+        style={
+          styles.subtitle
+        }
+      >
+        Intake, review, verify, approve, reject, revise,
+        and promote financial filings before they enter the
+        primary fundamental repository.
+      </Text>
+
+      {error ? (
+        <View
+          style={
+            styles.errorCard
+          }
+        >
+          <Text
+            style={
+              styles.errorText
+            }
+          >
+            {error}
+          </Text>
+        </View>
+      ) : null}
+
+      {routeFilingId &&
+      selectedFiling ? (
+        <View
+          style={
+            styles.routeBanner
+          }
+        >
+          <Text
+            style={
+              styles.routeBannerTitle
+            }
+          >
+            Opened From Extraction Workflow
+          </Text>
+
+          <Text
+            style={
+              styles.routeBannerText
+            }
+          >
+            Filing{" "}
+            {selectedFiling.id}{" "}
+            is selected for review.
+          </Text>
+        </View>
+      ) : null}
+
+      <View
+        style={
+          styles.hero
+        }
+      >
+        <View
+          style={
+            styles.heroScore
+          }
+        >
+          <Text
+            style={
+              styles.heroScoreValue
+            }
+          >
+            {
+              summary
+                ?.approved ||
+              0
+            }
+          </Text>
+
+          <Text
+            style={
+              styles.heroScoreMaximum
+            }
+          >
+            approved
+          </Text>
+        </View>
+
+        <View
+          style={
+            styles.heroContent
+          }
+        >
+          <Text
+            style={
+              styles.heroLabel
+            }
+          >
+            Verified Filing Controls
+          </Text>
+
+          <Text
+            style={
+              styles.heroTitle
+            }
+          >
+            {
+              reviewQueue
+                ?.total ||
+              0
+            }{" "}
+            Filing(s) Await Review
+          </Text>
+
+          <Text
+            style={
+              styles.heroText
+            }
+          >
+            {
+              summary?.total ||
+              0
+            }{" "}
+            total filing(s),{" "}
+            {
+              duplicates.length
+            }{" "}
+            duplicate or revision warning(s), and{" "}
+            {
+              summary?.superseded ||
+              0
+            }{" "}
+            superseded filing(s).
+          </Text>
+        </View>
+      </View>
+
+      <View
+        style={
+          styles.metricGrid
+        }
+      >
+        <Metric
+          label="Draft"
+          value={
+            summary?.draft ||
+            0
+          }
+        />
+
+        <Metric
+          label="Pending Review"
+          value={
+            summary
+              ?.pendingReview ||
+            0
+          }
+        />
+
+        <Metric
+          label="Verified"
+          value={
+            summary
+              ?.verified ||
+            0
+          }
+        />
+
+        <Metric
+          label="Approved"
+          value={
+            summary
+              ?.approved ||
+            0
+          }
+        />
+
+        <Metric
+          label="Rejected"
+          value={
+            summary
+              ?.rejected ||
+            0
+          }
+        />
+
+        <Metric
+          label="Duplicates"
+          value={
+            summary
+              ?.duplicates ||
+            0
+          }
+        />
+      </View>
+
+      <Section
+        title="Filing Intake"
+        description="Create a draft filing from normalized JSON. Financial values must come from a verified source document."
+      >
+        <View
+          style={
+            styles.inlineButtons
+          }
+        >
+          <Pressable
+            style={
+              styles.smallButton
+            }
+            onPress={
+              loadTemplate
+            }
+          >
+            <Text
+              style={
+                styles.smallButtonText
+              }
+            >
+              Load Filing Template
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={
+              styles.smallButtonMuted
+            }
+            onPress={() =>
+              setIntakeJson("")
+            }
+          >
+            <Text
+              style={
+                styles.smallButtonText
+              }
+            >
+              Clear
+            </Text>
+          </Pressable>
+        </View>
+
+        <TextInput
+          style={
+            styles.editor
+          }
+          multiline
+          autoCapitalize="none"
+          autoCorrect={
+            false
+          }
+          textAlignVertical="top"
+          placeholder="Paste normalized filing JSON..."
+          placeholderTextColor="#64748b"
+          value={
+            intakeJson
+          }
+          onChangeText={
+            setIntakeJson
+          }
+        />
+
+        <Pressable
+          disabled={
+            working
+          }
+          style={[
+            styles.primaryButton,
+
+            working &&
+              styles.disabled
+          ]}
+          onPress={
+            createFromJson
+          }
+        >
+          <Text
+            style={
+              styles.primaryButtonText
+            }
+          >
+            Create Draft Filing
+          </Text>
+        </Pressable>
+      </Section>
+
+      <Section
+        title="Filing Register"
+        description="Filter filings by lifecycle status and select one for review."
+      >
+        <OptionRow
+          values={
+            STATUS_FILTERS
+          }
+          selected={
+            statusFilter
+          }
+          onSelect={
+            setStatusFilter
+          }
+        />
+
+        {visibleFilings.length ? (
+          visibleFilings.map(
+            (
+              filing,
+              index
+            ) => (
+              <FilingCard
+                key={
+                  filing?.id ||
+                  `FILING-${index}`
+                }
+                filing={
+                  filing
+                }
+                selected={
+                  selectedFiling
+                    ?.id ===
+                  filing?.id
+                }
+                onPress={() => {
+                  setSelectedFilingId(
+                    filing?.id
+                  );
+
+                  setDetailTab(
+                    "OVERVIEW"
+                  );
+                }}
+              />
+            )
+          )
+        ) : (
+          <EmptyState
+            title="No Matching Filings"
+            message="No filing matches the selected status."
+          />
+        )}
+      </Section>
+
+      {selectedFiling ? (
+        <>
+          <Section
+            title={`${selectedFiling.symbol} Filing Review`}
+            description={`${formatLabel(
+              selectedFiling.filingType
+            )} · Fiscal year ${
+              selectedFiling.fiscalYear ??
+              "not specified"
+            } · Revision ${
+              selectedFiling.revisionNumber
+            }`}
+          >
+            <OptionRow
+              values={
+                DETAIL_TABS
+              }
+              selected={
+                detailTab
+              }
+              onSelect={
+                setDetailTab
+              }
+            />
+
+            {detailTab ===
+            "OVERVIEW" ? (
+              <FilingOverview
+                filing={
+                  selectedFiling
+                }
+              />
+            ) : null}
+
+            {detailTab ===
+            "SOURCE" ? (
+              <FilingSource
+                filing={
+                  selectedFiling
+                }
+              />
+            ) : null}
+
+            {detailTab ===
+            "FINANCIALS" ? (
+              <FilingFinancials
+                filing={
+                  selectedFiling
+                }
+              />
+            ) : null}
+
+            {detailTab ===
+            "REVIEW" ? (
+              <FilingReview
+                filing={
+                  selectedFiling
+                }
+              />
+            ) : null}
+
+            {detailTab ===
+            "AUDIT" ? (
+              <FilingAudit
+                filing={
+                  selectedFiling
+                }
+              />
+            ) : null}
+          </Section>
+
+          <Section
+            title="Review Controls"
+            description="Apply lifecycle actions using the named reviewer and review notes below."
+          >
+            <Text
+              style={
+                styles.fieldLabel
+              }
+            >
+              Reviewer
+            </Text>
+
+            <TextInput
+              style={
+                styles.input
+              }
+              placeholder="Reviewer name"
+              placeholderTextColor="#64748b"
+              value={
+                reviewerName
+              }
+              onChangeText={
+                setReviewerName
+              }
+            />
+
+            <Text
+              style={
+                styles.fieldLabel
+              }
+            >
+              Review Note
+            </Text>
+
+            <TextInput
+              style={
+                styles.textArea
+              }
+              multiline
+              textAlignVertical="top"
+              placeholder="Optional review note"
+              placeholderTextColor="#64748b"
+              value={
+                reviewNote
+              }
+              onChangeText={
+                setReviewNote
+              }
+            />
+
+            <Text
+              style={
+                styles.fieldLabel
+              }
+            >
+              Rejection Reason
+            </Text>
+
+            <TextInput
+              style={
+                styles.input
+              }
+              placeholder="Required only when rejecting"
+              placeholderTextColor="#64748b"
+              value={
+                rejectionReason
+              }
+              onChangeText={
+                setRejectionReason
+              }
+            />
+
+            <View
+              style={
+                styles.actionGrid
+              }
+            >
+              <ActionButton
+                label="Submit"
+                disabled={
+                  working ||
+                  selectedFiling
+                    .status !==
+                  VERIFIED_FILING_STATUSES
+                    .DRAFT
+                }
+                onPress={() =>
+                  executeAction(
+                    VERIFIED_FILING_REVIEW_ACTIONS
+                      .SUBMIT
+                  )
+                }
+              />
+
+              <ActionButton
+                label="Verify"
+                disabled={
+                  working ||
+                  selectedFiling
+                    .status !==
+                  VERIFIED_FILING_STATUSES
+                    .PENDING_REVIEW
+                }
+                onPress={() =>
+                  executeAction(
+                    VERIFIED_FILING_REVIEW_ACTIONS
+                      .VERIFY
+                  )
+                }
+              />
+
+              <ActionButton
+                label="Approve + Promote"
+                positive
+                disabled={
+                  working ||
+                  selectedFiling
+                    .status !==
+                  VERIFIED_FILING_STATUSES
+                    .VERIFIED
+                }
+                onPress={() =>
+                  executeAction(
+                    VERIFIED_FILING_REVIEW_ACTIONS
+                      .APPROVE
+                  )
+                }
+              />
+
+              <ActionButton
+                label="Reject"
+                danger
+                disabled={
+                  working ||
+                  ![
+                    VERIFIED_FILING_STATUSES
+                      .PENDING_REVIEW,
+                    VERIFIED_FILING_STATUSES
+                      .VERIFIED
+                  ].includes(
+                    selectedFiling
+                      .status
+                  )
+                }
+                onPress={() =>
+                  executeAction(
+                    VERIFIED_FILING_REVIEW_ACTIONS
+                      .REJECT
+                  )
+                }
+              />
+
+              <ActionButton
+                label="Create Revision"
+                disabled={
+                  working
+                }
+                onPress={
+                  createRevision
+                }
+              />
+
+              <ActionButton
+                label="Promote Again"
+                positive
+                disabled={
+                  working ||
+                  selectedFiling
+                    .status !==
+                  VERIFIED_FILING_STATUSES
+                    .APPROVED
+                }
+                onPress={
+                  promoteFiling
+                }
+              />
+            </View>
+          </Section>
+        </>
+      ) : null}
+
+      <Section
+        title="Duplicate and Revision Alerts"
+        description="Exact duplicates, possible duplicates, and controlled revisions requiring attention."
+      >
+        {duplicates.length ? (
+          duplicates.map(
+            (
+              filing,
+              index
+            ) => (
+              <View
+                key={
+                  filing?.id ||
+                  `DUPLICATE-${index}`
+                }
+                style={[
+                  styles.messageCard,
+                  styles.warningBorder
+                ]}
+              >
+                <Text
+                  style={
+                    styles.issueTitleWarning
+                  }
+                >
+                  {
+                    filing?.symbol ||
+                    "Unknown"
+                  }{" "}
+                  ·{" "}
+                  {formatLabel(
+                    filing
+                      ?.duplicateStatus
+                  )}
+                </Text>
+
+                <Text
+                  style={
+                    styles.cardText
+                  }
+                >
+                  Fiscal year{" "}
+                  {
+                    filing?.fiscalYear ??
+                    "not specified"
+                  }, revision{" "}
+                  {
+                    filing
+                      ?.revisionNumber
+                  }.
+                </Text>
+
+                <Row
+                  label="Duplicate Of"
+                  value={
+                    filing
+                      ?.duplicateOfFilingId ||
+                    "Not linked"
+                  }
+                />
+              </View>
+            )
+          )
+        ) : (
+          <EmptyState
+            title="No Duplicate Alerts"
+            message="No duplicate or revision warning is currently active."
+          />
+        )}
+      </Section>
+
+      <View
+        style={
+          styles.protectionCard
+        }
+      >
+        <Text
+          style={
+            styles.protectionTitle
+          }
+        >
+          Controlled Promotion
+        </Text>
+
+        <Text
+          style={
+            styles.protectionText
+          }
+        >
+          Only approved filings can enter the main fundamental
+          repository. Rejected, superseded, and duplicate
+          filings remain preserved for audit and revision
+          history.
+        </Text>
+      </View>
+
+      <Pressable
+        disabled={
+          refreshing
+        }
+        style={[
+          styles.primaryButton,
+
+          refreshing &&
+            styles.disabled
+        ]}
+        onPress={() =>
+          loadData()
+        }
+      >
+        {refreshing ? (
+          <ActivityIndicator
+            color="white"
+          />
+        ) : (
+          <Text
+            style={
+              styles.primaryButtonText
+            }
+          >
+            Refresh Filing Register
+          </Text>
+        )}
+      </Pressable>
+
+      <Pressable
+        style={
+          styles.secondaryButton
+        }
+        onPress={() =>
+          router.back()
+        }
+      >
+        <Text
+          style={
+            styles.secondaryButtonText
+          }
+        >
+          Back
+        </Text>
+      </Pressable>
+    </ScrollView>
+  );
+}
+
+function FilingCard({
+  filing,
+  selected,
+  onPress
+}) {
+  const duplicate =
+    filing
+      ?.duplicateStatus !==
+    VERIFIED_FILING_DUPLICATE_STATUSES
+      .UNIQUE;
+
+  return (
+    <Pressable
+      style={[
+        styles.recordCard,
+
+        selected &&
+          styles.recordCardSelected
+      ]}
+      onPress={
+        onPress
+      }
+    >
+      <View
+        style={
+          styles.cardHeader
+        }
+      >
+        <View
+          style={{
+            flex:
+              1
+          }}
+        >
+          <Text
+            style={
+              styles.cardTitle
+            }
+          >
+            {
+              filing?.symbol ||
+              "Unknown"
+            }
+          </Text>
+
+          <Text
+            style={
+              styles.cardSubtitle
+            }
+          >
+            {formatLabel(
+              filing?.filingType
+            )}{" "}
+            · FY{" "}
+            {
+              filing?.fiscalYear ??
+              "N/A"
+            }
+          </Text>
+        </View>
+
+        <View
+          style={
+            styles.statusBlock
+          }
+        >
+          <Text
+            style={
+              statusStyle(
+                filing?.status
+              )
+            }
+          >
+            {formatLabel(
+              filing?.status
+            )}
+          </Text>
+
+          <Text
+            style={
+              styles.statusScore
+            }
+          >
+            Rev{" "}
+            {
+              filing
+                ?.revisionNumber ||
+              1
+            }
+          </Text>
+        </View>
+      </View>
+
+      <View
+        style={
+          styles.recordMetrics
+        }
+      >
+        <MiniMetric
+          label="Period End"
+          value={
+            shortDate(
+              filing?.periodEnd
+            )
+          }
+        />
+
+        <MiniMetric
+          label="Duplicate"
+          value={
+            duplicate
+              ? formatLabel(
+                  filing
+                    ?.duplicateStatus
+                )
+              : "No"
+          }
+        />
+
+        <MiniMetric
+          label="Source"
+          value={
+            filing
+              ?.sourceDocument
+              ?.source
+              ?.name ||
+            "Unknown"
+          }
+        />
+
+        <MiniMetric
+          label="Audit Events"
+          value={
+            safeArray(
+              filing?.auditTrail
+            ).length
+          }
+        />
+      </View>
+    </Pressable>
+  );
+}
+
+function FilingOverview({
+  filing
+}) {
+  return (
+    <View
+      style={
+        styles.summaryCard
+      }
+    >
+      <Row
+        label="Company"
+        value={
+          filing
+            ?.companyName ||
+          "Unknown"
+        }
+      />
+
+      <Row
+        label="Status"
+        value={
+          formatLabel(
+            filing?.status
+          )
+        }
+      />
+
+      <Row
+        label="Filing Type"
+        value={
+          formatLabel(
+            filing
+              ?.filingType
+          )
+        }
+      />
+
+      <Row
+        label="Fiscal Year"
+        value={
+          filing
+            ?.fiscalYear ??
+          "Not available"
+        }
+      />
+
+      <Row
+        label="Revision"
+        value={
+          filing
+            ?.revisionNumber ||
+          1
+        }
+      />
+
+      <Row
+        label="Duplicate Status"
+        value={
+          formatLabel(
+            filing
+              ?.duplicateStatus
+          )
+        }
+      />
+
+      <Row
+        label="Content Hash"
+        value={
+          filing
+            ?.contentHash ||
+          "Not available"
+        }
+      />
+    </View>
+  );
+}
+
+function FilingSource({
+  filing
+}) {
+  const document =
+    filing
+      ?.sourceDocument ||
+    {};
+
+  const source =
+    document?.source ||
+    {};
+
+  return (
+    <>
+      <View
+        style={
+          styles.summaryCard
+        }
+      >
+        <Row
+          label="File Name"
+          value={
+            document?.fileName ||
+            "Not available"
+          }
+        />
+
+        <Row
+          label="MIME Type"
+          value={
+            document?.mimeType ||
+            "Not available"
+          }
+        />
+
+        <Row
+          label="Page Count"
+          value={
+            document?.pageCount ??
+            "Not available"
+          }
+        />
+
+        <Row
+          label="Checksum"
+          value={
+            document?.checksum ||
+            "Not available"
+          }
+        />
+
+        <Row
+          label="Source Name"
+          value={
+            source?.name ||
+            "Unknown"
+          }
+        />
+
+        <Row
+          label="Source Type"
+          value={
+            formatLabel(
+              source?.type
+            )
+          }
+        />
+
+        <Row
+          label="Authoritative"
+          value={
+            source?.authoritative
+              ? "Yes"
+              : "No"
+          }
+        />
+
+        <Row
+          label="Verified Source"
+          value={
+            source?.verified
+              ? "Yes"
+              : "No"
+          }
+        />
+
+        <Row
+          label="Published"
+          value={
+            shortDate(
+              source?.publishedAt
+            )
+          }
+        />
+      </View>
+
+      {source?.url ? (
+        <View
+          style={
+            styles.messageCard
+          }
+        >
+          <Text
+            style={
+              styles.cardTitle
+            }
+          >
+            Source URL
+          </Text>
+
+          <Text
+            style={
+              styles.cardText
+            }
+          >
+            {source.url}
+          </Text>
+        </View>
+      ) : null}
+    </>
+  );
+}
+
+function FilingFinancials({
+  filing
+}) {
+  const company =
+    filing?.company ||
+    {};
+
+  const periods =
+    safeArray(
+      company?.periods
+    );
+
+  return (
+    <>
+      <View
+        style={
+          styles.summaryCard
+        }
+      >
+        <Row
+          label="Current Price"
+          value={
+            nullableCurrency(
+              company
+                ?.currentPrice
+            )
+          }
+        />
+
+        <Row
+          label="Shares Outstanding"
+          value={
+            nullableNumberText(
+              company
+                ?.sharesOutstanding
+            )
+          }
+        />
+
+        <Row
+          label="Financial Periods"
+          value={
+            periods.length
+          }
+        />
+      </View>
+
+      {periods.length ? (
+        periods.map(
+          (
+            period,
+            index
+          ) => (
+            <View
+              key={
+                `${period?.fiscalYear || "YEAR"}-${index}`
+              }
+              style={
+                styles.messageCard
+              }
+            >
+              <Text
+                style={
+                  styles.cardTitle
+                }
+              >
+                FY{" "}
+                {
+                  period?.fiscalYear ??
+                  "Unknown"
+                }
+              </Text>
+
+              <Row
+                label="Revenue"
+                value={
+                  nullableCurrency(
+                    period?.revenue
+                  )
+                }
+              />
+
+              <Row
+                label="Net Income"
+                value={
+                  nullableCurrency(
+                    period
+                      ?.netIncome
+                  )
+                }
+              />
+
+              <Row
+                label="Free Cash Flow"
+                value={
+                  nullableCurrency(
+                    period
+                      ?.freeCashFlow
+                  )
+                }
+              />
+
+              <Row
+                label="EPS"
+                value={
+                  nullableNumberText(
+                    period
+                      ?.earningsPerShare
+                  )
+                }
+              />
+
+              <Row
+                label="Book Value / Share"
+                value={
+                  nullableNumberText(
+                    period
+                      ?.bookValuePerShare
+                  )
+                }
+              />
+
+              <Row
+                label="Dividend / Share"
+                value={
+                  nullableNumberText(
+                    period
+                      ?.dividendPerShare
+                  )
+                }
+              />
+            </View>
+          )
+        )
+      ) : (
+        <EmptyState
+          title="No Financial Periods"
+          message="The filing does not contain normalized financial periods."
+        />
+      )}
+    </>
+  );
+}
+
+function FilingReview({
+  filing
+}) {
+  const review =
+    filing?.review ||
+    {};
+
+  return (
+    <>
+      <View
+        style={
+          styles.summaryCard
+        }
+      >
+        <Row
+          label="Submitted"
+          value={
+            shortDateTime(
+              review
+                ?.submittedAt
+            )
+          }
+        />
+
+        <Row
+          label="Submitted By"
+          value={
+            review
+              ?.submittedBy
+              ?.name ||
+            "Not available"
+          }
+        />
+
+        <Row
+          label="Verified"
+          value={
+            shortDateTime(
+              review
+                ?.verifiedAt
+            )
+          }
+        />
+
+        <Row
+          label="Verified By"
+          value={
+            review
+              ?.verifiedBy
+              ?.name ||
+            "Not available"
+          }
+        />
+
+        <Row
+          label="Approved"
+          value={
+            shortDateTime(
+              review
+                ?.approvedAt
+            )
+          }
+        />
+
+        <Row
+          label="Approved By"
+          value={
+            review
+              ?.approvedBy
+              ?.name ||
+            "Not available"
+          }
+        />
+
+        <Row
+          label="Rejected"
+          value={
+            shortDateTime(
+              review
+                ?.rejectedAt
+            )
+          }
+        />
+
+        <Row
+          label="Rejection Reason"
+          value={
+            review
+              ?.rejectionReason ||
+            "Not available"
+          }
+        />
+      </View>
+
+      <Text
+        style={
+          styles.subheading
+        }
+      >
+        Review Notes
+      </Text>
+
+      {safeArray(
+        review?.notes
+      ).length ? (
+        safeArray(
+          review?.notes
+        ).map(
+          (
+            note,
+            index
+          ) => (
+            <View
+              key={
+                note?.id ||
+                `NOTE-${index}`
+              }
+              style={
+                styles.messageCard
+              }
+            >
+              <Text
+                style={
+                  styles.cardText
+                }
+              >
+                {
+                  note?.note ||
+                  "No note text"
+                }
+              </Text>
+
+              <Text
+                style={
+                  styles.issueMeta
+                }
+              >
+                {
+                  note
+                    ?.actor
+                    ?.name ||
+                  "Unknown reviewer"
+                }{" "}
+                ·{" "}
+                {shortDateTime(
+                  note?.timestamp
+                )}
+              </Text>
+            </View>
+          )
+        )
+      ) : (
+        <EmptyState
+          title="No Review Notes"
+          message="No review notes have been recorded."
+        />
+      )}
+    </>
+  );
+}
+
+function FilingAudit({
+  filing
+}) {
+  const events =
+    safeArray(
+      filing?.auditTrail
+    )
+      .slice()
+      .reverse();
+
+  return events.length ? (
+    events.map(
+      (
+        event,
+        index
+      ) => (
+        <View
+          key={
+            event?.id ||
+            `AUDIT-${index}`
+          }
+          style={
+            styles.messageCard
+          }
+        >
+          <Text
+            style={
+              styles.cardTitle
+            }
+          >
+            {formatLabel(
+              event?.action
+            )}
+          </Text>
+
+          <Text
+            style={
+              styles.cardText
+            }
+          >
+            {
+              event?.note ||
+              "No audit note."
+            }
+          </Text>
+
+          <Text
+            style={
+              styles.issueMeta
+            }
+          >
+            {
+              event
+                ?.actor
+                ?.name ||
+              "System"
+            }{" "}
+            ·{" "}
+            {shortDateTime(
+              event?.timestamp
+            )}
+          </Text>
+        </View>
+      )
+    )
+  ) : (
+    <EmptyState
+      title="No Audit Events"
+      message="No audit events are recorded for this filing."
+    />
+  );
+}
+
+function Section({
+  title,
+  description,
+  children
+}) {
+  return (
+    <View
+      style={
+        styles.section
+      }
+    >
+      <Text
+        style={
+          styles.sectionTitle
+        }
+      >
+        {title}
+      </Text>
+
+      {description ? (
+        <Text
+          style={
+            styles.sectionDescription
+          }
+        >
+          {description}
+        </Text>
+      ) : null}
+
+      {children}
+    </View>
+  );
+}
+
+function Metric({
+  label,
+  value
+}) {
+  return (
+    <View
+      style={
+        styles.metricCard
+      }
+    >
+      <Text
+        style={
+          styles.metricLabel
+        }
+      >
+        {label}
+      </Text>
+
+      <Text
+        style={
+          styles.metricValue
+        }
+      >
+        {String(
+          value
+        )}
+      </Text>
+    </View>
+  );
+}
+
+function MiniMetric({
+  label,
+  value
+}) {
+  return (
+    <View
+      style={
+        styles.miniMetric
+      }
+    >
+      <Text
+        style={
+          styles.miniMetricLabel
+        }
+      >
+        {label}
+      </Text>
+
+      <Text
+        style={
+          styles.miniMetricValue
+        }
+      >
+        {String(
+          value
+        )}
+      </Text>
+    </View>
+  );
+}
+
+function Row({
+  label,
+  value
+}) {
+  return (
+    <View
+      style={
+        styles.row
+      }
+    >
+      <Text
+        style={
+          styles.rowLabel
+        }
+      >
+        {label}
+      </Text>
+
+      <Text
+        style={
+          styles.rowValue
+        }
+      >
+        {String(
+          value ??
+          "Not available"
+        )}
+      </Text>
+    </View>
+  );
+}
+
+function ActionButton({
+  label,
+  onPress,
+  disabled,
+  positive = false,
+  danger = false
+}) {
+  return (
+    <Pressable
+      disabled={
+        disabled
+      }
+      style={[
+        styles.actionButton,
+
+        positive &&
+          styles.actionPositive,
+
+        danger &&
+          styles.actionDanger,
+
+        disabled &&
+          styles.disabled
+      ]}
+      onPress={
+        onPress
+      }
+    >
+      <Text
+        style={
+          styles.actionButtonText
+        }
+      >
+        {label}
+      </Text>
+    </Pressable>
+  );
+}
+
+function OptionRow({
+  values,
+  selected,
+  onSelect
+}) {
+  return (
+    <ScrollView
+      horizontal
+      showsHorizontalScrollIndicator={
+        false
+      }
+      contentContainerStyle={
+        styles.optionRow
+      }
+    >
+      {values.map(
+        (value) => (
+          <Pressable
+            key={
+              value
+            }
+            style={[
+              styles.optionButton,
+
+              selected ===
+                value &&
+                styles.optionButtonActive
+            ]}
+            onPress={() =>
+              onSelect(
+                value
+              )
+            }
+          >
+            <Text
+              style={[
+                styles.optionText,
+
+                selected ===
+                  value &&
+                  styles.optionTextActive
+              ]}
+            >
+              {formatLabel(
+                value
+              )}
+            </Text>
+          </Pressable>
+        )
+      )}
+    </ScrollView>
+  );
+}
+
+function EmptyState({
+  title,
+  message
+}) {
+  return (
+    <View
+      style={
+        styles.emptyCard
+      }
+    >
+      <Text
+        style={
+          styles.cardTitle
+        }
+      >
+        {title}
+      </Text>
+
+      <Text
+        style={
+          styles.cardText
+        }
+      >
+        {message}
+      </Text>
+    </View>
+  );
+}
+
+function buildFilingTemplate() {
+  return {
+    symbol:
+      "SCOM",
+
+    companyName:
+      "Safaricom PLC",
+
+    filingType:
+      "ANNUAL_REPORT",
+
+    fiscalYear:
+      null,
+
+    periodEnd:
+      null,
+
+    publicationDate:
+      null,
+
+    sourceDocument: {
+      fileName:
+        null,
+
+      fileUri:
+        null,
+
+      mimeType:
+        "application/pdf",
+
+      pageCount:
+        null,
+
+      checksum:
+        null,
+
+      source: {
+        name:
+          null,
+
+        type:
+          "COMPANY_FILING",
+
+        authoritative:
+          true,
+
+        verified:
+          true,
+
+        url:
+          null,
+
+        publishedAt:
+          null
+      }
+    },
+
+    company: {
+      symbol:
+        "SCOM",
+
+      name:
+        "Safaricom PLC",
+
+      sector:
+        "Telecommunication and Technology",
+
+      exchange:
+        "NSE",
+
+      currency:
+        "KES",
+
+      currentPrice:
+        null,
+
+      priceUpdatedAt:
+        null,
+
+      sharesOutstanding:
+        null,
+
+      periods: [
+        {
+          fiscalYear:
+            null,
+
+          periodType:
+            "ANNUAL",
+
+          periodEnd:
+            null,
+
+          revenue:
+            null,
+
+          netIncome:
+            null,
+
+          freeCashFlow:
+            null,
+
+          totalAssets:
+            null,
+
+          totalLiabilities:
+            null,
+
+          totalEquity:
+            null,
+
+          earningsPerShare:
+            null,
+
+          bookValuePerShare:
+            null,
+
+          dividendPerShare:
+            null
+        }
+      ]
+    }
+  };
+}
+
+function safeArray(value) {
+  return Array.isArray(value)
+    ? value
+    : [];
+}
+
+function nullableCurrency(value) {
+  if (
+    value === null ||
+    value === undefined ||
+    !Number.isFinite(
+      Number(value)
+    )
+  ) {
+    return "Not available";
+  }
+
+  return `KES ${Number(
+    value
+  ).toLocaleString(
+    "en-US",
+    {
+      minimumFractionDigits:
+        2,
+
+      maximumFractionDigits:
+        2
+    }
+  )}`;
+}
+
+function nullableNumberText(value) {
+  if (
+    value === null ||
+    value === undefined ||
+    !Number.isFinite(
+      Number(value)
+    )
+  ) {
+    return "Not available";
+  }
+
+  return Number(value).toLocaleString(
+    "en-US",
+    {
+      maximumFractionDigits:
+        4
+    }
+  );
+}
+
+function shortDate(value) {
+  if (!value) {
+    return "Not available";
+  }
+
+  const date =
+    new Date(value);
+
+  return Number.isNaN(
+    date.getTime()
+  )
+    ? "Not available"
+    : date.toLocaleDateString();
+}
+
+function shortDateTime(value) {
+  if (!value) {
+    return "Not available";
+  }
+
+  const date =
+    new Date(value);
+
+  return Number.isNaN(
+    date.getTime()
+  )
+    ? "Not available"
+    : date.toLocaleString();
+}
+
+function formatLabel(value) {
+  return String(
+    value ||
+    ""
+  )
+    .replaceAll(
+      "_",
+      " "
+    )
+    .toLowerCase()
+    .replace(
+      /\b\w/g,
+      (letter) =>
+        letter.toUpperCase()
+    );
+}
+
+function statusStyle(status) {
+  if (
+    status ===
+    VERIFIED_FILING_STATUSES
+      .APPROVED
+  ) {
+    return [
+      styles.statusText,
+      styles.validText
+    ];
+  }
+
+  if (
+    status ===
+      VERIFIED_FILING_STATUSES
+        .REJECTED ||
+    status ===
+      VERIFIED_FILING_STATUSES
+        .SUPERSEDED
+  ) {
+    return [
+      styles.statusText,
+      styles.invalidText
+    ];
+  }
+
+  if (
+    status ===
+      VERIFIED_FILING_STATUSES
+        .PENDING_REVIEW ||
+    status ===
+      VERIFIED_FILING_STATUSES
+        .VERIFIED
+  ) {
+    return [
+      styles.statusText,
+      styles.warningText
+    ];
+  }
+
+  return [
+    styles.statusText,
+    styles.infoText
+  ];
+}
+
+const styles =
+  StyleSheet.create({
+    screen: {
+      flex:
+        1,
+
+      backgroundColor:
+        "#020617"
+    },
+
+    content: {
+      padding:
+        22,
+
+      paddingTop:
+        70,
+
+      paddingBottom:
+        110
+    },
+
+    centerScreen: {
+      flex:
+        1,
+
+      backgroundColor:
+        "#020617",
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "center",
+
+      padding:
+        24
+    },
+
+    loadingText: {
+      color:
+        "#94a3b8",
+
+      marginTop:
+        14
+    },
+
+    eyebrow: {
+      color:
+        "#22d3ee",
+
+      fontWeight:
+        "900"
+    },
+
+    title: {
+      color:
+        "white",
+
+      fontSize:
+        31,
+
+      fontWeight:
+        "900",
+
+      marginTop:
+        8
+    },
+
+    subtitle: {
+      color:
+        "#94a3b8",
+
+      lineHeight:
+        22,
+
+      marginTop:
+        10,
+
+      marginBottom:
+        20
+    },
+
+    hero: {
+      backgroundColor:
+        "rgba(34,211,238,.08)",
+
+      borderColor:
+        "rgba(34,211,238,.35)",
+
+      borderWidth:
+        1,
+
+      borderRadius:
+        20,
+
+      padding:
+        18,
+
+      flexDirection:
+        "row",
+
+      alignItems:
+        "center",
+
+      gap:
+        17
+    },
+
+    heroScore: {
+      width:
+        96,
+
+      height:
+        96,
+
+      borderRadius:
+        48,
+
+      borderWidth:
+        6,
+
+      borderColor:
+        "#22d3ee",
+
+      alignItems:
+        "center",
+
+      justifyContent:
+        "center"
+    },
+
+    heroScoreValue: {
+      color:
+        "#86efac",
+
+      fontSize:
+        29,
+
+      fontWeight:
+        "900"
+    },
+
+    heroScoreMaximum: {
+      color:
+        "#94a3b8",
+
+      fontSize:
+        11,
+
+      fontWeight:
+        "900"
+    },
+
+    heroContent: {
+      flex:
+        1
+    },
+
+    heroLabel: {
+      color:
+        "#67e8f9",
+
+      fontWeight:
+        "900"
+    },
+
+    heroTitle: {
+      color:
+        "white",
+
+      fontSize:
+        21,
+
+      fontWeight:
+        "900",
+
+      marginTop:
+        6
+    },
+
+    heroText: {
+      color:
+        "#cbd5e1",
+
+      lineHeight:
+        20,
+
+      marginTop:
+        7
+    },
+
+    metricGrid: {
+      flexDirection:
+        "row",
+
+      flexWrap:
+        "wrap",
+
+      gap:
+        10,
+
+      marginTop:
+        14
+    },
+
+    metricCard: {
+      width:
+        "47%",
+
+      backgroundColor:
+        "#020617",
+
+      borderColor:
+        "#1e293b",
+
+      borderWidth:
+        1,
+
+      borderRadius:
+        14,
+
+      padding:
+        13
+    },
+
+    metricLabel: {
+      color:
+        "#94a3b8",
+
+      fontSize:
+        11
+    },
+
+    metricValue: {
+      color:
+        "white",
+
+      fontWeight:
+        "900",
+
+      marginTop:
+        6
+    },
+
+    section: {
+      backgroundColor:
+        "#0f172a",
+
+      borderColor:
+        "#1e293b",
+
+      borderWidth:
+        1,
+
+      borderRadius:
+        20,
+
+      padding:
+        17,
+
+      marginTop:
+        20
+    },
+
+    sectionTitle: {
+      color:
+        "#67e8f9",
+
+      fontSize:
+        19,
+
+      fontWeight:
+        "900"
+    },
+
+    sectionDescription: {
+      color:
+        "#94a3b8",
+
+      lineHeight:
+        20,
+
+      marginTop:
+        7,
+
+      marginBottom:
+        5
+    },
+
+    editor: {
+      minHeight:
+        280,
+
+      backgroundColor:
+        "#020617",
+
+      borderColor:
+        "#334155",
+
+      borderWidth:
+        1,
+
+      borderRadius:
+        15,
+
+      padding:
+        14,
+
+      marginTop:
+        14,
+
+      color:
+        "#e2e8f0",
+
+      fontFamily:
+        "monospace",
+
+      fontSize:
+        13,
+
+      lineHeight:
+        19
+    },
+
+    input: {
+      backgroundColor:
+        "#020617",
+
+      borderColor:
+        "#334155",
+
+      borderWidth:
+        1,
+
+      borderRadius:
+        13,
+
+      padding:
+        13,
+
+      color:
+        "white",
+
+      marginTop:
+        8
+    },
+
+    textArea: {
+      minHeight:
+        90,
+
+      backgroundColor:
+        "#020617",
+
+      borderColor:
+        "#334155",
+
+      borderWidth:
+        1,
+
+      borderRadius:
+        13,
+
+      padding:
+        13,
+
+      color:
+        "white",
+
+      marginTop:
+        8
+    },
+
+    fieldLabel: {
+      color:
+        "#cbd5e1",
+
+      fontWeight:
+        "900",
+
+      marginTop:
+        16
+    },
+
+    optionRow: {
+      gap:
+        8,
+
+      paddingVertical:
+        12
+    },
+
+    optionButton: {
+      backgroundColor:
+        "#1e293b",
+
+      paddingHorizontal:
+        13,
+
+      paddingVertical:
+        10,
+
+      borderRadius:
+        12
+    },
+
+    optionButtonActive: {
+      backgroundColor:
+        "#0891b2"
+    },
+
+    optionText: {
+      color:
+        "#94a3b8",
+
+      fontWeight:
+        "900"
+    },
+
+    optionTextActive: {
+      color:
+        "white"
+    },
+
+    inlineButtons: {
+      flexDirection:
+        "row",
+
+      flexWrap:
+        "wrap",
+
+      gap:
+        9,
+
+      marginTop:
+        14
+    },
+
+    smallButton: {
+      backgroundColor:
+        "#155e75",
+
+      paddingHorizontal:
+        13,
+
+      paddingVertical:
+        11,
+
+      borderRadius:
+        12
+    },
+
+    smallButtonMuted: {
+      backgroundColor:
+        "#334155",
+
+      paddingHorizontal:
+        13,
+
+      paddingVertical:
+        11,
+
+      borderRadius:
+        12
+    },
+
+    smallButtonText: {
+      color:
+        "white",
+
+      fontWeight:
+        "900"
+    },
+
+    recordCard: {
+      backgroundColor:
+        "#020617",
+
+      borderColor:
+        "#1e293b",
+
+      borderWidth:
+        1,
+
+      borderRadius:
+        15,
+
+      padding:
+        14,
+
+      marginTop:
+        11
+    },
+
+    recordCardSelected: {
+      borderColor:
+        "#22d3ee",
+
+      borderWidth:
+        2
+    },
+
+    cardHeader: {
+      flexDirection:
+        "row",
+
+      justifyContent:
+        "space-between",
+
+      alignItems:
+        "flex-start",
+
+      gap:
+        12
+    },
+
+    cardTitle: {
+      color:
+        "#67e8f9",
+
+      fontSize:
+        16,
+
+      fontWeight:
+        "900"
+    },
+
+    cardSubtitle: {
+      color:
+        "#94a3b8",
+
+      marginTop:
+        3
+    },
+
+    cardText: {
+      color:
+        "#cbd5e1",
+
+      lineHeight:
+        20,
+
+      marginTop:
+        8
+    },
+
+    statusBlock: {
+      alignItems:
+        "flex-end"
+    },
+
+    statusText: {
+      fontWeight:
+        "900"
+    },
+
+    statusScore: {
+      color:
+        "white",
+
+      fontWeight:
+        "900",
+
+      marginTop:
+        5
+    },
+
+    validText: {
+      color:
+        "#86efac",
+
+      fontWeight:
+        "900"
+    },
+
+    invalidText: {
+      color:
+        "#fca5a5",
+
+      fontWeight:
+        "900"
+    },
+
+    warningText: {
+      color:
+        "#fde68a",
+
+      fontWeight:
+        "900"
+    },
+
+    infoText: {
+      color:
+        "#93c5fd",
+
+      fontWeight:
+        "900"
+    },
+
+    recordMetrics: {
+      flexDirection:
+        "row",
+
+      flexWrap:
+        "wrap",
+
+      gap:
+        8,
+
+      marginTop:
+        13
+    },
+
+    miniMetric: {
+      width:
+        "47%",
+
+      backgroundColor:
+        "#0f172a",
+
+      borderRadius:
+        10,
+
+      padding:
+        10
+    },
+
+    miniMetricLabel: {
+      color:
+        "#64748b",
+
+      fontSize:
+        10
+    },
+
+    miniMetricValue: {
+      color:
+        "white",
+
+      fontWeight:
+        "900",
+
+      marginTop:
+        4
+    },
+
+    summaryCard: {
+      backgroundColor:
+        "#020617",
+
+      borderRadius:
+        15,
+
+      padding:
+        14,
+
+      marginTop:
+        13
+    },
+
+    row: {
+      flexDirection:
+        "row",
+
+      justifyContent:
+        "space-between",
+
+      gap:
+        14,
+
+      marginTop:
+        10
+    },
+
+    rowLabel: {
+      color:
+        "#94a3b8",
+
+      flex:
+        1
+    },
+
+    rowValue: {
+      color:
+        "white",
+
+      fontWeight:
+        "900",
+
+      textAlign:
+        "right",
+
+      flex:
+        1
+    },
+
+    subheading: {
+      color:
+        "#c084fc",
+
+      fontSize:
+        16,
+
+      fontWeight:
+        "900",
+
+      marginTop:
+        19
+    },
+
+    messageCard: {
+      backgroundColor:
+        "#020617",
+
+      borderColor:
+        "#1e293b",
+
+      borderWidth:
+        1,
+
+      borderRadius:
+        14,
+
+      padding:
+        14,
+
+      marginTop:
+        11
+    },
+
+    warningBorder: {
+      borderColor:
+        "rgba(245,158,11,.45)"
+    },
+
+    issueTitleWarning: {
+      color:
+        "#fde68a",
+
+      fontWeight:
+        "900"
+    },
+
+    issueMeta: {
+      color:
+        "#64748b",
+
+      fontSize:
+        11,
+
+      marginTop:
+        6
+    },
+
+    actionGrid: {
+      flexDirection:
+        "row",
+
+      flexWrap:
+        "wrap",
+
+      gap:
+        10,
+
+      marginTop:
+        16
+    },
+
+    actionButton: {
+      width:
+        "47%",
+
+      backgroundColor:
+        "#334155",
+
+      padding:
+        14,
+
+      borderRadius:
+        13
+    },
+
+    actionPositive: {
+      backgroundColor:
+        "#15803d"
+    },
+
+    actionDanger: {
+      backgroundColor:
+        "#b91c1c"
+    },
+
+    actionButtonText: {
+      color:
+        "white",
+
+      textAlign:
+        "center",
+
+      fontWeight:
+        "900"
+    },
+
+    emptyCard: {
+      backgroundColor:
+        "#020617",
+
+      borderColor:
+        "#1e293b",
+
+      borderWidth:
+        1,
+
+      borderRadius:
+        15,
+
+      padding:
+        15,
+
+      marginTop:
+        13
+    },
+
+    protectionCard: {
+      backgroundColor:
+        "rgba(245,158,11,.10)",
+
+      borderColor:
+        "rgba(245,158,11,.35)",
+
+      borderWidth:
+        1,
+
+      borderRadius:
+        18,
+
+      padding:
+        17,
+
+      marginTop:
+        20
+    },
+
+    protectionTitle: {
+      color:
+        "#fde68a",
+
+      fontWeight:
+        "900"
+    },
+
+    protectionText: {
+      color:
+        "#fef3c7",
+
+      lineHeight:
+        21,
+
+      marginTop:
+        7
+    },
+
+    primaryButton: {
+      backgroundColor:
+        "#0891b2",
+
+      padding:
+        17,
+
+      borderRadius:
+        17,
+
+      marginTop:
+        15
+    },
+
+    primaryButtonText: {
+      color:
+        "white",
+
+      textAlign:
+        "center",
+
+      fontWeight:
+        "900"
+    },
+
+    secondaryButton: {
+      backgroundColor:
+        "#1e293b",
+
+      padding:
+        16,
+
+      borderRadius:
+        17,
+
+      marginTop:
+        12
+    },
+
+    secondaryButtonText: {
+      color:
+        "#67e8f9",
+
+      textAlign:
+        "center",
+
+      fontWeight:
+        "900"
+    },
+
+    routeBanner: {
+      backgroundColor:
+        "rgba(124,58,237,.14)",
+
+      borderColor:
+        "rgba(167,139,250,.50)",
+
+      borderWidth:
+        1,
+
+      borderRadius:
+        15,
+
+      padding:
+        14,
+
+      marginBottom:
+        15
+    },
+
+    routeBannerTitle: {
+      color:
+        "#c4b5fd",
+
+      fontWeight:
+        "900"
+    },
+
+    routeBannerText: {
+      color:
+        "#ddd6fe",
+
+      marginTop:
+        6
+    },
+
+    errorCard: {
+      backgroundColor:
+        "rgba(239,68,68,.10)",
+
+      borderColor:
+        "rgba(239,68,68,.35)",
+
+      borderWidth:
+        1,
+
+      borderRadius:
+        16,
+
+      padding:
+        14,
+
+      marginBottom:
+        15
+    },
+
+    errorText: {
+      color:
+        "#fca5a5"
+    },
+
+    disabled: {
+      opacity:
+        0.45
+    }
+  });
