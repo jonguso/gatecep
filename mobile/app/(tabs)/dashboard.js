@@ -2,6 +2,7 @@ import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -22,12 +23,29 @@ import {
 } from "../../src/features/decision-journal/decisionJournalStore";
 
 import {
-  loadUnifiedPortfolio
+  loadUnifiedPortfolio,
+  loadPortfolioAccounts
 } from "../../src/portfolio/unifiedPortfolioApi";
+
+import {
+  calculatePortfolioSummary as calculateSharedPortfolioSummary
+} from "../../src/shared/portfolio/engine.js";
 
 import {
   loadInvestorContext
 } from "../../src/features/investor/investorContextStore";
+
+import {
+  loadCanonicalRealAvailableCash
+} from "../../src/features/portfolio-cash/canonicalPortfolioCashService";
+
+import {
+  loadRealAvailableCashForSource
+} from "../../src/features/portfolio-cash/accountScopedPortfolioCashService";
+
+import {
+  loadCanonicalRealWealthMetrics
+} from "../../src/features/wealth-journey/canonicalRealWealthMetricsService";
 
 import CoachReflectionCard from "../../src/features/learning-dashboard/components/CoachReflectionCard";
 import DailyLessonCard from "../../src/features/learning-dashboard/components/DailyLessonCard";
@@ -48,6 +66,16 @@ const [decisionJournal, setDecisionJournal] = useState([]);
 const [lastUpdated, setLastUpdated] = useState("");
 const [investorContext, setInvestorContext] = useState(null);
 
+const [portfolioAccounts, setPortfolioAccounts] = useState([]);
+const [selectedPortfolioAccount, setSelectedPortfolioAccount] = useState({
+  broker: "ALL",
+  label: "All Accounts",
+  type: "ALL"
+});
+const [portfolioAccountModalOpen, setPortfolioAccountModalOpen] = useState(false);
+const [canonicalRealWealth, setCanonicalRealWealth] = useState(null);
+const [canonicalRealCash, setCanonicalRealCash] = useState(0);
+
   useFocusEffect(
     useCallback(() => {
       loadDashboard();
@@ -60,18 +88,37 @@ const [investorContext, setInvestorContext] = useState(null);
 
  const [
   unifiedResult,
+  accountResult,
   marketResult,
   coachResult,
   brokerResult,
   investorContextResult,
-  journalResult
+  journalResult,
+  canonicalRealWealthResult,
+  canonicalRealCashResult
 ] = await Promise.all([
-  loadUnifiedPortfolio({ broker: "ALL" }).catch((error) => {
+  loadUnifiedPortfolio({
+    broker:
+      selectedPortfolioAccount?.type === "PRACTICE"
+        ? "ALL"
+        : selectedPortfolioAccount?.broker || "ALL"
+  }).catch((error) => {
     console.log(
       "Unified portfolio load error:",
       error.message
     );
     return null;
+  }),
+
+  loadPortfolioAccounts().catch((error) => {
+    console.log(
+      "Portfolio account load error:",
+      error.message
+    );
+
+    return {
+      accounts: []
+    };
   }),
 
   getMarketIntelligenceHome().catch((error) => {
@@ -115,10 +162,84 @@ const [investorContext, setInvestorContext] = useState(null);
       error.message
     );
     return [];
+  }),
+
+  loadCanonicalRealWealthMetrics().catch((error) => {
+    console.log(
+      "Canonical real wealth load error:",
+      error.message
+    );
+    return { active: false };
+  }),
+
+  loadCanonicalRealAvailableCash().catch((error) => {
+    console.log(
+      "Canonical real cash load error:",
+      error.message
+    );
+    return 0;
   })
 ]);
 
 setPortfolioResult(unifiedResult);
+
+const realAccounts =
+  Array.isArray(accountResult?.accounts)
+    ? accountResult.accounts
+    : [];
+
+const practice =
+  investorContextResult?.practicePortfolio || null;
+
+const practiceAvailable =
+  Array.isArray(practice?.holdings) &&
+  practice.holdings.length > 0;
+
+const realPortfolioAvailable =
+  Array.isArray(unifiedResult?.holdings) &&
+  unifiedResult.holdings.length > 0;
+
+const sourceAccounts = [
+  ...realAccounts
+];
+
+if (
+  realPortfolioAvailable &&
+  !sourceAccounts.some(
+    (item) =>
+      item?.type === "ALL" ||
+      item?.broker === "ALL"
+  )
+) {
+  sourceAccounts.unshift({
+    broker: "ALL",
+    label: "All Accounts",
+    type: "ALL"
+  });
+}
+
+if (practiceAvailable) {
+  sourceAccounts.push({
+    broker: "PRACTICE",
+    label: "Practice Portfolio",
+    type: "PRACTICE"
+  });
+}
+
+setPortfolioAccounts(sourceAccounts);
+
+if (
+  !realPortfolioAvailable &&
+  practiceAvailable &&
+  selectedPortfolioAccount?.type !== "PRACTICE"
+) {
+  setSelectedPortfolioAccount({
+    broker: "PRACTICE",
+    label: "Practice Portfolio",
+    type: "PRACTICE"
+  });
+}
+
 setMarketIntel(marketResult);
 setCoach(coachResult);
 setBrokers(brokerResult?.brokers || []);
@@ -136,6 +257,12 @@ setDecisionJournal(
   Array.isArray(journalResult)
     ? journalResult
     : []
+);
+
+setCanonicalRealWealth(canonicalRealWealthResult || null);
+
+setCanonicalRealCash(
+  Number(canonicalRealCashResult || 0)
 );
 
 setLastUpdated(new Date().toLocaleString());
@@ -159,15 +286,15 @@ setLastUpdated(new Date().toLocaleString());
       : [];
   }, [practicePortfolio]);
 
-  const activeHoldings = unifiedHoldings.length
-    ? unifiedHoldings
-    : practiceHoldings;
-
   const usePracticePortfolio =
-  practiceHoldings.length > 0 &&
-  unifiedHoldings.length === 0;
+    selectedPortfolioAccount?.type === "PRACTICE";
 
-const portfolioSummary = useMemo(() => {
+  const activeHoldings =
+    usePracticePortfolio
+      ? practiceHoldings
+      : unifiedHoldings;
+
+const legacyPortfolioSummary = useMemo(() => {
   return buildPortfolioSummary({
     holdings: activeHoldings,
     portfolioResult,
@@ -183,6 +310,37 @@ const portfolioSummary = useMemo(() => {
   usePracticePortfolio
 ]);
 
+const portfolioSummary = useMemo(() => {
+  const sharedResult =
+    calculateSharedPortfolioSummary({
+      holdings: activeHoldings,
+      cash:
+        usePracticePortfolio
+          ? Number(practicePortfolio?.availableCash || 0)
+          : Number(canonicalRealCash || 0)
+    });
+
+  const shared =
+    sharedResult?.summary || {};
+
+  return {
+    ...legacyPortfolioSummary,
+    currentValue: Number(shared?.totalValue || 0),
+    investedValue: Number(shared?.investedValue || 0),
+    totalCash: Number(shared?.totalCash || 0),
+    netWorth: Number(shared?.netWorth || 0),
+    totalGain: Number(shared?.totalGain || 0),
+    totalGainPct: Number(shared?.totalGainPct || 0),
+    holdingsCount: Number(shared?.holdingsCount || 0)
+  };
+}, [
+  activeHoldings,
+  legacyPortfolioSummary,
+  usePracticePortfolio,
+  practicePortfolio,
+  canonicalRealCash
+]);
+
   const {
     currentValue,
     investedValue,
@@ -193,6 +351,9 @@ const portfolioSummary = useMemo(() => {
     dayChange,
     holdingsCount
   } = portfolioSummary;
+
+  const selectedViewNetWorth =
+    Number(netWorth || 0);
 
   const profile = investorProfile?.profile || investorProfile || {};
 
@@ -290,18 +451,63 @@ const blueprintCreated =
     1000000
   );
 
-  const goalProgress =
-    goalTarget > 0
-      ? Math.min((netWorth / goalTarget) * 100, 100)
+  const realGoalCurrentValue =
+    canonicalRealWealth?.active
+      ? Number(canonicalRealWealth?.netWorth || 0)
       : 0;
 
-  const sourceLabel = unifiedHoldings.length
-    ? "UNIFIED PORTFOLIO"
-    : practiceHoldings.length
-    ? "GATECEP PRACTICE PORTFOLIO"
-    : marketIntel?.marketFeed?.provider
-    ? `MARKET INTELLIGENCE • ${marketIntel.marketFeed.provider}`
-    : "NO PORTFOLIO LOADED";
+  const goalProgress =
+    goalTarget > 0 && canonicalRealWealth?.active
+      ? Math.min((realGoalCurrentValue / goalTarget) * 100, 100)
+      : 0;
+
+  const sourceLabel =
+    selectedPortfolioAccount?.type === "PRACTICE"
+      ? "GATECEP PRACTICE PORTFOLIO"
+      : unifiedHoldings.length
+        ? selectedPortfolioAccount?.label || "ALL ACCOUNTS"
+        : marketIntel?.marketFeed?.provider
+          ? `MARKET INTELLIGENCE • ${marketIntel.marketFeed.provider}`
+          : "NO PORTFOLIO LOADED";
+
+  async function selectPortfolioAccount(account) {
+    try {
+      setPortfolioAccountModalOpen(false);
+
+      const nextAccount = {
+        ...account,
+        userSelected: true
+      };
+
+      setSelectedPortfolioAccount(nextAccount);
+
+      if (account?.type === "PRACTICE") {
+        return;
+      }
+
+      const nextPortfolio =
+        await loadUnifiedPortfolio({
+          broker:
+            account?.broker || "ALL"
+        });
+
+      const nextCash =
+        await loadRealAvailableCashForSource(
+          account
+        );
+
+      setPortfolioResult(nextPortfolio);
+      setCanonicalRealCash(
+        Number(nextCash || 0)
+      );
+      setLastUpdated(new Date().toLocaleString());
+    } catch (error) {
+      console.log(
+        "Dashboard portfolio source change error:",
+        error.message
+      );
+    }
+  }
 
   if (loading) {
     return (
@@ -355,6 +561,159 @@ const blueprintCreated =
       <Text style={styles.small}>Updated {lastUpdated}</Text>
       <Text style={styles.sourceText}>Source: {sourceLabel}</Text>
 
+      <Pressable
+        onPress={() => setPortfolioAccountModalOpen(true)}
+        style={{
+          marginTop: 10,
+          borderWidth: 1,
+          borderColor: "#334155",
+          backgroundColor: "#0f172a",
+          borderRadius: 12,
+          paddingHorizontal: 12,
+          paddingVertical: 10,
+          flexDirection: "row",
+          alignItems: "center",
+          justifyContent: "space-between"
+        }}
+      >
+        <View>
+          <Text
+            style={{
+              color: "#64748b",
+              fontSize: 9,
+              fontWeight: "900"
+            }}
+          >
+            PORTFOLIO VIEW
+          </Text>
+
+          <Text
+            style={{
+              color: "#f8fafc",
+              fontWeight: "900",
+              marginTop: 3
+            }}
+          >
+            {selectedPortfolioAccount?.label || "All Accounts"}
+          </Text>
+
+          {selectedPortfolioAccount?.type === "PRACTICE" ? (
+            <Text
+              style={{
+                color: "#fde68a",
+                fontSize: 10,
+                marginTop: 3
+              }}
+            >
+              Simulation only • No real money
+            </Text>
+          ) : null}
+        </View>
+
+        <Text
+          style={{
+            color: "#67e8f9",
+            fontWeight: "900"
+          }}
+        >
+          ▼
+        </Text>
+      </Pressable>
+
+      <Modal
+        visible={portfolioAccountModalOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setPortfolioAccountModalOpen(false)}
+      >
+        <Pressable
+          onPress={() => setPortfolioAccountModalOpen(false)}
+          style={{
+            flex: 1,
+            backgroundColor: "rgba(2,6,23,.75)",
+            justifyContent: "center",
+            padding: 22
+          }}
+        >
+          <Pressable
+            onPress={(event) => event.stopPropagation()}
+            style={{
+              backgroundColor: "#0f172a",
+              borderWidth: 1,
+              borderColor: "#334155",
+              borderRadius: 18,
+              padding: 14
+            }}
+          >
+            <Text
+              style={{
+                color: "white",
+                fontSize: 18,
+                fontWeight: "900",
+                marginBottom: 8
+              }}
+            >
+              Portfolio View
+            </Text>
+
+            {portfolioAccounts.map((account, index) => {
+              const active =
+                selectedPortfolioAccount?.broker === account?.broker &&
+                selectedPortfolioAccount?.type === account?.type;
+
+              return (
+                <Pressable
+                  key={`${account?.broker || account?.label}-${index}`}
+                  onPress={() => selectPortfolioAccount(account)}
+                  style={{
+                    paddingVertical: 12,
+                    borderTopWidth: index ? StyleSheet.hairlineWidth : 0,
+                    borderTopColor: "#1e293b",
+                    flexDirection: "row",
+                    justifyContent: "space-between",
+                    alignItems: "center"
+                  }}
+                >
+                  <View>
+                    <Text
+                      style={{
+                        color: "white",
+                        fontWeight: "800"
+                      }}
+                    >
+                      {account?.label || account?.broker || "Portfolio"}
+                    </Text>
+
+                    {account?.type === "PRACTICE" ? (
+                      <Text
+                        style={{
+                          color: "#fde68a",
+                          fontSize: 9,
+                          marginTop: 3
+                        }}
+                      >
+                        SIMULATION ONLY
+                      </Text>
+                    ) : null}
+                  </View>
+
+                  {active ? (
+                    <Text
+                      style={{
+                        color: "#22d3ee",
+                        fontWeight: "900"
+                      }}
+                    >
+                      ✓
+                    </Text>
+                  ) : null}
+                </Pressable>
+              );
+            })}
+          </Pressable>
+        </Pressable>
+      </Modal>
+
       <ActiveUserBanner />
 
       <CoachReflectionCard message={coachMessage} />
@@ -377,21 +736,25 @@ const blueprintCreated =
         <View style={styles.sectionHeader}>
           <View style={{ flex: 1 }}>
             <Text style={styles.heroLabel}>
-              {practiceHoldings.length && !unifiedHoldings.length
+              {usePracticePortfolio
                 ? "Practice Net Worth"
-                : "Net Worth"}
+                : selectedPortfolioAccount?.type === "ALL"
+                  ? "Real Investment Net Worth"
+                  : "Account Net Worth"}
             </Text>
 
             <Text style={styles.heroValue}>
-              KES {money(netWorth)}
+              KES {money(selectedViewNetWorth)}
             </Text>
           </View>
 
           <View style={styles.practiceBadge}>
             <Text style={styles.practiceBadgeText}>
-              {practiceHoldings.length && !unifiedHoldings.length
+              {usePracticePortfolio
                 ? "PRACTICE"
-                : "PORTFOLIO"}
+                : selectedPortfolioAccount?.type === "ALL"
+                  ? "ALL ACCOUNTS"
+                  : "PORTFOLIO"}
             </Text>
           </View>
         </View>
@@ -441,7 +804,9 @@ const blueprintCreated =
         <Text style={styles.cardTitle}>Goal Progress</Text>
 
         <Text style={styles.goalValue}>
-          KES {money(netWorth)}
+          {canonicalRealWealth?.active
+            ? `KES ${money(realGoalCurrentValue)}`
+            : "Real investing not activated"}
         </Text>
 
         <View style={styles.barTrack}>
@@ -665,7 +1030,12 @@ const blueprintCreated =
 
     <Quick
       title="Coach G"
-      route="/coach-dashboard"
+      route="/(tabs)/coach"
+    />
+
+    <Quick
+      title="Wealth Journey"
+      route="/wealth-journey"
     />
 
     <Quick
@@ -683,12 +1053,15 @@ const blueprintCreated =
       route="/fundamental-data-hub"
     />
 
-    {brokerConnected ? (
-      <Quick
-        title="Live Investing"
-        route="/live-dashboard"
-      />
-    ) : null}
+    <Quick
+      title="Live Investing"
+      route="/live-dashboard"
+    />
+
+    <Quick
+      title="Portfolio Analytics"
+      route="/unified-portfolio-analytics"
+    />
    </View>
 </View>
 

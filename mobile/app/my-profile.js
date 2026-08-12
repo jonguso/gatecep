@@ -159,9 +159,9 @@ const displayName =
 
         <Pressable
           style={styles.secondary}
-          onPress={() => router.push("/portfolio-command-center")}
+          onPress={() => router.push("/portfolio-hub")}
         >
-          <Text style={styles.secondaryText}>Open Command Center</Text>
+          <Text style={styles.secondaryText}>Open Portfolio Hub</Text>
         </Pressable>
       </View>
 

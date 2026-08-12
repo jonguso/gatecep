@@ -11,6 +11,9 @@ import {
 import { savePortfolio } from "../src/portfolio/portfolioStore";
 import { userSetItem } from "../src/auth/userStorage";
 import { buildSyncStatus } from "../src/portfolio/syncStatus";
+import {
+  refreshCanonicalRealPortfolioSnapshot
+} from "../src/services/portfolio/portfolioSnapshotTrigger";
 import { router } from "expo-router";
 
 const market = {
@@ -137,6 +140,10 @@ export default function ManualPortfolioEntry() {
   await userSetItem("brokerProfileSkipped", "false");
 
   await buildSyncStatus();
+
+  await refreshCanonicalRealPortfolioSnapshot({
+    reason: "MANUAL_PORTFOLIO_ENTRY"
+  });
 
   router.push("/(tabs)/dashboard");
 }

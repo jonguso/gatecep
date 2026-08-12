@@ -34,7 +34,7 @@ export default function BrokerUpload() {
 
         <Pressable
           style={styles.docOption}
-          onPress={() => router.push("/funds")}
+          onPress={() => router.push("/(tabs)/funds")}
         >
           <Text style={styles.docTitle}>Cash / Ledger Statement</Text>
           <Text style={styles.required}>Required</Text>
@@ -60,7 +60,7 @@ export default function BrokerUpload() {
 
         <Pressable
           style={styles.docOption}
-          onPress={() => router.push("/holdings-import")}
+          onPress={() => router.push("/manual-portfolio-entry")}
         >
           <Text style={styles.docTitle}>Holdings Report</Text>
           <Text style={styles.fallback}>Fallback</Text>
@@ -72,7 +72,7 @@ export default function BrokerUpload() {
 
       <Pressable
         style={styles.dashboardButton}
-        onPress={() => router.replace("/dashboard")}
+        onPress={() => router.replace("/(tabs)/dashboard")}
       >
         <Text style={styles.dashboardText}>Go to Dashboard</Text>
       </Pressable>

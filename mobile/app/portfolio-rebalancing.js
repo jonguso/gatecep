@@ -438,7 +438,7 @@ export default function PortfolioRebalancingScreen() {
         }
       >
         <Metric
-          label="Portfolio Value"
+          label="Net Worth"
           value={`KES ${money(
             result
               ?.portfolio
@@ -1135,7 +1135,7 @@ export default function PortfolioRebalancingScreen() {
         ) : (
           <EmptyState
             title="No Drift Analysis"
-            message="A funded Practice Portfolio and valid target allocation are required."
+            message="A funded real portfolio and valid target allocation are required."
           />
         )}
       </Section>
@@ -1377,7 +1377,7 @@ export default function PortfolioRebalancingScreen() {
         }
         onPress={() =>
           router.replace(
-            "/(tabs)/dashboard"
+            "/unified-portfolio-analytics"
           )
         }
       >
@@ -1386,7 +1386,7 @@ export default function PortfolioRebalancingScreen() {
             styles.secondaryButtonText
           }
         >
-          Back to Dashboard
+          Back to Portfolio Analytics
         </Text>
       </Pressable>
     </ScrollView>

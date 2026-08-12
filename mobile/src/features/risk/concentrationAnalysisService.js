@@ -67,35 +67,54 @@ function buildEmptyAnalysis({
 
     configuration,
 
-    portfolio: {
-      totalValue:
-        number(
-          allocation
-            ?.portfolio
-            ?.totalValue
-        ),
+   portfolio: {
+  holdingsValue:
+    roundMoney(
+      allocation
+        ?.portfolio
+        ?.holdingsValue
+    ),
 
-      holdingsValue:
-        number(
-          allocation
-            ?.portfolio
-            ?.holdingsValue
-        ),
+  availableCash:
+    roundMoney(
+      allocation
+        ?.portfolio
+        ?.availableCash
+    ),
 
-      availableCash:
-        number(
-          allocation
-            ?.portfolio
-            ?.availableCash
-        ),
+  netWorth:
+    roundMoney(
+      number(
+        allocation
+          ?.portfolio
+          ?.holdingsValue
+      ) +
+      number(
+        allocation
+          ?.portfolio
+          ?.availableCash
+      )
+    ),
 
-      holdingsCount:
-        number(
-          allocation
-            ?.portfolio
-            ?.holdingsCount
-        )
-    },
+  /*
+   * Legacy compatibility only.
+   *
+   * Risk exposure should use holdingsValue.
+   * Net worth includes cash.
+   */
+  totalValue:
+    roundMoney(
+      allocation
+        ?.portfolio
+        ?.holdingsValue
+    ),
+
+  holdingsCount:
+    holdings.length,
+
+  sectorCount:
+    sectors.length
+},
 
     concentration: {
       largestHolding:

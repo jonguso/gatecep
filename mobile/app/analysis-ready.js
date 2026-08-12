@@ -75,7 +75,7 @@ export default function AnalysisReady() {
 
       <Pressable
         style={styles.secondary}
-        onPress={() => router.push("/coach-insights")}
+        onPress={() => router.push("/(tabs)/coach")}
       >
         <Text style={styles.secondaryText}>Open Coach G Insights</Text>
       </Pressable>

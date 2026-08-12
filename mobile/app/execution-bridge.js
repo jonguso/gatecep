@@ -81,7 +81,7 @@ export default function ExecutionBridge() {
       <Pressable
         style={styles.secondary}
         onPress={() =>
-          router.push("/trading")
+          router.push("/(tabs)/trading")
         }
       >
         <Text style={styles.secondaryText}>
@@ -92,7 +92,7 @@ export default function ExecutionBridge() {
       <Pressable
         style={styles.secondary}
         onPress={() =>
-          router.push("/oms-orders")
+          router.push("/orders")
         }
       >
         <Text style={styles.secondaryText}>

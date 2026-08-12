@@ -262,7 +262,7 @@ export default function Watchlist() {
 
       <Pressable
         style={styles.primary}
-        onPress={() => router.push("/coach-insights")}
+        onPress={() => router.push("/(tabs)/coach")}
       >
         <Text style={styles.primaryText}>Open Coach G Insights</Text>
       </Pressable>

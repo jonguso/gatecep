@@ -206,7 +206,7 @@ export async function buildPortfolioDriftAnalysis() {
       allocation,
       target,
       message:
-        "A funded Practice Portfolio is required before drift can be calculated."
+        "A funded real portfolio is required before drift can be calculated."
     });
   }
 

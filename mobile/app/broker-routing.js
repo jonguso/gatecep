@@ -168,7 +168,7 @@ export default function BrokerRouting() {
             }
 
             setExecution(latest);
-            router.push("/trading");
+            router.push("/(tabs)/trading");
           }
         }
       ]
@@ -291,7 +291,7 @@ export default function BrokerRouting() {
 
       <Pressable
         style={styles.secondary}
-        onPress={() => router.push("/trading")}
+        onPress={() => router.push("/(tabs)/trading")}
       >
         <Text style={styles.secondaryText}>Open Trading</Text>
       </Pressable>

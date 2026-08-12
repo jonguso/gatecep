@@ -102,7 +102,7 @@ export default function OrderBook() {
         <Text style={styles.secondaryText}>View Trade History</Text>
       </Pressable>
 
-      <Pressable style={styles.secondary} onPress={() => router.push("/coach-insights")}>
+      <Pressable style={styles.secondary} onPress={() => router.push("/(tabs)/coach")}>
         <Text style={styles.secondaryText}>Back to Coach G Insights</Text>
       </Pressable>
     </ScrollView>

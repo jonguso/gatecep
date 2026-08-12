@@ -207,12 +207,34 @@ export default function PortfolioRiskScreen() {
       </View>
 
       <View style={styles.grid}>
-        <Metric label="Portfolio Value" value={`KES ${money(portfolio?.totalValue)}`} />
-        <Metric label="Holdings" value={portfolio?.holdingsCount || 0} />
         <Metric
-          label="Concentration Status"
-          value={formatLabel(concentration?.status || "NOT_READY")}
-          danger={concentration?.status === "LIMIT_BREACH"}
+  label="Holdings Market Value"
+  value={`KES ${money(
+    portfolio?.holdingsValue ??
+    portfolio?.totalValue
+  )}`}
+/>
+        <Metric label="Holdings" value={portfolio?.holdingsCount || 0} />
+                <Metric
+          label="Concentration Alerts"
+          value={
+            concentration?.status === "LIMIT_BREACH"
+              ? `${concentration?.summary?.breached || 0} Breach${
+                  Number(concentration?.summary?.breached || 0) === 1
+                    ? ""
+                    : "es"
+                }`
+              : Number(concentration?.summary?.warnings || 0) > 0
+              ? `${concentration?.summary?.warnings || 0} Warning${
+                  Number(concentration?.summary?.warnings || 0) === 1
+                    ? ""
+                    : "s"
+                }`
+              : "Within Limits"
+          }
+          danger={
+            concentration?.status === "LIMIT_BREACH"
+          }
         />
         <Metric label="Risk Metrics" value={formatLabel(metrics?.status || "NOT_READY")} />
         <Metric
@@ -767,9 +789,9 @@ export default function PortfolioRiskScreen() {
 
       <Pressable
         style={styles.secondaryButton}
-        onPress={() => router.replace("/(tabs)/dashboard")}
+        onPress={() => router.replace("/unified-portfolio-analytics")}
       >
-        <Text style={styles.secondaryButtonText}>Back to Dashboard</Text>
+        <Text style={styles.secondaryButtonText}>Back to Portfolio Analytics</Text>
       </Pressable>
     </ScrollView>
   );

@@ -1,6 +1,6 @@
 import {
-  loadInvestorContext
-} from "../investor/investorContextStore";
+  loadCanonicalRealWealthMetrics
+} from "../wealth-journey/canonicalRealWealthMetricsService";
 
 function number(value) {
   const parsed =
@@ -215,13 +215,69 @@ function emptyAllocation() {
  */
 
 export async function buildCurrentPortfolioAllocation() {
-  const investorContext =
-    await loadInvestorContext();
+  const realMetrics =
+    await loadCanonicalRealWealthMetrics();
 
+  /*
+   * PC-030C2B2
+   *
+   * Analytics portfolio source of truth:
+   * canonical REAL All Accounts.
+   *
+   * Practice Portfolio remains available to the investor as
+   * an explicit learning portfolio, but is not used by the
+   * real portfolio analytics engine.
+   *
+   * Keep the local variable name practicePortfolio temporarily
+   * to preserve the mature allocation calculations below.
+   */
   const practicePortfolio =
-    investorContext
-      ?.practicePortfolio ||
-    null;
+    realMetrics?.active
+      ? {
+          id: "REAL-ALL",
+          name:
+            realMetrics?.sourceLabel ||
+            "All Accounts",
+          currency: "KES",
+
+          holdings:
+            Array.isArray(
+              realMetrics?.holdings
+            )
+              ? realMetrics.holdings
+              : [],
+
+          holdingsValue:
+            Number(
+              realMetrics?.holdingsValue ||
+              0
+            ),
+
+          investedAmount:
+            Number(
+              realMetrics?.investedValue ||
+              0
+            ),
+
+          availableCash:
+            Number(
+              realMetrics?.availableCash ||
+              0
+            ),
+
+          totalValue:
+            Number(
+              realMetrics?.netWorth ||
+              0
+            ),
+
+          sourceType:
+            "REAL",
+
+          sourceId:
+            "ALL"
+        }
+      : null;
 
   if (!practicePortfolio) {
     return emptyAllocation();

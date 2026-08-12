@@ -1,0 +1,97 @@
+import {
+  buildInvestorDNAReconciliation
+} from "./investorDNAReconciliationEngine";
+
+import {
+  loadInvestorContext
+} from "../investor/investorContextStore";
+
+import {
+  loadCanonicalRealWealthMetrics
+} from "./canonicalRealWealthMetricsService";
+
+import {
+  buildPortfolioHealthScore
+} from "../analytics/portfolioHealthScoreService";
+
+import {
+  buildBehaviorAnalytics
+} from "../behavior-analytics/behaviorAnalyticsService";
+
+import {
+  loadRealCurrentInvestorWealthJourney
+} from "./realWealthJourneyRuntime";
+
+/*
+ * PC-028T runtime adapter.
+ *
+ * recommendationHistory, orderHistory and tradeHistory are intentionally
+ * injectable because GateCEP currently has multiple execution/history stores.
+ * The runtime does not guess or silently merge incompatible histories.
+ */
+
+export async function loadCurrentInvestorDNAReconciliation({
+  recommendationHistory = [],
+  orderHistory = [],
+  tradeHistory = [],
+  confirmedClarifications = []
+} = {}) {
+  const [
+    investorContext,
+    realWealth,
+    portfolioHealth,
+    behavior,
+    wealthJourney
+  ] =
+    await Promise.all([
+      loadInvestorContext(),
+
+      loadCanonicalRealWealthMetrics(),
+
+      buildPortfolioHealthScore().catch(
+        () => ({})
+      ),
+
+      buildBehaviorAnalytics().catch(
+        () => ({})
+      ),
+
+      loadRealCurrentInvestorWealthJourney().catch(
+        () => ({})
+      )
+    ]);
+
+  return buildInvestorDNAReconciliation({
+    investorDNA:
+      investorContext?.investorDNA || {},
+
+    wealthBlueprint:
+      investorContext?.wealthBlueprint || {},
+
+    realPortfolio: {
+      totalValue:
+        realWealth?.netWorth ?? null,
+
+      holdingsValue:
+        realWealth?.holdingsValue ?? null,
+
+      availableCash:
+        realWealth?.availableCash ?? null,
+
+      holdings:
+        realWealth?.holdings || []
+    },
+
+    portfolioHealth,
+
+    behavior,
+
+    recommendationHistory,
+    orderHistory,
+    tradeHistory,
+
+    wealthJourney,
+
+    confirmedClarifications
+  });
+}

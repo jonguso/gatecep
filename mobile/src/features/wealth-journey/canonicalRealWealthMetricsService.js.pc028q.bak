@@ -1,0 +1,98 @@
+import { buildCanonicalRealWealthContext } from "./canonicalRealWealthContextService";
+
+function n(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function sumHoldingsValue(holdings = []) {
+  return (Array.isArray(holdings) ? holdings : []).reduce(
+    (total, holding) =>
+      total +
+      (
+        n(holding?.marketValue ?? holding?.value) ??
+        ((n(holding?.quantity) || 0) *
+          (n(holding?.marketPrice ?? holding?.price ?? holding?.lastPrice) || 0))
+      ),
+    0
+  );
+}
+
+function sumInvestedValue(holdings = []) {
+  return (Array.isArray(holdings) ? holdings : []).reduce(
+    (total, holding) =>
+      total +
+      (
+        n(holding?.investedValue ?? holding?.costValue ?? holding?.costBasis) ??
+        ((n(holding?.quantity) || 0) *
+          (n(holding?.averageCost ?? holding?.averagePrice ?? holding?.price) || 0))
+      ),
+    0
+  );
+}
+
+export function buildCanonicalRealWealthMetrics(canonical = {}) {
+  const activation = canonical?.wealthActivation || {};
+  const all = canonical?.portfolioSources?.allAccounts || null;
+
+  if (!activation?.active || !all) {
+    return {
+      active: false,
+      sourceId: null,
+      holdings: [],
+      holdingsCount: 0,
+      holdingsValue: null,
+      investedValue: null,
+      availableCash: null,
+      netWorth: null,
+      reconciliation: {
+        equation: "REAL_NET_WORTH = REAL_HOLDINGS_VALUE + REAL_AVAILABLE_CASH",
+        balanced: null,
+        difference: null
+      },
+      safeguards: {
+        practiceIncluded: false,
+        selectorIndependent: true
+      }
+    };
+  }
+
+  const holdings = Array.isArray(all?.holdings) ? all.holdings : [];
+  const holdingsValue = n(all?.holdingsValue) ?? sumHoldingsValue(holdings);
+  const investedValue = sumInvestedValue(holdings);
+  const availableCash = n(all?.availableCash) ?? 0;
+  const netWorth = holdingsValue + availableCash;
+  const reportedTotal = n(all?.totalValue);
+  const difference = reportedTotal === null ? 0 : reportedTotal - netWorth;
+
+  return {
+    active: true,
+    sourceId: "ALL",
+    sourceLabel: "All Accounts",
+    holdings,
+    holdingsCount: holdings.length,
+    holdingsValue,
+    investedValue,
+    availableCash,
+    netWorth,
+    reconciliation: {
+      equation: "REAL_NET_WORTH = REAL_HOLDINGS_VALUE + REAL_AVAILABLE_CASH",
+      reportedTotal,
+      calculatedTotal: netWorth,
+      difference,
+      balanced: Math.abs(difference) < 0.01
+    },
+    safeguards: {
+      practiceIncluded: false,
+      selectorIndependent: true,
+      usedForGoalProgress: true,
+      usedForWealthJourney: true
+    }
+  };
+}
+
+export async function loadCanonicalRealWealthMetrics() {
+  const canonical = await buildCanonicalRealWealthContext({ broker: "ALL" });
+  return buildCanonicalRealWealthMetrics(canonical);
+}

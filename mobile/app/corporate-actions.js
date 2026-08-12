@@ -1,20 +1,15 @@
 import React, {
   useCallback,
   useEffect,
-  useMemo,
   useState
 } from "react";
 
 import {
   ActivityIndicator,
-  Alert,
-  Modal,
-  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View
 } from "react-native";
 
@@ -23,276 +18,67 @@ import {
 } from "expo-router";
 
 import {
-  approveCorporateAction,
-  deleteCorporateAction,
-  getCorporateActionSummary,
-  loadCorporateActions,
-  rejectCorporateAction,
-  saveCorporateAction,
-  submitCorporateActionForReview
-} from "../src/features/corporate-actions/corporateActionStore";
+  buildCorporateActionInvestorExperience
+} from "../src/features/corporate-actions/corporateActionExperienceService";
 
-import {
-  CORPORATE_ACTION_STATUSES,
-  CORPORATE_ACTION_TYPES
-} from "../src/features/corporate-actions/corporateActionTypes";
+/*
+ * ============================================================
+ * PC-027I
+ * INVESTOR CORPORATE ACTION EXPERIENCE
+ * ============================================================
+ *
+ * This is intentionally NOT a technical corporate-action console.
+ *
+ * It shows:
+ * - what affects the investor,
+ * - expected income,
+ * - decisions requiring discussion,
+ * - important share changes,
+ * - Coach G's next-best action.
+ *
+ * The engines remain underneath.
+ * ============================================================
+ */
 
-import {
-  buildCorporateActionImpact
-} from "../src/features/corporate-actions/corporateActionImpactService";
-
-import {
-  executeCorporateAction
-} from "../src/features/corporate-actions/corporateActionExecutionService";
-
-import {
-  loadInvestorContext
-} from "../src/features/investor/investorContextStore";
-
-const EMPTY_FORM = {
-  symbol: "",
-  companyName: "",
-  sector: "",
-
-  actionType:
-    CORPORATE_ACTION_TYPES.BONUS_SHARE,
-
-  ratioNumerator:
-    "1",
-
-  ratioDenominator:
-    "10",
-
-  fractionalShareTreatment:
-    "ROUND_DOWN",
-
-  announcementDate:
-    "",
-
-  exDate:
-    "",
-
-  recordDate:
-    "",
-
-  effectiveDate:
-    "",
-
-  source:
-    "MANUAL_ENTRY",
-
-  notes:
-    ""
-};
-
-const FILTERS = [
-  "ALL",
-
-  CORPORATE_ACTION_STATUSES.DRAFT,
-
-  CORPORATE_ACTION_STATUSES.ANNOUNCED,
-
-  CORPORATE_ACTION_STATUSES.UNDER_REVIEW,
-
-  CORPORATE_ACTION_STATUSES.APPROVED,
-
-  CORPORATE_ACTION_STATUSES.REJECTED,
-
-  CORPORATE_ACTION_STATUSES.EXECUTED,
-
-  CORPORATE_ACTION_STATUSES.CANCELLED,
-
-  CORPORATE_ACTION_STATUSES.FAILED
-];
-
-export default function CorporateActionsCenter() {
+export default function CorporateActionsScreen() {
   const [
     loading,
     setLoading
   ] = useState(true);
 
   const [
-    saving,
-    setSaving
-  ] = useState(false);
-
-  const [
-    processingId,
-    setProcessingId
+    experience,
+    setExperience
   ] = useState(null);
-
-  const [
-    actions,
-    setActions
-  ] = useState([]);
-
-  const [
-    summary,
-    setSummary
-  ] = useState({});
-
-  const [
-    holdings,
-    setHoldings
-  ] = useState([]);
-
-  const [
-    impacts,
-    setImpacts
-  ] = useState({});
-
-  const [
-    filter,
-    setFilter
-  ] = useState("ALL");
-
-  const [
-    modalVisible,
-    setModalVisible
-  ] = useState(false);
-
-  const [
-    editingId,
-    setEditingId
-  ] = useState(null);
-
-  const [
-    form,
-    setForm
-  ] = useState(
-    EMPTY_FORM
-  );
-
-  const [
-    preview,
-    setPreview
-  ] = useState(null);
-
-  const [
-    previewing,
-    setPreviewing
-  ] = useState(false);
 
   const [
     error,
     setError
   ] = useState("");
 
-  const loadData =
+  const loadExperience =
     useCallback(
       async () => {
         try {
           setLoading(true);
           setError("");
 
-          const [
-            savedActions,
-            actionSummary,
-            investorContext
-          ] = await Promise.all([
-            loadCorporateActions(),
+          /*
+           * PC-027I default:
+           * corporate actions are read from the PC-027A registry.
+           *
+           * When the investor-session orchestration layer is connected,
+           * pass real holdings, portfolio and Investor DNA context here.
+           */
+          const result =
+            await buildCorporateActionInvestorExperience();
 
-            getCorporateActionSummary(),
-
-            loadInvestorContext()
-          ]);
-
-          const safeActions =
-            Array.isArray(
-              savedActions
-            )
-              ? savedActions
-              : [];
-
-          const sortedActions =
-            [...safeActions].sort(
-              (a, b) =>
-                new Date(
-                  b?.updatedAt ||
-                  b?.createdAt ||
-                  0
-                ).getTime() -
-                new Date(
-                  a?.updatedAt ||
-                  a?.createdAt ||
-                  0
-                ).getTime()
-            );
-
-          setActions(
-            sortedActions
-          );
-
-          setSummary(
-            actionSummary ||
-            {}
-          );
-
-          const portfolioHoldings =
-            investorContext
-              ?.practicePortfolio
-              ?.holdings;
-
-          setHoldings(
-            Array.isArray(
-              portfolioHoldings
-            )
-              ? portfolioHoldings
-              : []
-          );
-
-          const impactEntries =
-            await Promise.all(
-              safeActions.map(
-                async (
-                  action
-                ) => {
-                  try {
-                    const result =
-                      await buildCorporateActionImpact({
-                        corporateAction:
-                          action
-                      });
-
-                    return [
-                      action.id,
-                      result
-                    ];
-                  } catch (
-                    impactError
-                  ) {
-                    return [
-                      action.id,
-                      {
-                        supported:
-                          false,
-
-                        executable:
-                          false,
-
-                        message:
-                          impactError?.message ||
-                          "Unable to calculate impact."
-                      }
-                    ];
-                  }
-                }
-              )
-            );
-
-          setImpacts(
-            Object.fromEntries(
-              impactEntries
-            )
+          setExperience(
+            result
           );
         } catch (
           loadError
         ) {
-          console.error(
-            "Unable to load Corporate Actions Center:",
-            loadError
-          );
-
           setError(
             loadError?.message ||
             "Unable to load corporate actions."
@@ -306,893 +92,131 @@ export default function CorporateActionsCenter() {
 
   useEffect(
     () => {
-      loadData();
+      loadExperience();
     },
     [
-      loadData
+      loadExperience
     ]
   );
 
-  const visibleActions =
-    useMemo(
-      () => {
-        if (
-          filter ===
-          "ALL"
-        ) {
-          return actions;
-        }
-
-        return actions.filter(
-          (item) =>
-            item?.status ===
-            filter
-        );
-      },
-      [
-        actions,
-        filter
-      ]
-    );
-
-  function openCreate() {
-    setEditingId(null);
-
-    setForm({
-      ...EMPTY_FORM
-    });
-
-    setPreview(null);
-
-    setModalVisible(true);
-  }
-
-  function openEdit(
-    action
-  ) {
-    if (
-      action?.status ===
-        CORPORATE_ACTION_STATUSES.EXECUTED
-    ) {
-      showMessage(
-        "Corporate Actions",
-        "An executed corporate action cannot be edited."
-      );
-
-      return;
-    }
-
-    setEditingId(
-      action?.id ||
-      null
-    );
-
-    setForm({
-      symbol:
-        action?.symbol ||
-        "",
-
-      companyName:
-        action?.companyName ||
-        "",
-
-      sector:
-        action?.sector ||
-        "",
-
-      actionType:
-        action?.actionType ||
-        CORPORATE_ACTION_TYPES
-          .BONUS_SHARE,
-
-      ratioNumerator:
-        String(
-          action
-            ?.ratioNumerator ??
-          1
-        ),
-
-      ratioDenominator:
-        String(
-          action
-            ?.ratioDenominator ??
-          10
-        ),
-
-      fractionalShareTreatment:
-        action
-          ?.fractionalShareTreatment ||
-        "ROUND_DOWN",
-
-      announcementDate:
-        dateInputValue(
-          action?.announcementDate
-        ),
-
-      exDate:
-        dateInputValue(
-          action?.exDate
-        ),
-
-      recordDate:
-        dateInputValue(
-          action?.recordDate
-        ),
-
-      effectiveDate:
-        dateInputValue(
-          action?.effectiveDate
-        ),
-
-      source:
-        action?.source ||
-        "MANUAL_ENTRY",
-
-      notes:
-        action?.notes ||
-        ""
-    });
-
-    setPreview(
-      impacts[
-        action.id
-      ] ||
-      null
-    );
-
-    setModalVisible(true);
-  }
-
-  function selectHolding(
-    holding
-  ) {
-    setForm(
-      (current) => ({
-        ...current,
-
-        symbol:
-          String(
-            holding
-              ?.symbol ||
-            ""
-          )
-            .trim()
-            .toUpperCase(),
-
-        companyName:
-          holding?.name ||
-          holding?.symbol ||
-          "",
-
-        sector:
-          holding?.sector ||
-          ""
-      })
-    );
-
-    setPreview(null);
-  }
-
-  function updateForm(
-    field,
-    value
-  ) {
-    setForm(
-      (current) => ({
-        ...current,
-        [field]:
-          value
-      })
-    );
-
-    setPreview(null);
-  }
-
-  function buildDraftAction() {
-    const existingAction =
-      editingId
-        ? actions.find(
-            (item) =>
-              item?.id ===
-              editingId
-          )
-        : null;
-
-    return {
-      id:
-        editingId ||
-        "UNSAVED_PREVIEW",
-
-      actionType:
-        form.actionType,
-
-      status:
-        existingAction
-          ?.status ||
-        CORPORATE_ACTION_STATUSES
-          .DRAFT,
-
-      symbol:
-        String(
-          form.symbol ||
-          ""
-        )
-          .trim()
-          .toUpperCase(),
-
-      companyName:
-        form.companyName ||
-        null,
-
-      sector:
-        form.sector ||
-        null,
-
-      ratioNumerator:
-        Number(
-          form.ratioNumerator ||
-          0
-        ),
-
-      ratioDenominator:
-        Number(
-          form.ratioDenominator ||
-          0
-        ),
-
-      fractionalShareTreatment:
-        String(
-          form
-            .fractionalShareTreatment ||
-          "ROUND_DOWN"
-        )
-          .trim()
-          .toUpperCase(),
-
-      announcementDate:
-        toIsoDate(
-          form.announcementDate
-        ),
-
-      exDate:
-        toIsoDate(
-          form.exDate
-        ),
-
-      recordDate:
-        toIsoDate(
-          form.recordDate
-        ),
-
-      effectiveDate:
-        toIsoDate(
-          form.effectiveDate
-        ),
-
-      source:
-        form.source ||
-        "MANUAL_ENTRY",
-
-      notes:
-        form.notes ||
-        null
-    };
-  }
-
-  function validateDraft(
-    draft
-  ) {
-    if (
-      !draft.symbol
-    ) {
-      throw new Error(
-        "Select or enter a security symbol."
-      );
-    }
-
-    if (
-      !draft.actionType
-    ) {
-      throw new Error(
-        "Select a corporate action type."
-      );
-    }
-
-    if (
-      draft.ratioNumerator <=
-        0 ||
-      draft.ratioDenominator <=
-        0
-    ) {
-      throw new Error(
-        "The action ratio must contain positive values."
-      );
-    }
-
-    const supportedTypes = [
-      CORPORATE_ACTION_TYPES
-        .BONUS_SHARE,
-
-      CORPORATE_ACTION_TYPES
-        .STOCK_SPLIT,
-
-      CORPORATE_ACTION_TYPES
-        .REVERSE_SPLIT
-    ];
-
-    if (
-      !supportedTypes.includes(
-        draft.actionType
-      )
-    ) {
-      throw new Error(
-        "This corporate action type is not currently supported."
-      );
-    }
-
-    const allowedFractionalTreatments = [
-      "ROUND_DOWN",
-      "ROUND_UP",
-      "ROUND_NEAREST",
-      "ALLOW_FRACTIONAL"
-    ];
-
-    if (
-      !allowedFractionalTreatments.includes(
-        draft
-          .fractionalShareTreatment
-      )
-    ) {
-      throw new Error(
-        "Fractional treatment must be ROUND_DOWN, ROUND_UP, ROUND_NEAREST, or ALLOW_FRACTIONAL."
-      );
-    }
-
-    const dateFields = [
-      {
-        label:
-          "Announcement date",
-
-        value:
-          form.announcementDate
-      },
-      {
-        label:
-          "Ex-date",
-
-        value:
-          form.exDate
-      },
-      {
-        label:
-          "Record date",
-
-        value:
-          form.recordDate
-      },
-      {
-        label:
-          "Effective date",
-
-        value:
-          form.effectiveDate
-      }
-    ];
-
-    const invalidDate =
-      dateFields.find(
-        (item) =>
-          item.value &&
-          !isValidDateInput(
-            item.value
-          )
-      );
-
-    if (
-      invalidDate
-    ) {
-      throw new Error(
-        `${invalidDate.label} must use YYYY-MM-DD format.`
-      );
-    }
-  }
-
-  async function handlePreview() {
-    try {
-      setPreviewing(true);
-
-      const draft =
-        buildDraftAction();
-
-      validateDraft(
-        draft
-      );
-
-      const result =
-        await buildCorporateActionImpact({
-          corporateAction:
-            draft
-        });
-
-      setPreview(
-        result
-      );
-    } catch (
-      previewError
-    ) {
-      showMessage(
-        "Corporate Action Preview",
-        previewError?.message ||
-        "Unable to calculate the corporate action impact."
-      );
-    } finally {
-      setPreviewing(false);
-    }
-  }
-
-  async function handleSave() {
-    try {
-      const draft =
-        buildDraftAction();
-
-      validateDraft(
-        draft
-      );
-
-      setSaving(true);
-
-      await saveCorporateAction({
-        ...draft,
-
-        id:
-          editingId ||
-          undefined,
-
-        status:
-          editingId
-            ? draft.status
-            : CORPORATE_ACTION_STATUSES
-                .DRAFT
-      });
-
-      setModalVisible(false);
-
-      setPreview(null);
-
-      await loadData();
-
-      showMessage(
-        "Corporate Actions",
-        editingId
-          ? "Corporate action updated."
-          : "Corporate action created."
-      );
-    } catch (
-      saveError
-    ) {
-      console.error(
-        "Unable to save corporate action:",
-        saveError
-      );
-
-      showMessage(
-        "Corporate Actions",
-        saveError?.message ||
-        "Unable to save the corporate action."
-      );
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleOperation({
-    action,
-    operation
-  }) {
-    if (
-      !action?.id
-    ) {
-      return;
-    }
-
-    try {
-      setProcessingId(
-        action.id
-      );
-
-      setError("");
-
-      switch (
-        operation
-      ) {
-        case "SUBMIT":
-          await submitCorporateActionForReview(
-            action.id
-          );
-
-          showMessage(
-            "Corporate Actions",
-            `${action.symbol} was submitted for review.`
-          );
-
-          break;
-
-        case "APPROVE":
-          await approveCorporateAction(
-            action.id,
-            "CURRENT_USER"
-          );
-
-          showMessage(
-            "Corporate Actions",
-            `${action.symbol} was approved and is ready for execution.`
-          );
-
-          break;
-
-        case "REJECT":
-          await rejectCorporateAction(
-            action.id,
-            {
-              rejectedBy:
-                "CURRENT_USER",
-
-              reason:
-                "Rejected through the PC-018 Corporate Actions Center."
-            }
-          );
-
-          showMessage(
-            "Corporate Actions",
-            `${action.symbol} corporate action was rejected.`
-          );
-
-          break;
-
-        case "EXECUTE": {
-          const result =
-            await executeCorporateAction({
-              actionId:
-                action.id,
-
-              executedBy:
-                "CURRENT_USER"
-            });
-
-          const execution =
-            result?.execution ||
-            {};
-
-          if (
-            result?.status ===
-            "EXECUTED"
-          ) {
-            showMessage(
-              "Corporate Action Executed",
-              `${action.symbol} ${formatLabel(
-                action.actionType
-              )} executed successfully.\n\n` +
-                `Quantity before: ${execution.quantityBefore}\n` +
-                `Quantity change: ${signedNumber(
-                  execution.quantityChange
-                )}\n` +
-                `Quantity after: ${execution.quantityAfter}\n` +
-                `Average cost after: KES ${money(
-                  execution.averagePriceAfter
-                )}\n` +
-                `Cash impact: KES ${money(
-                  execution.cashImpact
-                )}\n\n` +
-                `Reference: ${
-                  execution.executionReference ||
-                  "Unavailable"
-                }`
-            );
-          } else {
-            showMessage(
-              "Corporate Action",
-              `This action was already executed.\n\nReference: ${
-                result
-                  ?.action
-                  ?.executionReference ||
-                result
-                  ?.portfolioEvent
-                  ?.reference ||
-                "Unavailable"
-              }`
-            );
-          }
-
-          break;
-        }
-
-        case "DELETE":
-          await deleteCorporateAction(
-            action.id
-          );
-
-          showMessage(
-            "Corporate Actions",
-            "Corporate action deleted."
-          );
-
-          break;
-
-        default:
-          return;
-      }
-
-      await loadData();
-    } catch (
-      operationError
-    ) {
-      console.error(
-        "Unable to update corporate action:",
-        operationError
-      );
-
-      showMessage(
-        "Corporate Actions",
-        operationError?.message ||
-        "Unable to update this corporate action."
-      );
-
-      await loadData();
-    } finally {
-      setProcessingId(null);
-    }
-  }
-
-  function confirmDelete(
-    action
-  ) {
-    if (
-      action?.status ===
-      CORPORATE_ACTION_STATUSES
-        .EXECUTED
-    ) {
-      showMessage(
-        "Delete Corporate Action",
-        "An executed corporate action cannot be deleted."
-      );
-
-      return;
-    }
-
-    const message =
-      `Delete the ${
-        action?.symbol ||
-        ""
-      } ${
-        formatLabel(
-          action?.actionType
-        )
-      } corporate action?`;
-
-    if (
-      Platform.OS ===
-      "web"
-    ) {
-      if (
-        window.confirm(
-          message
-        )
-      ) {
-        handleOperation({
-          action,
-
-          operation:
-            "DELETE"
-        });
-      }
-
-      return;
-    }
-
-    Alert.alert(
-      "Delete Corporate Action",
-      message,
-      [
-        {
-          text:
-            "Cancel",
-
-          style:
-            "cancel"
-        },
-        {
-          text:
-            "Delete",
-
-          style:
-            "destructive",
-
-          onPress:
-            () =>
-              handleOperation({
-                action,
-
-                operation:
-                  "DELETE"
-              })
-        }
-      ]
-    );
-  }
-
-  function confirmExecution(
-    action
-  ) {
-    const impact =
-      impacts[
-        action.id
-      ];
-
-    const quantityBefore =
-      impact
-        ?.impact
-        ?.quantityBefore ??
-      action?.quantityBefore ??
-      0;
-
-    const quantityAfter =
-      impact
-        ?.impact
-        ?.quantityAfter ??
-      action?.quantityAfter ??
-      0;
-
-    const quantityChange =
-      impact
-        ?.impact
-        ?.quantityChange ??
-      action?.quantityChange ??
-      0;
-
-    const message =
-      `Execute the ${formatLabel(
-        action?.actionType
-      )} for ${
-        action?.symbol ||
-        ""
-      }?\n\n` +
-      `Quantity before: ${quantityBefore}\n` +
-      `Quantity change: ${signedNumber(
-        quantityChange
-      )}\n` +
-      `Quantity after: ${quantityAfter}\n` +
-      `Cash impact: KES ${money(
-        impact
-          ?.impact
-          ?.cashImpact ||
-        0
-      )}\n\n` +
-      "This will update the Practice Portfolio and create an immutable Portfolio Event Ledger entry.";
-
-    if (
-      Platform.OS ===
-      "web"
-    ) {
-      if (
-        window.confirm(
-          message
-        )
-      ) {
-        handleOperation({
-          action,
-
-          operation:
-            "EXECUTE"
-        });
-      }
-
-      return;
-    }
-
-    Alert.alert(
-      "Execute Corporate Action",
-      message,
-      [
-        {
-          text:
-            "Cancel",
-
-          style:
-            "cancel"
-        },
-        {
-          text:
-            "Execute",
-
-          onPress:
-            () =>
-              handleOperation({
-                action,
-
-                operation:
-                  "EXECUTE"
-              })
-        }
-      ]
-    );
-  }
-
-  if (
-    loading
-  ) {
+  if (loading) {
     return (
       <View
         style={
-          styles.centerScreen
+          styles.center
         }
       >
         <ActivityIndicator
           size="large"
-          color="#67e8f9"
+          color="#22d3ee"
         />
 
         <Text
           style={
-            styles.loadingText
+            styles.muted
           }
         >
-          Loading corporate actions...
+          Coach G is checking your investments...
         </Text>
       </View>
     );
   }
 
+  const advice =
+    experience?.advice ||
+    [];
+
   return (
-    <>
-      <ScrollView
+    <ScrollView
+      style={
+        styles.screen
+      }
+      contentContainerStyle={
+        styles.content
+      }
+    >
+      <Text
         style={
-          styles.screen
-        }
-        contentContainerStyle={
-          styles.content
+          styles.eyebrow
         }
       >
-        <Text
+        COACH G
+      </Text>
+
+      <Text
+        style={
+          styles.title
+        }
+      >
+        Corporate Actions
+      </Text>
+
+      <Text
+        style={
+          styles.subtitle
+        }
+      >
+        Company events that may affect your income, shares,
+        portfolio or investment decisions.
+      </Text>
+
+      {error ? (
+        <View
           style={
-            styles.eyebrow
+            styles.errorCard
           }
         >
-          PC-018
-        </Text>
-
-        <Text
-          style={
-            styles.title
-          }
-        >
-          Corporate Actions Center
-        </Text>
-
-        <Text
-          style={
-            styles.subtitle
-          }
-        >
-          Create, review, approve, and execute
-          controlled non-trade portfolio events.
-        </Text>
-
-        {error ? (
-          <View
+          <Text
             style={
-              styles.errorCard
+              styles.errorText
             }
           >
-            <Text
-              style={
-                styles.errorText
-              }
-            >
-              {error}
-            </Text>
-          </View>
-        ) : null}
+            {error}
+          </Text>
+        </View>
+      ) : null}
 
+      <View
+        style={
+          styles.summary
+        }
+      >
+        <SummaryMetric
+          label="Being monitored"
+          value={
+            experience?.summary?.total ||
+            0
+          }
+        />
+
+        <SummaryMetric
+          label="Need attention"
+          value={
+            experience?.summary?.highPriority ||
+            0
+          }
+        />
+
+        <SummaryMetric
+          label="Decisions"
+          value={
+            experience?.summary?.decisionRequired ||
+            0
+          }
+        />
+
+        <SummaryMetric
+          label="Income events"
+          value={
+            experience?.summary?.expectedIncomeEvents ||
+            0
+          }
+        />
+      </View>
+
+      {experience
+        ?.coachGPrompt
+        ?.shouldSurface ? (
         <View
           style={
             styles.coachCard
@@ -1203,7 +227,19 @@ export default function CorporateActionsCenter() {
               styles.coachLabel
             }
           >
-            COACH G
+            Coach G's Priority
+          </Text>
+
+          <Text
+            style={
+              styles.coachTitle
+            }
+          >
+            {
+              experience
+                .coachGPrompt
+                .title
+            }
           </Text>
 
           <Text
@@ -1211,770 +247,270 @@ export default function CorporateActionsCenter() {
               styles.coachText
             }
           >
-            Bonus shares and stock splits preserve
-            the holding's total economic value while
-            changing its quantity and per-share cost.
-            Only approved actions can be executed.
+            {
+              experience
+                .coachGPrompt
+                .message
+            }
           </Text>
-        </View>
 
-        <View
-          style={
-            styles.metricGrid
-          }
-        >
-          <Metric
-            label="Total"
-            value={
-              summary?.total ||
-              0
-            }
-          />
-
-          <Metric
-            label="Draft"
-            value={
-              summary?.draft ||
-              0
-            }
-          />
-
-          <Metric
-            label="Under Review"
-            value={
-              summary
-                ?.underReview ||
-              0
-            }
-          />
-
-          <Metric
-            label="Approved"
-            value={
-              summary?.approved ||
-              0
-            }
-          />
-
-          <Metric
-            label="Executed"
-            value={
-              summary?.executed ||
-              0
-            }
-          />
-
-          <Metric
-            label="Rejected"
-            value={
-              summary?.rejected ||
-              0
-            }
-          />
-        </View>
-
-        <Pressable
-          style={
-            styles.primaryButton
-          }
-          onPress={
-            openCreate
-          }
-        >
-          <Text
-            style={
-              styles.primaryButtonText
-            }
-          >
-            Add Corporate Action
-          </Text>
-        </Pressable>
-
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={
-            false
-          }
-          contentContainerStyle={
-            styles.filterRow
-          }
-        >
-          {FILTERS.map(
-            (item) => (
-              <Pressable
-                key={
-                  item
-                }
-                style={[
-                  styles.filterButton,
-
-                  filter ===
-                    item &&
-                    styles.filterButtonActive
-                ]}
-                onPress={() =>
-                  setFilter(
-                    item
-                  )
+          {experience
+            .coachGPrompt
+            .suggestedQuestion ? (
+            <View
+              style={
+                styles.question
+              }
+            >
+              <Text
+                style={
+                  styles.questionLabel
                 }
               >
-                <Text
-                  style={[
-                    styles.filterText,
+                Ask Coach G:
+              </Text>
 
-                    filter ===
-                      item &&
-                      styles.filterTextActive
-                  ]}
-                >
-                  {formatLabel(
+              <Text
+                style={
+                  styles.questionText
+                }
+              >
+                {
+                  experience
+                    .coachGPrompt
+                    .suggestedQuestion
+                }
+              </Text>
+            </View>
+          ) : null}
+        </View>
+      ) : null}
+
+      <Section
+        title="What Needs Your Attention"
+        description="Only items where Coach G sees a decision, missing evidence, overdue payment, or other important issue."
+      >
+        {experience
+          ?.attentionItems
+          ?.length ? (
+          experience
+            .attentionItems
+            .map(
+              (item) => (
+                <ActionCard
+                  key={
                     item
-                  )}
-                </Text>
-              </Pressable>
+                      ?.event
+                      ?.actionId
+                  }
+                  item={
+                    item
+                  }
+                />
+              )
             )
-          )}
-        </ScrollView>
+        ) : (
+          <EmptyState
+            message="Nothing currently needs your attention."
+          />
+        )}
+      </Section>
 
-        {visibleActions.length ? (
-          visibleActions.map(
-            (action) => (
-              <CorporateActionCard
+      <Section
+        title="Expected Income"
+        description="Cash corporate actions Coach G is monitoring for you."
+      >
+        {experience
+          ?.incomeItems
+          ?.length ? (
+          experience
+            .incomeItems
+            .map(
+              (item) => (
+                <ActionCard
+                  key={
+                    `income-${item?.event?.actionId}`
+                  }
+                  item={
+                    item
+                  }
+                />
+              )
+            )
+        ) : (
+          <EmptyState
+            message="No expected corporate-action income is currently recorded."
+          />
+        )}
+      </Section>
+
+      <Section
+        title="All Corporate Actions"
+        description="Events affecting investments in your portfolio."
+      >
+        {advice.length ? (
+          advice.map(
+            (item) => (
+              <ActionCard
                 key={
-                  action.id
+                  `all-${item?.event?.actionId}`
                 }
-                action={
-                  action
-                }
-                impact={
-                  impacts[
-                    action.id
-                  ]
-                }
-                processing={
-                  processingId ===
-                  action.id
-                }
-                onEdit={() =>
-                  openEdit(
-                    action
-                  )
-                }
-                onSubmit={() =>
-                  handleOperation({
-                    action,
-
-                    operation:
-                      "SUBMIT"
-                  })
-                }
-                onApprove={() =>
-                  handleOperation({
-                    action,
-
-                    operation:
-                      "APPROVE"
-                  })
-                }
-                onReject={() =>
-                  handleOperation({
-                    action,
-
-                    operation:
-                      "REJECT"
-                  })
-                }
-                onExecute={() =>
-                  confirmExecution(
-                    action
-                  )
-                }
-                onDelete={() =>
-                  confirmDelete(
-                    action
-                  )
+                item={
+                  item
                 }
               />
             )
           )
         ) : (
           <EmptyState
-            title="No Corporate Actions"
-            message="Create the first bonus share, stock split, or reverse split action."
+            message="No investor-relevant corporate actions are currently available."
           />
         )}
+      </Section>
 
-        <View
-          style={
-            styles.protectionCard
-          }
-        >
-          <Text
-            style={
-              styles.protectionTitle
-            }
-          >
-            Controlled Execution
-          </Text>
-
-          <Text
-            style={
-              styles.protectionText
-            }
-          >
-            Saving or approving an action does not
-            change holdings. The Practice Portfolio
-            changes only when an approved action is
-            explicitly executed. Duplicate execution
-            is prevented by a deterministic reference.
-          </Text>
-        </View>
-
-        <Pressable
-          style={
-            styles.secondaryButton
-          }
-          onPress={
-            loadData
-          }
-        >
-          <Text
-            style={
-              styles.secondaryButtonText
-            }
-          >
-            Refresh Corporate Actions
-          </Text>
-        </Pressable>
-
-        <Pressable
-          style={
-            styles.secondaryButton
-          }
-          onPress={() =>
-            router.replace(
-              "/(tabs)/dashboard"
-            )
-          }
-        >
-          <Text
-            style={
-              styles.secondaryButtonText
-            }
-          >
-            Back to Dashboard
-          </Text>
-        </Pressable>
-      </ScrollView>
-
-      <Modal
-        visible={
-          modalVisible
-        }
-        transparent
-        animationType="slide"
-        onRequestClose={() =>
-          setModalVisible(
-            false
-          )
+      <View
+        style={
+          styles.notice
         }
       >
-        <View
+        <Text
           style={
-            styles.modalOverlay
+            styles.noticeTitle
           }
         >
-          <ScrollView
-            style={
-              styles.modal
-            }
-            contentContainerStyle={
-              styles.modalContent
-            }
-          >
-            <Text
-              style={
-                styles.modalEyebrow
-              }
-            >
-              PC-018
-            </Text>
+          You stay in control
+        </Text>
 
-            <Text
-              style={
-                styles.modalTitle
-              }
-            >
-              {editingId
-                ? "Edit Corporate Action"
-                : "Add Corporate Action"}
-            </Text>
+        <Text
+          style={
+            styles.noticeText
+          }
+        >
+          Coach G explains and recommends. GateCEP does not
+          automatically exercise rights, elect shares, move cash,
+          or change your investments from this screen.
+        </Text>
+      </View>
 
-            {holdings.length ? (
-              <View
-                style={
-                  styles.holdingPicker
-                }
-              >
-                <Text
-                  style={
-                    styles.inputLabel
-                  }
-                >
-                  Select Current Holding
-                </Text>
+      <Pressable
+        style={
+          styles.refreshButton
+        }
+        onPress={
+          loadExperience
+        }
+      >
+        <Text
+          style={
+            styles.buttonText
+          }
+        >
+          Refresh
+        </Text>
+      </Pressable>
 
-                <ScrollView
-                  horizontal
-                  showsHorizontalScrollIndicator={
-                    false
-                  }
-                  contentContainerStyle={
-                    styles.holdingPickerRow
-                  }
-                >
-                  {holdings.map(
-                    (
-                      holding
-                    ) => (
-                      <Pressable
-                        key={
-                          holding.symbol
-                        }
-                        style={[
-                          styles.holdingChip,
-
-                          String(
-                            form.symbol ||
-                            ""
-                          )
-                            .trim()
-                            .toUpperCase() ===
-                            String(
-                              holding.symbol ||
-                              ""
-                            )
-                              .trim()
-                              .toUpperCase() &&
-                            styles.holdingChipActive
-                        ]}
-                        onPress={() =>
-                          selectHolding(
-                            holding
-                          )
-                        }
-                      >
-                        <Text
-                          style={
-                            styles.holdingChipText
-                          }
-                        >
-                          {
-                            holding.symbol
-                          }
-                        </Text>
-                      </Pressable>
-                    )
-                  )}
-                </ScrollView>
-              </View>
-            ) : null}
-
-            <Text
-              style={
-                styles.inputLabel
-              }
-            >
-              Action Type
-            </Text>
-
-            <View
-              style={
-                styles.typeGrid
-              }
-            >
-              {[
-                CORPORATE_ACTION_TYPES
-                  .BONUS_SHARE,
-
-                CORPORATE_ACTION_TYPES
-                  .STOCK_SPLIT,
-
-                CORPORATE_ACTION_TYPES
-                  .REVERSE_SPLIT
-              ].map(
-                (
-                  type
-                ) => (
-                  <Pressable
-                    key={
-                      type
-                    }
-                    style={[
-                      styles.typeButton,
-
-                      form.actionType ===
-                        type &&
-                        styles.typeButtonActive
-                    ]}
-                    onPress={() =>
-                      updateForm(
-                        "actionType",
-                        type
-                      )
-                    }
-                  >
-                    <Text
-                      style={
-                        styles.typeButtonText
-                      }
-                    >
-                      {formatLabel(
-                        type
-                      )}
-                    </Text>
-                  </Pressable>
-                )
-              )}
-            </View>
-
-            <Field
-              label="Symbol"
-              value={
-                form.symbol
-              }
-              onChangeText={(
-                value
-              ) =>
-                updateForm(
-                  "symbol",
-                  value
-                )
-              }
-            />
-
-            <Field
-              label="Company Name"
-              value={
-                form.companyName
-              }
-              onChangeText={(
-                value
-              ) =>
-                updateForm(
-                  "companyName",
-                  value
-                )
-              }
-            />
-
-            <Field
-              label="Sector"
-              value={
-                form.sector
-              }
-              onChangeText={(
-                value
-              ) =>
-                updateForm(
-                  "sector",
-                  value
-                )
-              }
-            />
-
-            <Field
-              label="Ratio Numerator"
-              value={
-                form
-                  .ratioNumerator
-              }
-              keyboardType="decimal-pad"
-              onChangeText={(
-                value
-              ) =>
-                updateForm(
-                  "ratioNumerator",
-                  value
-                )
-              }
-            />
-
-            <Field
-              label="Ratio Denominator"
-              value={
-                form
-                  .ratioDenominator
-              }
-              keyboardType="decimal-pad"
-              onChangeText={(
-                value
-              ) =>
-                updateForm(
-                  "ratioDenominator",
-                  value
-                )
-              }
-            />
-
-            <Field
-              label="Fractional Treatment"
-              value={
-                form
-                  .fractionalShareTreatment
-              }
-              placeholder="ROUND_DOWN"
-              onChangeText={(
-                value
-              ) =>
-                updateForm(
-                  "fractionalShareTreatment",
-                  value
-                    .trim()
-                    .toUpperCase()
-                )
-              }
-            />
-
-            <Field
-              label="Announcement Date"
-              value={
-                form
-                  .announcementDate
-              }
-              placeholder="YYYY-MM-DD"
-              onChangeText={(
-                value
-              ) =>
-                updateForm(
-                  "announcementDate",
-                  value
-                )
-              }
-            />
-
-            <Field
-              label="Ex-Date"
-              value={
-                form.exDate
-              }
-              placeholder="YYYY-MM-DD"
-              onChangeText={(
-                value
-              ) =>
-                updateForm(
-                  "exDate",
-                  value
-                )
-              }
-            />
-
-            <Field
-              label="Record Date"
-              value={
-                form.recordDate
-              }
-              placeholder="YYYY-MM-DD"
-              onChangeText={(
-                value
-              ) =>
-                updateForm(
-                  "recordDate",
-                  value
-                )
-              }
-            />
-
-            <Field
-              label="Effective Date"
-              value={
-                form.effectiveDate
-              }
-              placeholder="YYYY-MM-DD"
-              onChangeText={(
-                value
-              ) =>
-                updateForm(
-                  "effectiveDate",
-                  value
-                )
-              }
-            />
-
-            <Field
-              label="Source"
-              value={
-                form.source
-              }
-              onChangeText={(
-                value
-              ) =>
-                updateForm(
-                  "source",
-                  value
-                )
-              }
-            />
-
-            <Field
-              label="Notes"
-              value={
-                form.notes
-              }
-              multiline
-              onChangeText={(
-                value
-              ) =>
-                updateForm(
-                  "notes",
-                  value
-                )
-              }
-            />
-
-            <Pressable
-              disabled={
-                previewing
-              }
-              style={[
-                styles.previewButton,
-
-                previewing &&
-                  styles.buttonDisabled
-              ]}
-              onPress={
-                handlePreview
-              }
-            >
-              {previewing ? (
-                <ActivityIndicator
-                  color="white"
-                />
-              ) : (
-                <Text
-                  style={
-                    styles.previewButtonText
-                  }
-                >
-                  Preview Impact
-                </Text>
-              )}
-            </Pressable>
-
-            {preview ? (
-              <ImpactPreview
-                impact={
-                  preview
-                }
-              />
-            ) : null}
-
-            <Pressable
-              disabled={
-                saving
-              }
-              style={[
-                styles.modalPrimaryButton,
-
-                saving &&
-                  styles.buttonDisabled
-              ]}
-              onPress={
-                handleSave
-              }
-            >
-              {saving ? (
-                <ActivityIndicator
-                  color="white"
-                />
-              ) : (
-                <Text
-                  style={
-                    styles.modalPrimaryButtonText
-                  }
-                >
-                  Save Corporate Action
-                </Text>
-              )}
-            </Pressable>
-
-            <Pressable
-              style={
-                styles.modalSecondaryButton
-              }
-              onPress={() =>
-                setModalVisible(
-                  false
-                )
-              }
-            >
-              <Text
-                style={
-                  styles.modalSecondaryButtonText
-                }
-              >
-                Cancel
-              </Text>
-            </Pressable>
-          </ScrollView>
-        </View>
-      </Modal>
-    </>
+      <Pressable
+        style={
+          styles.homeButton
+        }
+        onPress={() =>
+          router.replace("/")
+        }
+      >
+        <Text
+          style={
+            styles.homeText
+          }
+        >
+          Return to Home
+        </Text>
+      </Pressable>
+    </ScrollView>
   );
 }
 
-function CorporateActionCard({
-  action,
-  impact,
-  processing,
-  onEdit,
-  onSubmit,
-  onApprove,
-  onReject,
-  onExecute,
-  onDelete
+function Section({
+  title,
+  description,
+  children
 }) {
-  const status =
-    action?.status ||
-    CORPORATE_ACTION_STATUSES
-      .DRAFT;
+  return (
+    <View
+      style={
+        styles.section
+      }
+    >
+      <Text
+        style={
+          styles.sectionTitle
+        }
+      >
+        {title}
+      </Text>
 
-  const isExecuted =
-    status ===
-    CORPORATE_ACTION_STATUSES
-      .EXECUTED;
+      <Text
+        style={
+          styles.sectionDescription
+        }
+      >
+        {description}
+      </Text>
 
-  const isCancelled =
-    status ===
-    CORPORATE_ACTION_STATUSES
-      .CANCELLED;
+      {children}
+    </View>
+  );
+}
 
-  const isRejected =
-    status ===
-    CORPORATE_ACTION_STATUSES
-      .REJECTED;
+function SummaryMetric({
+  label,
+  value
+}) {
+  return (
+    <View
+      style={
+        styles.summaryMetric
+      }
+    >
+      <Text
+        style={
+          styles.summaryLabel
+        }
+      >
+        {label}
+      </Text>
 
-  const isFailed =
-    status ===
-    CORPORATE_ACTION_STATUSES
-      .FAILED;
+      <Text
+        style={
+          styles.summaryValue
+        }
+      >
+        {String(value)}
+      </Text>
+    </View>
+  );
+}
 
-  const terminal =
-    isExecuted ||
-    isCancelled;
+function ActionCard({
+  item
+}) {
+  const event =
+    item?.event ||
+    {};
+
+  const amount =
+    item
+      ?.receivable
+      ?.expectedAmount;
 
   return (
     <View
-      style={[
-        styles.actionCard,
-
-        isExecuted &&
-          styles.executedActionCard
-      ]}
+      style={
+        styles.actionCard
+      }
     >
       <View
         style={
-          styles.cardHeader
+          styles.actionHeader
         }
       >
         <View
@@ -1987,16 +523,8 @@ function CorporateActionCard({
               styles.symbol
             }
           >
-            {action.symbol}
-          </Text>
-
-          <Text
-            style={
-              styles.companyName
-            }
-          >
-            {action.companyName ||
-              action.symbol}
+            {event.symbol ||
+            "Investment"}
           </Text>
 
           <Text
@@ -2004,717 +532,110 @@ function CorporateActionCard({
               styles.actionType
             }
           >
-            {formatLabel(
-              action.actionType
-            )}
+            {String(
+              event.type ||
+              "Corporate action"
+            )
+              .replaceAll(
+                "_",
+                " "
+              )
+              .toLowerCase()
+              .replace(
+                /\b\w/g,
+                (letter) =>
+                  letter.toUpperCase()
+              )}
           </Text>
         </View>
 
         <Text
-          style={[
-            styles.status,
-
-            isExecuted &&
-              styles.statusExecuted,
-
-            isRejected &&
-              styles.statusRejected,
-
-            isFailed &&
-              styles.statusFailed
-          ]}
+          style={
+            styles.priority
+          }
         >
-          {formatLabel(
-            status
-          )}
+          {item.priority}
         </Text>
       </View>
 
-      <View
+      <Text
         style={
-          styles.detailCard
+          styles.actionNarrative
         }
       >
-        <Row
-          label="Ratio"
-          value={`${action.ratioNumerator}:${action.ratioDenominator}`}
-        />
+        {item.narrative}
+      </Text>
 
-        <Row
-          label="Fractional Treatment"
-          value={
-            formatLabel(
-              action
-                .fractionalShareTreatment
-            )
+      {amount > 0 ? (
+        <Text
+          style={
+            styles.money
           }
-        />
-
-        <Row
-          label="Record Date"
-          value={
-            formatDate(
-              action.recordDate
-            )
-          }
-        />
-
-        <Row
-          label="Effective Date"
-          value={
-            formatDate(
-              action.effectiveDate
-            )
-          }
-        />
-      </View>
-
-      {impact ? (
-        <ImpactPreview
-          impact={
-            impact
-          }
-          compact
-        />
+        >
+          Expected income:{" "}
+          {item
+            ?.receivable
+            ?.currency ||
+          "KES"}{" "}
+          {Number(
+            amount
+          ).toLocaleString()}
+        </Text>
       ) : null}
 
-      {isExecuted ? (
+      {item
+        ?.nextBestAction ? (
         <View
           style={
-            styles.executedCard
+            styles.nextAction
           }
         >
           <Text
             style={
-              styles.executedTitle
+              styles.nextActionLabel
             }
           >
-            Execution Complete
-          </Text>
-
-          <Row
-            label="Quantity Before"
-            value={
-              action
-                ?.quantityBefore ||
-              0
-            }
-          />
-
-          <Row
-            label="Quantity Change"
-            value={
-              signedNumber(
-                action
-                  ?.quantityChange
-              )
-            }
-            highlight
-          />
-
-          <Row
-            label="Quantity After"
-            value={
-              action
-                ?.quantityAfter ||
-              0
-            }
-            highlight
-          />
-
-          <Row
-            label="Cash Impact"
-            value={`KES ${money(
-              action?.cashImpact
-            )}`}
-          />
-
-          <Row
-            label="Executed At"
-            value={
-              formatDateTime(
-                action?.executedAt
-              )
-            }
-          />
-
-          <Row
-            label="Reference"
-            value={
-              action
-                ?.executionReference ||
-              "Unavailable"
-            }
-          />
-        </View>
-      ) : null}
-
-      {isRejected &&
-      action?.rejectionReason ? (
-        <View
-          style={
-            styles.rejectedCard
-          }
-        >
-          <Text
-            style={
-              styles.rejectedTitle
-            }
-          >
-            Rejection Reason
+            NEXT
           </Text>
 
           <Text
             style={
-              styles.rejectedText
+              styles.nextActionTitle
             }
           >
             {
-              action.rejectionReason
+              item
+                .nextBestAction
+                .label
             }
-          </Text>
-        </View>
-      ) : null}
-
-      {isFailed &&
-      action?.failureReason ? (
-        <View
-          style={
-            styles.failedCard
-          }
-        >
-          <Text
-            style={
-              styles.failedTitle
-            }
-          >
-            Execution Failed
           </Text>
 
           <Text
             style={
-              styles.failedText
+              styles.nextActionText
             }
           >
             {
-              action.failureReason
+              item
+                .nextBestAction
+                .reason
             }
           </Text>
         </View>
       ) : null}
-
-      {!terminal ? (
-        <View
-          style={
-            styles.actionButtonGroup
-          }
-        >
-          {status ===
-          CORPORATE_ACTION_STATUSES
-            .DRAFT ? (
-            <>
-              <ActionButton
-                label="Edit"
-                onPress={
-                  onEdit
-                }
-                disabled={
-                  processing
-                }
-              />
-
-              <ActionButton
-                label="Submit for Review"
-                onPress={
-                  onSubmit
-                }
-                primary
-                disabled={
-                  processing
-                }
-              />
-            </>
-          ) : null}
-
-          {status ===
-          CORPORATE_ACTION_STATUSES
-            .UNDER_REVIEW ? (
-            <>
-              <ActionButton
-                label="Approve"
-                onPress={
-                  onApprove
-                }
-                primary
-                disabled={
-                  processing
-                }
-              />
-
-              <ActionButton
-                label="Reject"
-                onPress={
-                  onReject
-                }
-                danger
-                disabled={
-                  processing
-                }
-              />
-            </>
-          ) : null}
-
-          {status ===
-          CORPORATE_ACTION_STATUSES
-            .APPROVED ? (
-            <>
-              <View
-                style={
-                  styles.approvedNotice
-                }
-              >
-                <Text
-                  style={
-                    styles.approvedNoticeText
-                  }
-                >
-                  Approved and ready for execution.
-                </Text>
-              </View>
-
-              <ActionButton
-                label="Execute Corporate Action"
-                onPress={
-                  onExecute
-                }
-                primary
-                disabled={
-                  processing
-                }
-              />
-            </>
-          ) : null}
-
-          {status ===
-            CORPORATE_ACTION_STATUSES
-              .REJECTED ||
-          status ===
-            CORPORATE_ACTION_STATUSES
-              .FAILED ? (
-            <ActionButton
-              label="Edit"
-              onPress={
-                onEdit
-              }
-              disabled={
-                processing
-              }
-            />
-          ) : null}
-
-          <ActionButton
-            label="Delete"
-            onPress={
-              onDelete
-            }
-            danger
-            disabled={
-              processing
-            }
-          />
-        </View>
-      ) : null}
-
-      {processing ? (
-        <ActivityIndicator
-          color="#67e8f9"
-          style={{
-            marginTop: 14
-          }}
-        />
-      ) : null}
-    </View>
-  );
-}
-
-function ImpactPreview({
-  impact,
-  compact = false
-}) {
-  if (
-    !impact?.impact
-  ) {
-    return (
-      <View
-        style={
-          styles.previewError
-        }
-      >
-        <Text
-          style={
-            styles.previewErrorText
-          }
-        >
-          {impact?.message ||
-            "Impact preview unavailable."}
-        </Text>
-      </View>
-    );
-  }
-
-  return (
-    <View
-      style={[
-        styles.impactCard,
-
-        compact &&
-          styles.compactImpactCard
-      ]}
-    >
-      <Text
-        style={
-          styles.impactTitle
-        }
-      >
-        Impact Preview
-      </Text>
-
-      <Row
-        label="Quantity Before"
-        value={
-          impact
-            .impact
-            .quantityBefore
-        }
-      />
-
-      <Row
-        label="Raw Quantity After"
-        value={
-          impact
-            .impact
-            .rawQuantityAfter
-        }
-      />
-
-      <Row
-        label="Final Quantity"
-        value={
-          impact
-            .impact
-            .quantityAfter
-        }
-        highlight
-      />
-
-      <Row
-        label="Quantity Change"
-        value={
-          signedNumber(
-            impact
-              .impact
-              .quantityChange
-          )
-        }
-        highlight
-      />
-
-      <Row
-        label="Fractional Quantity"
-        value={
-          impact
-            .impact
-            .fractionalQuantity
-        }
-      />
-
-      <Row
-        label="Average Cost Before"
-        value={`KES ${money(
-          impact
-            .impact
-            .averagePriceBefore
-        )}`}
-      />
-
-      <Row
-        label="Average Cost After"
-        value={`KES ${money(
-          impact
-            .impact
-            .averagePriceAfter
-        )}`}
-      />
-
-      <Row
-        label="Market Price Before"
-        value={`KES ${money(
-          impact
-            .impact
-            .marketPriceBefore
-        )}`}
-      />
-
-      <Row
-        label="Theoretical Price After"
-        value={`KES ${money(
-          impact
-            .impact
-            .theoreticalMarketPriceAfter
-        )}`}
-      />
-
-      <Row
-        label="Cost Value Before"
-        value={`KES ${money(
-          impact
-            .impact
-            .costValueBefore
-        )}`}
-      />
-
-      <Row
-        label="Cost Value After"
-        value={`KES ${money(
-          impact
-            .impact
-            .costValueAfter
-        )}`}
-      />
-
-      <Row
-        label="Cash Impact"
-        value={`KES ${money(
-          impact
-            .impact
-            .cashImpact
-        )}`}
-      />
-
-      {impact?.explanation ? (
-        <Text
-          style={
-            styles.impactExplanation
-          }
-        >
-          {impact.explanation}
-        </Text>
-      ) : null}
-
-      {impact
-        ?.warnings
-        ?.length ? (
-        <View
-          style={
-            styles.warningCard
-          }
-        >
-          {impact.warnings.map(
-            (
-              warning,
-              index
-            ) => (
-              <Text
-                key={`${warning}-${index}`}
-                style={
-                  styles.warningText
-                }
-              >
-                • {warning}
-              </Text>
-            )
-          )}
-        </View>
-      ) : null}
-    </View>
-  );
-}
-
-function ActionButton({
-  label,
-  onPress,
-  primary = false,
-  danger = false,
-  disabled = false
-}) {
-  return (
-    <Pressable
-      disabled={
-        disabled
-      }
-      style={[
-        styles.actionButton,
-
-        primary &&
-          styles.actionButtonPrimary,
-
-        danger &&
-          styles.actionButtonDanger,
-
-        disabled &&
-          styles.buttonDisabled
-      ]}
-      onPress={
-        onPress
-      }
-    >
-      <Text
-        style={[
-          styles.actionButtonText,
-
-          primary &&
-            styles.actionButtonTextPrimary,
-
-          danger &&
-            styles.actionButtonTextDanger
-        ]}
-      >
-        {label}
-      </Text>
-    </Pressable>
-  );
-}
-
-function Field({
-  label,
-  value,
-  onChangeText,
-  placeholder,
-  keyboardType,
-  multiline = false
-}) {
-  return (
-    <View
-      style={
-        styles.field
-      }
-    >
-      <Text
-        style={
-          styles.inputLabel
-        }
-      >
-        {label}
-      </Text>
-
-      <TextInput
-        style={[
-          styles.input,
-
-          multiline &&
-            styles.multilineInput
-        ]}
-        value={
-          String(
-            value ??
-            ""
-          )
-        }
-        onChangeText={
-          onChangeText
-        }
-        placeholder={
-          placeholder ||
-          label
-        }
-        placeholderTextColor="#64748b"
-        keyboardType={
-          keyboardType ||
-          "default"
-        }
-        multiline={
-          multiline
-        }
-      />
-    </View>
-  );
-}
-
-function Metric({
-  label,
-  value
-}) {
-  return (
-    <View
-      style={
-        styles.metric
-      }
-    >
-      <Text
-        style={
-          styles.metricLabel
-        }
-      >
-        {label}
-      </Text>
-
-      <Text
-        style={
-          styles.metricValue
-        }
-      >
-        {String(
-          value
-        )}
-      </Text>
-    </View>
-  );
-}
-
-function Row({
-  label,
-  value,
-  highlight = false
-}) {
-  return (
-    <View
-      style={
-        styles.row
-      }
-    >
-      <Text
-        style={
-          styles.rowLabel
-        }
-      >
-        {label}
-      </Text>
-
-      <Text
-        style={[
-          styles.rowValue,
-
-          highlight &&
-            styles.rowHighlight
-        ]}
-      >
-        {String(
-          value ??
-          "N/A"
-        )}
-      </Text>
     </View>
   );
 }
 
 function EmptyState({
-  title,
   message
 }) {
   return (
     <View
       style={
-        styles.emptyCard
+        styles.empty
       }
     >
-      <Text
-        style={
-          styles.emptyTitle
-        }
-      >
-        {title}
-      </Text>
-
       <Text
         style={
           styles.emptyText
@@ -2723,233 +644,6 @@ function EmptyState({
         {message}
       </Text>
     </View>
-  );
-}
-
-function dateInputValue(
-  value
-) {
-  if (
-    !value
-  ) {
-    return "";
-  }
-
-  const date =
-    new Date(
-      value
-    );
-
-  if (
-    Number.isNaN(
-      date.getTime()
-    )
-  ) {
-    return "";
-  }
-
-  return date
-    .toISOString()
-    .slice(
-      0,
-      10
-    );
-}
-
-function toIsoDate(
-  value
-) {
-  if (
-    !value
-  ) {
-    return null;
-  }
-
-  const date =
-    new Date(
-      `${value}T12:00:00`
-    );
-
-  if (
-    Number.isNaN(
-      date.getTime()
-    )
-  ) {
-    return null;
-  }
-
-  return date
-    .toISOString();
-}
-
-function isValidDateInput(
-  value
-) {
-  const text =
-    String(
-      value ||
-      ""
-    );
-
-  if (
-    !/^\d{4}-\d{2}-\d{2}$/.test(
-      text
-    )
-  ) {
-    return false;
-  }
-
-  const date =
-    new Date(
-      `${text}T12:00:00`
-    );
-
-  return !Number.isNaN(
-    date.getTime()
-  );
-}
-
-function formatDate(
-  value
-) {
-  if (
-    !value
-  ) {
-    return "Not provided";
-  }
-
-  const date =
-    new Date(
-      value
-    );
-
-  if (
-    Number.isNaN(
-      date.getTime()
-    )
-  ) {
-    return "Unknown";
-  }
-
-  return date.toLocaleDateString(
-    "en-US",
-    {
-      month:
-        "short",
-
-      day:
-        "numeric",
-
-      year:
-        "numeric"
-    }
-  );
-}
-
-function formatDateTime(
-  value
-) {
-  if (
-    !value
-  ) {
-    return "Not provided";
-  }
-
-  const date =
-    new Date(
-      value
-    );
-
-  if (
-    Number.isNaN(
-      date.getTime()
-    )
-  ) {
-    return "Unknown";
-  }
-
-  return date.toLocaleString(
-    "en-US"
-  );
-}
-
-function formatLabel(
-  value
-) {
-  return String(
-    value ||
-    ""
-  )
-    .replaceAll(
-      "_",
-      " "
-    )
-    .toLowerCase()
-    .replace(
-      /\b\w/g,
-      (
-        letter
-      ) =>
-        letter.toUpperCase()
-    );
-}
-
-function signedNumber(
-  value
-) {
-  const parsed =
-    Number(
-      value ||
-      0
-    );
-
-  if (
-    parsed > 0
-  ) {
-    return `+${parsed}`;
-  }
-
-  return String(
-    parsed
-  );
-}
-
-function money(
-  value
-) {
-  return Number(
-    value ||
-    0
-  ).toLocaleString(
-    "en-US",
-    {
-      minimumFractionDigits:
-        2,
-
-      maximumFractionDigits:
-        2
-    }
-  );
-}
-
-function showMessage(
-  title,
-  message
-) {
-  if (
-    Platform.OS ===
-    "web"
-  ) {
-    window.alert(
-      `${title}\n\n${message}`
-    );
-
-    return;
-  }
-
-  Alert.alert(
-    title,
-    message
   );
 }
 
@@ -2974,7 +668,7 @@ const styles =
         110
     },
 
-    centerScreen: {
+    center: {
       flex:
         1,
 
@@ -2985,23 +679,20 @@ const styles =
         "center",
 
       justifyContent:
-        "center",
-
-      padding:
-        24
+        "center"
     },
 
-    loadingText: {
+    muted: {
       color:
         "#94a3b8",
 
       marginTop:
-        14
+        12
     },
 
     eyebrow: {
       color:
-        "#c084fc",
+        "#22d3ee",
 
       fontWeight:
         "900"
@@ -3029,49 +720,10 @@ const styles =
         22,
 
       marginTop:
-        10,
-
-      marginBottom:
-        20
+        10
     },
 
-    coachCard: {
-      backgroundColor:
-        "rgba(147,51,234,.12)",
-
-      borderColor:
-        "rgba(147,51,234,.35)",
-
-      borderWidth:
-        1,
-
-      borderRadius:
-        20,
-
-      padding:
-        18
-    },
-
-    coachLabel: {
-      color:
-        "#c084fc",
-
-      fontWeight:
-        "900"
-    },
-
-    coachText: {
-      color:
-        "white",
-
-      lineHeight:
-        22,
-
-      marginTop:
-        8
-    },
-
-    metricGrid: {
+    summary: {
       flexDirection:
         "row",
 
@@ -3085,27 +737,21 @@ const styles =
         18
     },
 
-    metric: {
+    summaryMetric: {
       width:
         "47%",
 
       backgroundColor:
         "#0f172a",
 
-      borderColor:
-        "#1e293b",
-
-      borderWidth:
-        1,
-
       borderRadius:
-        17,
+        14,
 
       padding:
-        14
+        13
     },
 
-    metricLabel: {
+    summaryLabel: {
       color:
         "#94a3b8",
 
@@ -3113,83 +759,113 @@ const styles =
         11
     },
 
-    metricValue: {
+    summaryValue: {
+      color:
+        "white",
+
+      fontSize:
+        20,
+
+      fontWeight:
+        "900",
+
+      marginTop:
+        5
+    },
+
+    coachCard: {
+      backgroundColor:
+        "rgba(124,58,237,.13)",
+
+      borderColor:
+        "rgba(167,139,250,.45)",
+
+      borderWidth:
+        1,
+
+      borderRadius:
+        18,
+
+      padding:
+        16,
+
+      marginTop:
+        18
+    },
+
+    coachLabel: {
+      color:
+        "#c4b5fd",
+
+      fontWeight:
+        "900",
+
+      fontSize:
+        11
+    },
+
+    coachTitle: {
       color:
         "white",
 
       fontWeight:
         "900",
 
+      fontSize:
+        19,
+
       marginTop:
-        6
+        7
     },
 
-    primaryButton: {
+    coachText: {
+      color:
+        "#ddd6fe",
+
+      lineHeight:
+        21,
+
+      marginTop:
+        8
+    },
+
+    question: {
       backgroundColor:
-        "#9333ea",
+        "#020617",
+
+      borderRadius:
+        12,
 
       padding:
-        17,
-
-      borderRadius:
-        17,
+        12,
 
       marginTop:
-        20
+        12
     },
 
-    primaryButtonText: {
-      color:
-        "white",
-
-      textAlign:
-        "center",
-
-      fontWeight:
-        "900"
-    },
-
-    filterRow: {
-      gap:
-        8,
-
-      paddingVertical:
-        20
-    },
-
-    filterButton: {
-      backgroundColor:
-        "#1e293b",
-
-      paddingHorizontal:
-        13,
-
-      paddingVertical:
-        10,
-
-      borderRadius:
-        13
-    },
-
-    filterButtonActive: {
-      backgroundColor:
-        "#9333ea"
-    },
-
-    filterText: {
+    questionLabel: {
       color:
         "#94a3b8",
 
+      fontSize:
+        10,
+
       fontWeight:
         "900"
     },
 
-    filterTextActive: {
+    questionText: {
       color:
-        "white"
+        "#e9d5ff",
+
+      lineHeight:
+        20,
+
+      marginTop:
+        5
     },
 
-    actionCard: {
+    section: {
       backgroundColor:
         "#0f172a",
 
@@ -3200,302 +876,58 @@ const styles =
         1,
 
       borderRadius:
-        20,
-
-      padding:
         18,
 
-      marginBottom:
-        16
+      padding:
+        16,
+
+      marginTop:
+        18
     },
 
-    executedActionCard: {
-      borderColor:
-        "rgba(34,197,94,.45)"
-    },
-
-    cardHeader: {
-      flexDirection:
-        "row",
-
-      justifyContent:
-        "space-between",
-
-      gap:
-        14
-    },
-
-    symbol: {
+    sectionTitle: {
       color:
         "#67e8f9",
 
       fontSize:
-        24,
+        18,
 
       fontWeight:
         "900"
     },
 
-    companyName: {
+    sectionDescription: {
       color:
-        "#cbd5e1",
-
-      marginTop:
-        3
-    },
-
-    actionType: {
-      color:
-        "#c084fc",
-
-      fontWeight:
-        "900",
-
-      marginTop:
-        7
-    },
-
-    status: {
-      color:
-        "#fde68a",
-
-      fontSize:
-        11,
-
-      fontWeight:
-        "900"
-    },
-
-    statusExecuted: {
-      color:
-        "#86efac"
-    },
-
-    statusRejected: {
-      color:
-        "#fca5a5"
-    },
-
-    statusFailed: {
-      color:
-        "#fca5a5"
-    },
-
-    detailCard: {
-      backgroundColor:
-        "#020617",
-
-      borderRadius:
-        14,
-
-      padding:
-        13,
-
-      marginTop:
-        15
-    },
-
-    impactCard: {
-      backgroundColor:
-        "rgba(34,197,94,.08)",
-
-      borderColor:
-        "rgba(34,197,94,.30)",
-
-      borderWidth:
-        1,
-
-      borderRadius:
-        15,
-
-      padding:
-        14,
-
-      marginTop:
-        15
-    },
-
-    compactImpactCard: {
-      backgroundColor:
-        "rgba(15,23,42,.75)"
-    },
-
-    impactTitle: {
-      color:
-        "#86efac",
-
-      fontWeight:
-        "900",
-
-      marginBottom:
-        3
-    },
-
-    impactExplanation: {
-      color:
-        "#cbd5e1",
+        "#94a3b8",
 
       lineHeight:
         20,
 
       marginTop:
+        6
+    },
+
+    actionCard: {
+      backgroundColor:
+        "#020617",
+
+      borderColor:
+        "#1e293b",
+
+      borderWidth:
+        1,
+
+      borderRadius:
+        14,
+
+      padding:
+        14,
+
+      marginTop:
         12
     },
 
-    warningCard: {
-      backgroundColor:
-        "rgba(245,158,11,.10)",
-
-      borderRadius:
-        12,
-
-      padding:
-        11,
-
-      marginTop:
-        12
-    },
-
-    warningText: {
-      color:
-        "#fde68a",
-
-      lineHeight:
-        19,
-
-      marginTop:
-        3
-    },
-
-    previewError: {
-      backgroundColor:
-        "rgba(239,68,68,.10)",
-
-      borderRadius:
-        13,
-
-      padding:
-        13,
-
-      marginTop:
-        15
-    },
-
-    previewErrorText: {
-      color:
-        "#fca5a5"
-    },
-
-    executedCard: {
-      backgroundColor:
-        "rgba(34,197,94,.10)",
-
-      borderColor:
-        "rgba(34,197,94,.35)",
-
-      borderWidth:
-        1,
-
-      borderRadius:
-        14,
-
-      padding:
-        14,
-
-      marginTop:
-        15
-    },
-
-    executedTitle: {
-      color:
-        "#86efac",
-
-      fontWeight:
-        "900",
-
-      marginBottom:
-        3
-    },
-
-    rejectedCard: {
-      backgroundColor:
-        "rgba(239,68,68,.08)",
-
-      borderColor:
-        "rgba(239,68,68,.30)",
-
-      borderWidth:
-        1,
-
-      borderRadius:
-        14,
-
-      padding:
-        14,
-
-      marginTop:
-        15
-    },
-
-    rejectedTitle: {
-      color:
-        "#fca5a5",
-
-      fontWeight:
-        "900"
-    },
-
-    rejectedText: {
-      color:
-        "#fecaca",
-
-      marginTop:
-        7,
-
-      lineHeight:
-        20
-    },
-
-    failedCard: {
-      backgroundColor:
-        "rgba(239,68,68,.08)",
-
-      borderColor:
-        "rgba(239,68,68,.30)",
-
-      borderWidth:
-        1,
-
-      borderRadius:
-        14,
-
-      padding:
-        14,
-
-      marginTop:
-        15
-    },
-
-    failedTitle: {
-      color:
-        "#fca5a5",
-
-      fontWeight:
-        "900"
-    },
-
-    failedText: {
-      color:
-        "#fecaca",
-
-      marginTop:
-        7,
-
-      lineHeight:
-        20
-    },
-
-    row: {
+    actionHeader: {
       flexDirection:
         "row",
 
@@ -3503,127 +935,128 @@ const styles =
         "space-between",
 
       gap:
-        14,
-
-      marginTop:
         10
     },
 
-    rowLabel: {
-      color:
-        "#94a3b8",
-
-      flex:
-        1
-    },
-
-    rowValue: {
+    symbol: {
       color:
         "white",
 
       fontWeight:
         "900",
 
-      textAlign:
-        "right",
-
-      flex:
-        1
+      fontSize:
+        17
     },
 
-    rowHighlight: {
+    actionType: {
       color:
-        "#86efac"
-    },
-
-    actionButtonGroup: {
-      marginTop:
-        14
-    },
-
-    actionButton: {
-      backgroundColor:
-        "#1e293b",
-
-      borderColor:
-        "#334155",
-
-      borderWidth:
-        1,
-
-      borderRadius:
-        13,
-
-      padding:
-        13,
+        "#94a3b8",
 
       marginTop:
-        9
+        3
     },
 
-    actionButtonPrimary: {
-      backgroundColor:
-        "#9333ea",
-
-      borderColor:
-        "#9333ea"
-    },
-
-    actionButtonDanger: {
-      backgroundColor:
-        "rgba(239,68,68,.10)",
-
-      borderColor:
-        "rgba(239,68,68,.35)"
-    },
-
-    actionButtonText: {
+    priority: {
       color:
-        "#67e8f9",
-
-      textAlign:
-        "center",
+        "#fde68a",
 
       fontWeight:
-        "900"
+        "900",
+
+      fontSize:
+        11
     },
 
-    actionButtonTextPrimary: {
+    actionNarrative: {
       color:
-        "white"
-    },
+        "#cbd5e1",
 
-    actionButtonTextDanger: {
-      color:
-        "#fca5a5"
-    },
-
-    approvedNotice: {
-      backgroundColor:
-        "rgba(34,197,94,.10)",
-
-      borderRadius:
-        12,
-
-      padding:
-        12,
+      lineHeight:
+        21,
 
       marginTop:
-        9
+        10
     },
 
-    approvedNoticeText: {
+    money: {
       color:
         "#86efac",
 
-      textAlign:
-        "center",
+      fontWeight:
+        "900",
+
+      marginTop:
+        10
+    },
+
+    nextAction: {
+      backgroundColor:
+        "#0f172a",
+
+      borderRadius:
+        11,
+
+      padding:
+        11,
+
+      marginTop:
+        11
+    },
+
+    nextActionLabel: {
+      color:
+        "#22d3ee",
+
+      fontSize:
+        9,
 
       fontWeight:
         "900"
     },
 
-    protectionCard: {
+    nextActionTitle: {
+      color:
+        "white",
+
+      fontWeight:
+        "900",
+
+      marginTop:
+        4
+    },
+
+    nextActionText: {
+      color:
+        "#94a3b8",
+
+      lineHeight:
+        19,
+
+      marginTop:
+        5
+    },
+
+    empty: {
+      backgroundColor:
+        "#020617",
+
+      borderRadius:
+        12,
+
+      padding:
+        13,
+
+      marginTop:
+        11
+    },
+
+    emptyText: {
+      color:
+        "#94a3b8"
+    },
+
+    notice: {
       backgroundColor:
         "rgba(245,158,11,.10)",
 
@@ -3634,16 +1067,16 @@ const styles =
         1,
 
       borderRadius:
-        18,
+        16,
 
       padding:
-        17,
+        15,
 
       marginTop:
         18
     },
 
-    protectionTitle: {
+    noticeTitle: {
       color:
         "#fde68a",
 
@@ -3651,34 +1084,34 @@ const styles =
         "900"
     },
 
-    protectionText: {
+    noticeText: {
       color:
         "#fef3c7",
 
       lineHeight:
-        21,
+        20,
 
       marginTop:
-        7
+        6
     },
 
-    secondaryButton: {
+    refreshButton: {
       backgroundColor:
-        "#1e293b",
-
-      padding:
-        16,
+        "#0891b2",
 
       borderRadius:
-        17,
+        15,
+
+      padding:
+        15,
 
       marginTop:
-        12
+        16
     },
 
-    secondaryButtonText: {
+    buttonText: {
       color:
-        "#67e8f9",
+        "white",
 
       textAlign:
         "center",
@@ -3687,40 +1120,29 @@ const styles =
         "900"
     },
 
-    emptyCard: {
+    homeButton: {
       backgroundColor:
-        "#0f172a",
-
-      borderColor:
         "#1e293b",
 
-      borderWidth:
-        1,
-
       borderRadius:
-        18,
+        15,
 
       padding:
-        17
+        15,
+
+      marginTop:
+        10
     },
 
-    emptyTitle: {
+    homeText: {
       color:
         "#67e8f9",
 
+      textAlign:
+        "center",
+
       fontWeight:
         "900"
-    },
-
-    emptyText: {
-      color:
-        "#94a3b8",
-
-      lineHeight:
-        20,
-
-      marginTop:
-        7
     },
 
     errorCard: {
@@ -3734,286 +1156,17 @@ const styles =
         1,
 
       borderRadius:
-        16,
-
-      padding:
         14,
 
-      marginBottom:
-        15
+      padding:
+        13,
+
+      marginTop:
+        14
     },
 
     errorText: {
       color:
         "#fca5a5"
-    },
-
-    modalOverlay: {
-      flex:
-        1,
-
-      backgroundColor:
-        "rgba(0,0,0,.78)",
-
-      justifyContent:
-        "center",
-
-      padding:
-        16
-    },
-
-    modal: {
-      maxHeight:
-        "94%",
-
-      backgroundColor:
-        "#020617",
-
-      borderColor:
-        "#334155",
-
-      borderWidth:
-        1,
-
-      borderRadius:
-        22
-    },
-
-    modalContent: {
-      padding:
-        18,
-
-      paddingBottom:
-        34
-    },
-
-    modalEyebrow: {
-      color:
-        "#c084fc",
-
-      fontWeight:
-        "900"
-    },
-
-    modalTitle: {
-      color:
-        "white",
-
-      fontSize:
-        26,
-
-      fontWeight:
-        "900",
-
-      marginTop:
-        7
-    },
-
-    holdingPicker: {
-      marginTop:
-        18
-    },
-
-    holdingPickerRow: {
-      gap:
-        8,
-
-      paddingVertical:
-        8
-    },
-
-    holdingChip: {
-      backgroundColor:
-        "#1e293b",
-
-      borderRadius:
-        13,
-
-      paddingHorizontal:
-        14,
-
-      paddingVertical:
-        10
-    },
-
-    holdingChipActive: {
-      backgroundColor:
-        "#9333ea"
-    },
-
-    holdingChipText: {
-      color:
-        "white",
-
-      fontWeight:
-        "900"
-    },
-
-    typeGrid: {
-      flexDirection:
-        "row",
-
-      flexWrap:
-        "wrap",
-
-      gap:
-        8,
-
-      marginTop:
-        8
-    },
-
-    typeButton: {
-      backgroundColor:
-        "#1e293b",
-
-      borderRadius:
-        12,
-
-      paddingHorizontal:
-        12,
-
-      paddingVertical:
-        10
-    },
-
-    typeButtonActive: {
-      backgroundColor:
-        "#9333ea"
-    },
-
-    typeButtonText: {
-      color:
-        "white",
-
-      fontWeight:
-        "900"
-    },
-
-    field: {
-      marginTop:
-        14
-    },
-
-    inputLabel: {
-      color:
-        "#94a3b8",
-
-      fontSize:
-        12,
-
-      marginTop:
-        14
-    },
-
-    input: {
-      marginTop:
-        7,
-
-      backgroundColor:
-        "#0f172a",
-
-      borderColor:
-        "#334155",
-
-      borderWidth:
-        1,
-
-      borderRadius:
-        13,
-
-      padding:
-        14,
-
-      color:
-        "white"
-    },
-
-    multilineInput: {
-      minHeight:
-        90,
-
-      textAlignVertical:
-        "top"
-    },
-
-    previewButton: {
-      backgroundColor:
-        "#0f766e",
-
-      padding:
-        16,
-
-      borderRadius:
-        15,
-
-      marginTop:
-        20
-    },
-
-    previewButtonText: {
-      color:
-        "white",
-
-      textAlign:
-        "center",
-
-      fontWeight:
-        "900"
-    },
-
-    modalPrimaryButton: {
-      backgroundColor:
-        "#9333ea",
-
-      padding:
-        17,
-
-      borderRadius:
-        16,
-
-      marginTop:
-        18
-    },
-
-    modalPrimaryButtonText: {
-      color:
-        "white",
-
-      textAlign:
-        "center",
-
-      fontWeight:
-        "900"
-    },
-
-    modalSecondaryButton: {
-      backgroundColor:
-        "#1e293b",
-
-      padding:
-        15,
-
-      borderRadius:
-        16,
-
-      marginTop:
-        11
-    },
-
-    modalSecondaryButtonText: {
-      color:
-        "#67e8f9",
-
-      textAlign:
-        "center",
-
-      fontWeight:
-        "900"
-    },
-
-    buttonDisabled: {
-      opacity:
-        0.6
     }
   });

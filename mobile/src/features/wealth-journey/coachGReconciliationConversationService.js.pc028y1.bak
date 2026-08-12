@@ -1,0 +1,67 @@
+import {
+  loadCurrentInvestorDNAReconciliation
+} from "./investorDNAReconciliationRuntime";
+
+import {
+  buildCoachGReconciliationConversation,
+  buildReconciliationResponseOptions,
+  buildDNAClarificationEvidence
+} from "./coachGReconciliationConversationEngine";
+
+import {
+  loadInvestorDNAReconciliationClarifications,
+  saveInvestorDNAReconciliationClarification
+} from "./investorDNAReconciliationConversationStore";
+
+export async function loadCurrentCoachGReconciliationConversation() {
+  const reconciliation =
+    await loadCurrentInvestorDNAReconciliation();
+
+  const conversation =
+    buildCoachGReconciliationConversation({
+      reconciliation
+    });
+
+  return {
+    reconciliation,
+    conversation,
+    responseOptions:
+      conversation?.activeSignal
+        ? buildReconciliationResponseOptions({
+            signal:
+              conversation.activeSignal
+          })
+        : []
+  };
+}
+
+export async function submitCoachGReconciliationClarification({
+  signal = {},
+  responseType,
+  responseText = null
+} = {}) {
+  const evidence =
+    buildDNAClarificationEvidence({
+      signal,
+      responseType,
+      responseText
+    });
+
+  if (!evidence?.valid) {
+    return evidence;
+  }
+
+  const saved =
+    await saveInvestorDNAReconciliationClarification(
+      evidence
+    );
+
+  return {
+    success: true,
+    clarification: saved
+  };
+}
+
+export async function loadConfirmedDNAReconciliationClarifications() {
+  return loadInvestorDNAReconciliationClarifications();
+}

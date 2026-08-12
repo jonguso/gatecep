@@ -20,9 +20,21 @@ import {
   PORTFOLIO_TABS,
   buildPortfolioHub
 } from "../src/portfolio/portfolioHubData";
+
+import {
+  calculatePortfolioSummary as calculateSharedPortfolioSummary
+} from "../src/shared/portfolio/engine.js";
 import {
   loadInvestorContext
 } from "../src/features/investor/investorContextStore";
+
+import {
+  loadCanonicalRealAvailableCash
+} from "../src/features/portfolio-cash/canonicalPortfolioCashService";
+
+import {
+  loadRealAvailableCashForSource
+} from "../src/features/portfolio-cash/accountScopedPortfolioCashService";
 
 const COLORS = [
   "#06b6d4",
@@ -46,6 +58,7 @@ export default function PortfolioHub() {
   const [accountModalOpen, setAccountModalOpen] = useState(false);
   const [selectedSector, setSelectedSector] = useState(null);
   const [practicePortfolio, setPracticePortfolio] = useState(null);
+  const [portfolioCash, setPortfolioCash] = useState(0);
 
   useFocusEffect(
     useCallback(() => {
@@ -55,7 +68,11 @@ export default function PortfolioHub() {
 
   async function load(account = selectedAccount) {
   try {
-    const [accountResult, investorContext] =
+    const [
+      accountResult,
+      investorContext,
+      canonicalRealCash
+    ] =
       await Promise.all([
         loadPortfolioAccounts().catch((error) => {
           console.log(
@@ -75,6 +92,15 @@ export default function PortfolioHub() {
           );
 
           return null;
+        }),
+
+        loadCanonicalRealAvailableCash().catch((error) => {
+          console.log(
+            "Canonical real cash load error:",
+            error.message
+          );
+
+          return 0;
         })
       ]);
 
@@ -93,7 +119,9 @@ export default function PortfolioHub() {
       ? accountResult.accounts
       : [];
 
-    const sourceAccounts = [];
+    const sourceAccounts = [
+      ...liveAccounts
+    ];
 
     if (
       Array.isArray(practice?.holdings) &&
@@ -105,8 +133,6 @@ export default function PortfolioHub() {
         type: "PRACTICE"
       });
     }
-
-    sourceAccounts.push(...liveAccounts);
 
     setAccounts(sourceAccounts);
 
@@ -121,6 +147,13 @@ export default function PortfolioHub() {
           : []
       );
 
+      setPortfolioCash(
+        Number(
+          practice?.availableCash ||
+          0
+        )
+      );
+
       return;
     }
 
@@ -130,10 +163,40 @@ export default function PortfolioHub() {
           account?.broker || "ALL"
       });
 
-    setPortfolio(
+    const realHoldings =
       Array.isArray(portfolioResult?.holdings)
         ? portfolioResult.holdings
-        : []
+        : [];
+
+    if (
+      realHoldings.length === 0 &&
+      liveAccounts.length === 0 &&
+      Array.isArray(practice?.holdings) &&
+      practice.holdings.length > 0 &&
+      account?.type !== "PRACTICE"
+    ) {
+      const practiceAccount = {
+        broker: "PRACTICE",
+        label: "Practice Portfolio",
+        type: "PRACTICE"
+      };
+
+      setSelectedAccount(practiceAccount);
+      setPortfolio(practice.holdings);
+      return;
+    }
+
+    setPortfolio(realHoldings);
+
+    const resolvedCash =
+      account?.type === "ALL"
+        ? Number(canonicalRealCash || 0)
+        : await loadRealAvailableCashForSource(
+            account
+          );
+
+    setPortfolioCash(
+      Number(resolvedCash || 0)
     );
   } catch (error) {
     console.log(
@@ -144,7 +207,45 @@ export default function PortfolioHub() {
     setPortfolio([]);
   }
 }
-  const hub = useMemo(() => buildPortfolioHub(portfolio), [portfolio]);
+  const hubAnalytics = useMemo(
+    () =>
+      buildPortfolioHub(
+        portfolio
+      ),
+    [portfolio]
+  );
+
+  const sharedPortfolio = useMemo(
+    () =>
+      calculateSharedPortfolioSummary({
+        holdings: portfolio,
+        cash: portfolioCash
+      }),
+    [
+      portfolio,
+      portfolioCash
+    ]
+  );
+
+  const sharedSummary =
+    sharedPortfolio?.summary || {};
+
+  const hub = useMemo(
+    () => ({
+      ...hubAnalytics,
+      totalValue: Number(sharedSummary?.totalValue || 0),
+      investedValue: Number(sharedSummary?.investedValue || 0),
+      availableCash: Number(sharedSummary?.totalCash || 0),
+      netWorth: Number(sharedSummary?.netWorth || 0),
+      gainLoss: Number(sharedSummary?.totalGain || 0),
+      gainLossPct: Number(sharedSummary?.totalGainPct || 0),
+      holdingsCount: Number(sharedSummary?.holdingsCount || 0)
+    }),
+    [
+      hubAnalytics,
+      sharedSummary
+    ]
+  );
 
   const sectorRows = useMemo(() => {
     const sectors = {};
@@ -240,10 +341,14 @@ export default function PortfolioHub() {
       <View style={styles.hero}>
         <Text style={styles.heroLabel}>
   {selectedAccount?.type === "PRACTICE"
-    ? "Practice Portfolio Value"
-    : "Total Portfolio Value"}
+    ? "Practice Net Worth"
+    : selectedAccount?.type === "ALL"
+      ? "Real Investment Net Worth"
+      : "Account Net Worth"}
 </Text>
-        <Text style={styles.heroValue}>KES {money(hub.totalValue)}</Text>
+        <Text style={styles.heroValue}>
+          KES {money(hub.netWorth)}
+        </Text>
 
         <Text
           style={[
@@ -260,14 +365,12 @@ export default function PortfolioHub() {
             label="Invested"
             value={`KES ${money(hub.investedValue)}`}
           />
-          {selectedAccount?.type === "PRACTICE" ? (
-  <HeroMetric
-    label="Available Cash"
-    value={`KES ${money(
-      practicePortfolio?.availableCash
-    )}`}
-  />
-) : null}
+          <HeroMetric
+            label="Available Cash"
+            value={`KES ${money(
+              hub.availableCash
+            )}`}
+          />
           <HeroMetric label="Holdings" value={String(hub.holdingsCount)} />
           <HeroMetric
             label="Largest Sector"
@@ -531,6 +634,64 @@ export default function PortfolioHub() {
           ))}
         </View>
       ) : null}
+
+      <View style={styles.specialistCard}>
+        <Text style={styles.specialistTitle}>
+          Portfolio Tools
+        </Text>
+
+        <Text style={styles.specialistDescription}>
+          Open detailed portfolio views and specialist analytics.
+        </Text>
+
+        <View style={styles.specialistGrid}>
+          <Pressable
+            style={styles.specialistButton}
+            onPress={() =>
+              router.push("/holding-details")
+            }
+          >
+            <Text style={styles.specialistButtonText}>
+              Holdings Detail
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.specialistButton}
+            onPress={() =>
+              router.push("/performance")
+            }
+          >
+            <Text style={styles.specialistButtonText}>
+              Performance
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.specialistButton}
+            onPress={() =>
+              router.push("/portfolio-activity")
+            }
+          >
+            <Text style={styles.specialistButtonText}>
+              Activity
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.specialistButton}
+            onPress={() =>
+              router.push(
+                "/unified-portfolio-analytics"
+              )
+            }
+          >
+            <Text style={styles.specialistButtonText}>
+              Portfolio Analytics
+            </Text>
+          </Pressable>
+        </View>
+      </View>
 
       <SectorModal
         sector={selectedSector}
@@ -1248,5 +1409,48 @@ settlementBadge: {
   fontSize: 10,
   fontWeight: "900",
   marginTop: 5
-}
+},
+
+  specialistCard: {
+    marginTop: 18,
+    marginBottom: 8,
+    backgroundColor: "#0f172a",
+    borderWidth: 1,
+    borderColor: "#1e293b",
+    borderRadius: 18,
+    padding: 16
+  },
+
+  specialistTitle: {
+    color: "#67e8f9",
+    fontSize: 18,
+    fontWeight: "900"
+  },
+
+  specialistDescription: {
+    color: "#94a3b8",
+    marginTop: 6,
+    marginBottom: 14,
+    lineHeight: 20
+  },
+
+  specialistGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10
+  },
+
+  specialistButton: {
+    backgroundColor: "#1e293b",
+    borderWidth: 1,
+    borderColor: "#334155",
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14
+  },
+
+  specialistButtonText: {
+    color: "#e2e8f0",
+    fontWeight: "800"
+  }
 });

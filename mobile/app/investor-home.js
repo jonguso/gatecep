@@ -60,7 +60,7 @@ export default function InvestorHome() {
 
   <Pressable
     style={styles.quickButton}
-    onPress={() => router.push("/dashboard")}
+    onPress={() => router.push("/(tabs)/dashboard")}
   >
     <Text style={styles.quickText}>
       Dashboard
@@ -105,7 +105,7 @@ export default function InvestorHome() {
 
       <Pressable
         style={styles.linkButton}
-        onPress={() => router.push("/dashboard")}
+        onPress={() => router.push("/(tabs)/dashboard")}
       >
         <Text style={styles.linkText}>View My Checklist</Text>
       </Pressable>

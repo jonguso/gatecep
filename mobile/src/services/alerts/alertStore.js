@@ -68,7 +68,7 @@ export async function buildAlerts() {
       symbol: "COACH",
       title: "Trading frequency elevated",
       message: "Coach G detected higher trading activity. Review behavior insights.",
-      route: "/coach-insights",
+      route: "/(tabs)/coach",
       createdAt: new Date().toISOString(),
       read: false
     });

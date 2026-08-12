@@ -1,0 +1,1240 @@
+import React, {
+  useCallback,
+  useEffect,
+  useState
+} from "react";
+
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View
+} from "react-native";
+
+import {
+  router
+} from "expo-router";
+
+import WealthJourneyGoalCard from "../src/features/wealth-journey/components/WealthJourneyGoalCard";
+
+import {
+  loadRealCurrentInvestorWealthJourney
+} from "../src/features/wealth-journey/realWealthJourneyRuntime";
+
+import CoachGReconciliationCard from "../src/features/wealth-journey/components/CoachGReconciliationCard";
+
+/*
+ * ============================================================
+ * PC-028I
+ * LIVE WEALTH JOURNEY SCREEN
+ * ============================================================
+ *
+ * This replaces the temporary route-param development contract from
+ * PC-028F with the current GateCEP investor runtime from PC-028H.
+ *
+ * Screen states:
+ * - loading
+ * - error
+ * - unavailable
+ * - minimal
+ * - partial
+ * - ready
+ * - no active goal
+ *
+ * The screen remains investor-facing.
+ * It does not expose the internal PC-028 engines.
+ * ============================================================
+ */
+
+export default function WealthJourneyScreen() {
+  const [
+    loading,
+    setLoading
+  ] = useState(true);
+
+  const [
+    result,
+    setResult
+  ] = useState(null);
+
+  const [
+    error,
+    setError
+  ] = useState("");
+
+  const loadJourney =
+    useCallback(
+      async ({
+        forceProviderReset = false
+      } = {}) => {
+        try {
+          setLoading(true);
+          setError("");
+
+          const next =
+            await loadRealCurrentInvestorWealthJourney({
+              forceProviderReset
+            });
+
+          setResult(
+            next
+          );
+        } catch (
+          loadError
+        ) {
+          setError(
+            loadError?.message ||
+            "Unable to load your wealth journey."
+          );
+        } finally {
+          setLoading(false);
+        }
+      },
+      []
+    );
+
+  useEffect(
+    () => {
+      let active =
+        true;
+
+      loadRealCurrentInvestorWealthJourney()
+        .then(
+          (value) => {
+            if (active) {
+              setResult(
+                value
+              );
+            }
+          }
+        )
+        .catch(
+          (loadError) => {
+            if (active) {
+              setError(
+                loadError?.message ||
+                "Unable to load your wealth journey."
+              );
+            }
+          }
+        )
+        .finally(
+          () => {
+            if (active) {
+              setLoading(false);
+            }
+          }
+        );
+
+      return () => {
+        active =
+          false;
+      };
+    },
+    []
+  );
+
+  if (loading) {
+    return (
+      <View
+        style={
+          styles.center
+        }
+      >
+        <ActivityIndicator
+          size="large"
+          color="#22d3ee"
+        />
+
+        <Text
+          style={
+            styles.loadingTitle
+          }
+        >
+          Coach G is reviewing your wealth journey...
+        </Text>
+
+        <Text
+          style={
+            styles.loadingText
+          }
+        >
+          Checking your goals, portfolio, behavior and Investor DNA.
+        </Text>
+      </View>
+    );
+  }
+
+  const status =
+    result?.status ||
+    result
+      ?.wealthContext
+      ?.status ||
+    "UNAVAILABLE";
+
+  const experience =
+    result?.experience ||
+    null;
+
+  const summary =
+    experience
+      ?.goalsSummary ||
+    null;
+
+  const readiness =
+    result
+      ?.wealthContext
+      ?.readiness ||
+    null;
+
+  const missing =
+    readiness
+      ?.missingForWealthJourney ||
+    [];
+
+  const providerFailures =
+    readiness
+      ?.providerFailures ||
+    [];
+
+  return (
+    <ScrollView
+      style={
+        styles.screen
+      }
+      contentContainerStyle={
+        styles.content
+      }
+    >
+      <Text
+        style={
+          styles.eyebrow
+        }
+      >
+        COACH G
+      </Text>
+
+      <Text
+        style={
+          styles.title
+        }
+      >
+        Your Wealth Journey
+      </Text>
+
+      <Text
+        style={
+          styles.subtitle
+        }
+      >
+        Where you are, where you're going, whether you're on track,
+        and what matters next.
+      </Text>
+
+      {error ? (
+        <ErrorState
+          error={
+            error
+          }
+          onRetry={() =>
+            loadJourney({
+              forceProviderReset:
+                true
+            })
+          }
+        />
+      ) : null}
+
+      {!error ? (
+        <CoachGReconciliationCard compact={false} />
+
+        <ReadinessBanner
+          status={
+            status
+          }
+          missing={
+            missing
+          }
+        />
+      ) : null}
+
+      {!error &&
+      providerFailures.length ? (
+        <View
+          style={
+            styles.warningCard
+          }
+        >
+          <Text
+            style={
+              styles.warningTitle
+            }
+          >
+            Some information could not be loaded
+          </Text>
+
+          <Text
+            style={
+              styles.warningText
+            }
+          >
+            Coach G can still use the information that is available.
+            Missing sources are not being guessed.
+          </Text>
+
+          {providerFailures.map(
+            (
+              item,
+              index
+            ) => (
+              <Text
+                key={
+                  `${item.domain}-${index}`
+                }
+                style={
+                  styles.warningItem
+                }
+              >
+                • {item.domain}: {item.error}
+              </Text>
+            )
+          )}
+        </View>
+      ) : null}
+
+      {!error &&
+      summary ? (
+        <>
+          <View
+            style={
+              styles.summary
+            }
+          >
+            <Metric
+              label="Goals"
+              value={
+                summary
+                  .totalGoals
+              }
+            />
+
+            <Metric
+              label="On track"
+              value={
+                summary
+                  .onTrack
+              }
+            />
+
+            <Metric
+              label="Need attention"
+              value={
+                summary
+                  .needsAttention
+              }
+            />
+
+            <Metric
+              label="Achieved"
+              value={
+                summary
+                  .achieved
+              }
+            />
+          </View>
+
+          {experience
+            ?.coachGPrompt
+            ?.shouldSurface ? (
+            <CoachPriority
+              prompt={
+                experience
+                  .coachGPrompt
+              }
+            />
+          ) : null}
+
+          {summary
+            ?.goals
+            ?.length ? (
+            <View
+              style={
+                styles.section
+              }
+            >
+              <Text
+                style={
+                  styles.sectionTitle
+                }
+              >
+                Your Goals
+              </Text>
+
+              <Text
+                style={
+                  styles.sectionText
+                }
+              >
+                Coach G monitors progress and surfaces the most useful
+                next step for each goal.
+              </Text>
+
+              {summary
+                .goals
+                .map(
+                  (
+                    goal,
+                    index
+                  ) => (
+                    <WealthJourneyGoalCard
+                      key={
+                        goal.id ||
+                        `${goal.name}-${index}`
+                      }
+                      goal={
+                        goal
+                      }
+                    />
+                  )
+                )}
+            </View>
+          ) : (
+            <NoGoalState />
+          )}
+
+          {experience
+            ?.portfolioContext
+            ?.visible ? (
+            <PortfolioGoalContext
+              context={
+                experience
+                  .portfolioContext
+              }
+            />
+          ) : null}
+
+          {experience
+            ?.dnaContext
+            ?.visible ? (
+            <DNAContext
+              context={
+                experience
+                  .dnaContext
+              }
+            />
+          ) : null}
+        </>
+      ) : null}
+
+      {!error &&
+      !summary ? (
+        <NoJourneyDataState
+          status={
+            status
+          }
+          missing={
+            missing
+          }
+        />
+      ) : null}
+
+      <View
+        style={
+          styles.principle
+        }
+      >
+        <Text
+          style={
+            styles.principleTitle
+          }
+        >
+          Your plan evolves with you
+        </Text>
+
+        <Text
+          style={
+            styles.principleText
+          }
+        >
+          GateCEP learns from your goals, conversations, practice and
+          investing behavior. A change in behavior is evidence to
+          discuss—not proof that you did something wrong.
+        </Text>
+      </View>
+
+      <Pressable
+        style={
+          styles.refreshButton
+        }
+        onPress={() =>
+          loadJourney({
+            forceProviderReset:
+              true
+          })
+        }
+      >
+        <Text
+          style={
+            styles.refreshText
+          }
+        >
+          Refresh My Journey
+        </Text>
+      </Pressable>
+
+      <Pressable
+        style={
+          styles.homeButton
+        }
+        onPress={() =>
+          router.replace("/")
+        }
+      >
+        <Text
+          style={
+            styles.homeText
+          }
+        >
+          Return to Home
+        </Text>
+      </Pressable>
+    </ScrollView>
+  );
+}
+
+function ReadinessBanner({
+  status,
+  missing = []
+}) {
+  const config = {
+    READY: {
+      title:
+        "Your wealth journey is connected",
+      message:
+        "Coach G has enough current context to evaluate your goals and portfolio."
+    },
+
+    PARTIAL: {
+      title:
+        "Coach G has most of the picture",
+      message:
+        "Some context is still missing, so recommendations may include clarification questions."
+    },
+
+    MINIMAL: {
+      title:
+        "GateCEP is still learning",
+      message:
+        "Coach G has limited information and will focus on learning more before recommending major changes."
+    },
+
+    UNAVAILABLE: {
+      title:
+        "Your journey needs more information",
+      message:
+        "GateCEP does not yet have enough connected context to evaluate your goals."
+    }
+  }[
+    status
+  ] || {
+    title:
+      "Your journey is being reviewed",
+    message:
+      "Coach G is checking the information currently available."
+  };
+
+  return (
+    <View
+      style={
+        styles.statusCard
+      }
+    >
+      <Text
+        style={
+          styles.statusTitle
+        }
+      >
+        {config.title}
+      </Text>
+
+      <Text
+        style={
+          styles.statusText
+        }
+      >
+        {config.message}
+      </Text>
+
+      {missing.length ? (
+        <Text
+          style={
+            styles.statusMissing
+          }
+        >
+          Still needed:{" "}
+          {missing.join(", ")}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+function CoachPriority({
+  prompt
+}) {
+  return (
+    <View
+      style={
+        styles.coachCard
+      }
+    >
+      <Text
+        style={
+          styles.coachLabel
+        }
+      >
+        COACH G'S PRIORITY
+      </Text>
+
+      <Text
+        style={
+          styles.coachTitle
+        }
+      >
+        {prompt.title}
+      </Text>
+
+      <Text
+        style={
+          styles.coachText
+        }
+      >
+        {prompt.message}
+      </Text>
+
+      {prompt
+        ?.suggestedQuestion ? (
+        <View
+          style={
+            styles.question
+          }
+        >
+          <Text
+            style={
+              styles.questionLabel
+            }
+          >
+            Ask Coach G:
+          </Text>
+
+          <Text
+            style={
+              styles.questionText
+            }
+          >
+            {
+              prompt
+                .suggestedQuestion
+            }
+          </Text>
+        </View>
+      ) : null}
+    </View>
+  );
+}
+
+function PortfolioGoalContext({
+  context
+}) {
+  return (
+    <View
+      style={
+        styles.section
+      }
+    >
+      <Text
+        style={
+          styles.sectionTitle
+        }
+      >
+        Portfolio & Goals
+      </Text>
+
+      <Text
+        style={
+          styles.sectionText
+        }
+      >
+        {context.message}
+      </Text>
+
+      {context
+        ?.concentrationIssue ? (
+        <Text
+          style={
+            styles.issue
+          }
+        >
+          • {context.concentrationIssue}
+        </Text>
+      ) : null}
+
+      {context
+        ?.driftIssue ? (
+        <Text
+          style={
+            styles.issue
+          }
+        >
+          • {context.driftIssue}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+function DNAContext({
+  context
+}) {
+  return (
+    <View
+      style={
+        styles.section
+      }
+    >
+      <Text
+        style={
+          styles.sectionTitle
+        }
+      >
+        What GateCEP Is Learning
+      </Text>
+
+      <Text
+        style={
+          styles.sectionText
+        }
+      >
+        {context.message}
+      </Text>
+
+      <View
+        style={
+          styles.inlineMetrics
+        }
+      >
+        <SmallMetric
+          label="Evidence"
+          value={
+            context
+              .evidenceCount
+          }
+        />
+
+        <SmallMetric
+          label="Clarify"
+          value={
+            context
+              .clarificationCount
+          }
+        />
+
+        <SmallMetric
+          label="Updates"
+          value={
+            context
+              .proposedUpdateCount
+          }
+        />
+      </View>
+    </View>
+  );
+}
+
+function NoGoalState() {
+  return (
+    <View
+      style={
+        styles.section
+      }
+    >
+      <Text
+        style={
+          styles.sectionTitle
+        }
+      >
+        Turn your goal into a trackable plan
+      </Text>
+
+      <Text
+        style={
+          styles.sectionText
+        }
+      >
+        Coach G understands your goal intention, but a target amount
+        and target date may still be needed before GateCEP can tell
+        whether you are on track.
+      </Text>
+    </View>
+  );
+}
+
+function NoJourneyDataState({
+  status,
+  missing
+}) {
+  return (
+    <View
+      style={
+        styles.section
+      }
+    >
+      <Text
+        style={
+          styles.sectionTitle
+        }
+      >
+        Coach G needs more context
+      </Text>
+
+      <Text
+        style={
+          styles.sectionText
+        }
+      >
+        Current context status: {status}. GateCEP will not invent
+        missing investor information.
+      </Text>
+
+      {missing?.length ? (
+        <Text
+          style={
+            styles.issue
+          }
+        >
+          Needed: {missing.join(", ")}
+        </Text>
+      ) : null}
+    </View>
+  );
+}
+
+function ErrorState({
+  error,
+  onRetry
+}) {
+  return (
+    <View
+      style={
+        styles.errorCard
+      }
+    >
+      <Text
+        style={
+          styles.errorTitle
+        }
+      >
+        We couldn't load your wealth journey
+      </Text>
+
+      <Text
+        style={
+          styles.errorText
+        }
+      >
+        {error}
+      </Text>
+
+      <Pressable
+        style={
+          styles.retryButton
+        }
+        onPress={
+          onRetry
+        }
+      >
+        <Text
+          style={
+            styles.retryText
+          }
+        >
+          Try Again
+        </Text>
+      </Pressable>
+    </View>
+  );
+}
+
+function Metric({
+  label,
+  value
+}) {
+  return (
+    <View
+      style={
+        styles.metric
+      }
+    >
+      <Text
+        style={
+          styles.metricLabel
+        }
+      >
+        {label}
+      </Text>
+
+      <Text
+        style={
+          styles.metricValue
+        }
+      >
+        {String(
+          value ?? 0
+        )}
+      </Text>
+    </View>
+  );
+}
+
+function SmallMetric({
+  label,
+  value
+}) {
+  return (
+    <View
+      style={
+        styles.smallMetric
+      }
+    >
+      <Text
+        style={
+          styles.smallMetricLabel
+        }
+      >
+        {label}
+      </Text>
+
+      <Text
+        style={
+          styles.smallMetricValue
+        }
+      >
+        {String(
+          value ?? 0
+        )}
+      </Text>
+    </View>
+  );
+}
+
+const styles =
+  StyleSheet.create({
+    screen: {
+      flex: 1,
+      backgroundColor: "#020617"
+    },
+
+    content: {
+      padding: 22,
+      paddingTop: 70,
+      paddingBottom: 110
+    },
+
+    center: {
+      flex: 1,
+      backgroundColor: "#020617",
+      alignItems: "center",
+      justifyContent: "center",
+      padding: 28
+    },
+
+    loadingTitle: {
+      color: "white",
+      fontSize: 17,
+      fontWeight: "900",
+      marginTop: 16,
+      textAlign: "center"
+    },
+
+    loadingText: {
+      color: "#94a3b8",
+      lineHeight: 20,
+      marginTop: 7,
+      textAlign: "center"
+    },
+
+    eyebrow: {
+      color: "#22d3ee",
+      fontWeight: "900"
+    },
+
+    title: {
+      color: "white",
+      fontSize: 31,
+      fontWeight: "900",
+      marginTop: 8
+    },
+
+    subtitle: {
+      color: "#94a3b8",
+      lineHeight: 22,
+      marginTop: 10
+    },
+
+    statusCard: {
+      backgroundColor: "rgba(34,211,238,.08)",
+      borderColor: "rgba(34,211,238,.30)",
+      borderWidth: 1,
+      borderRadius: 16,
+      padding: 15,
+      marginTop: 18
+    },
+
+    statusTitle: {
+      color: "#67e8f9",
+      fontWeight: "900"
+    },
+
+    statusText: {
+      color: "#cbd5e1",
+      lineHeight: 20,
+      marginTop: 6
+    },
+
+    statusMissing: {
+      color: "#fde68a",
+      marginTop: 8,
+      fontSize: 12
+    },
+
+    summary: {
+      flexDirection: "row",
+      flexWrap: "wrap",
+      gap: 9,
+      marginTop: 18
+    },
+
+    metric: {
+      width: "47%",
+      backgroundColor: "#0f172a",
+      borderRadius: 14,
+      padding: 13
+    },
+
+    metricLabel: {
+      color: "#94a3b8",
+      fontSize: 10
+    },
+
+    metricValue: {
+      color: "white",
+      fontSize: 20,
+      fontWeight: "900",
+      marginTop: 5
+    },
+
+    coachCard: {
+      backgroundColor: "rgba(124,58,237,.12)",
+      borderColor: "rgba(167,139,250,.40)",
+      borderWidth: 1,
+      borderRadius: 18,
+      padding: 16,
+      marginTop: 18
+    },
+
+    coachLabel: {
+      color: "#c4b5fd",
+      fontSize: 10,
+      fontWeight: "900"
+    },
+
+    coachTitle: {
+      color: "white",
+      fontSize: 18,
+      fontWeight: "900",
+      marginTop: 8
+    },
+
+    coachText: {
+      color: "#ddd6fe",
+      lineHeight: 21,
+      marginTop: 8
+    },
+
+    question: {
+      backgroundColor: "#020617",
+      borderRadius: 12,
+      padding: 12,
+      marginTop: 12
+    },
+
+    questionLabel: {
+      color: "#94a3b8",
+      fontSize: 10,
+      fontWeight: "900"
+    },
+
+    questionText: {
+      color: "#e9d5ff",
+      lineHeight: 20,
+      marginTop: 5
+    },
+
+    section: {
+      backgroundColor: "#0f172a",
+      borderColor: "#1e293b",
+      borderWidth: 1,
+      borderRadius: 18,
+      padding: 16,
+      marginTop: 18
+    },
+
+    sectionTitle: {
+      color: "#67e8f9",
+      fontSize: 18,
+      fontWeight: "900"
+    },
+
+    sectionText: {
+      color: "#94a3b8",
+      lineHeight: 20,
+      marginTop: 6
+    },
+
+    issue: {
+      color: "#f8fafc",
+      lineHeight: 20,
+      marginTop: 8
+    },
+
+    inlineMetrics: {
+      flexDirection: "row",
+      gap: 8,
+      marginTop: 12
+    },
+
+    smallMetric: {
+      flex: 1,
+      backgroundColor: "#020617",
+      borderRadius: 10,
+      padding: 9
+    },
+
+    smallMetricLabel: {
+      color: "#94a3b8",
+      fontSize: 9
+    },
+
+    smallMetricValue: {
+      color: "white",
+      fontWeight: "900",
+      marginTop: 4
+    },
+
+    principle: {
+      backgroundColor: "rgba(34,211,238,.08)",
+      borderColor: "rgba(34,211,238,.30)",
+      borderWidth: 1,
+      borderRadius: 16,
+      padding: 15,
+      marginTop: 18
+    },
+
+    principleTitle: {
+      color: "#67e8f9",
+      fontWeight: "900"
+    },
+
+    principleText: {
+      color: "#cbd5e1",
+      lineHeight: 20,
+      marginTop: 6
+    },
+
+    warningCard: {
+      backgroundColor: "rgba(245,158,11,.10)",
+      borderColor: "rgba(245,158,11,.35)",
+      borderWidth: 1,
+      borderRadius: 16,
+      padding: 15,
+      marginTop: 18
+    },
+
+    warningTitle: {
+      color: "#fde68a",
+      fontWeight: "900"
+    },
+
+    warningText: {
+      color: "#fef3c7",
+      lineHeight: 20,
+      marginTop: 6
+    },
+
+    warningItem: {
+      color: "#fed7aa",
+      lineHeight: 19,
+      marginTop: 6
+    },
+
+    errorCard: {
+      backgroundColor: "rgba(239,68,68,.10)",
+      borderColor: "rgba(239,68,68,.35)",
+      borderWidth: 1,
+      borderRadius: 16,
+      padding: 15,
+      marginTop: 18
+    },
+
+    errorTitle: {
+      color: "#fca5a5",
+      fontWeight: "900"
+    },
+
+    errorText: {
+      color: "#fecaca",
+      lineHeight: 20,
+      marginTop: 6
+    },
+
+    retryButton: {
+      backgroundColor: "#7f1d1d",
+      borderRadius: 12,
+      padding: 12,
+      marginTop: 12
+    },
+
+    retryText: {
+      color: "white",
+      textAlign: "center",
+      fontWeight: "900"
+    },
+
+    refreshButton: {
+      backgroundColor: "#0891b2",
+      borderRadius: 15,
+      padding: 15,
+      marginTop: 16
+    },
+
+    refreshText: {
+      color: "white",
+      textAlign: "center",
+      fontWeight: "900"
+    },
+
+    homeButton: {
+      backgroundColor: "#1e293b",
+      borderRadius: 15,
+      padding: 15,
+      marginTop: 10
+    },
+
+    homeText: {
+      color: "#67e8f9",
+      textAlign: "center",
+      fontWeight: "900"
+    }
+  });

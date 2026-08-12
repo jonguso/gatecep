@@ -5,14 +5,50 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View
 } from "react-native";
 import { router } from "expo-router";
-import { loadPortfolioSnapshots } from "../src/portfolio/portfolioSnapshot";
+import Svg, {
+  Circle,
+  Line,
+  Path,
+  Text as SvgText
+} from "react-native-svg";
+import {
+  loadPortfolioSnapshots,
+  saveCanonicalRealPortfolioSnapshot
+} from "../src/portfolio/portfolioSnapshot";
+import { loadCanonicalRealWealthMetrics } from "../src/features/wealth-journey/canonicalRealWealthMetricsService";
+import { buildPortfolioHealthScore } from "../src/features/analytics/portfolioHealthScoreService";
+import {
+  buildHistoricalPerformanceSummary
+} from "../src/features/performance/historicalPerformanceSummaryService";
+import {
+  buildPerformanceBenchmarkGoalIntelligence
+} from "../src/features/performance/performanceBenchmarkGoalIntelligenceService";
 
 export default function Performance() {
   const [loading, setLoading] = useState(true);
   const [snapshots, setSnapshots] = useState([]);
+  const [canonicalMetrics, setCanonicalMetrics] = useState(null);
+const [currentHealth, setCurrentHealth] = useState(null);
+const [historicalSummary, setHistoricalSummary] = useState(null);
+const [benchmarkGoalIntel, setBenchmarkGoalIntel] = useState(null);
+
+  /*
+   * PC-030C2C3
+   *
+   * Timeline defaults to 90D.
+   * Net Worth is always visible.
+   * Holdings and Cash are optional comparison layers.
+   */
+  const [timelineRange, setTimelineRange] = useState("90D");
+  const [showTimelineHoldings, setShowTimelineHoldings] = useState(false);
+  const [showTimelineCash, setShowTimelineCash] = useState(false);
+  const [selectedTimelinePoint, setSelectedTimelinePoint] = useState(null);
+
+  const { width: windowWidth } = useWindowDimensions();
 
   useEffect(() => {
     load();
@@ -20,32 +56,188 @@ export default function Performance() {
 
   async function load() {
     setLoading(true);
-    const data = await loadPortfolioSnapshots();
-    setSnapshots(data);
-    setLoading(false);
+
+    try {
+      /*
+       * PC-030C2B8
+       *
+       * Refresh today's REAL All Accounts snapshot before
+       * loading historical performance.
+       */
+      await saveCanonicalRealPortfolioSnapshot({
+        triggerReason: "PERFORMANCE_OPEN"
+      });
+
+      const [
+        data,
+        realMetrics,
+        health,
+        historySummary,
+        benchmarkGoalResult
+      ] = await Promise.all([
+        loadPortfolioSnapshots(),
+        loadCanonicalRealWealthMetrics(),
+        buildPortfolioHealthScore(),
+        buildHistoricalPerformanceSummary(),
+        buildPerformanceBenchmarkGoalIntelligence()
+      ]);
+
+      setSnapshots(
+        Array.isArray(data)
+          ? data
+          : []
+      );
+
+      setCanonicalMetrics(
+        realMetrics || null
+      );
+
+      setCurrentHealth(
+        health || null
+      );
+
+      setHistoricalSummary(
+        historySummary || null
+      );
+
+      setBenchmarkGoalIntel(
+        benchmarkGoalResult || null
+      );
+    } catch (error) {
+      console.error("Unable to load performance:", error);
+      setSnapshots([]);
+      setCanonicalMetrics(null);
+      setCurrentHealth(null);
+      setHistoricalSummary(null);
+      setBenchmarkGoalIntel(null);
+    } finally {
+      setLoading(false);
+    }
   }
 
   const metrics = useMemo(() => {
-    const latest = snapshots[0];
-    const first = snapshots[snapshots.length - 1];
+    const latestSnapshot = snapshots[0] || null;
+    const first = snapshots[snapshots.length - 1] || null;
+
+    const holdingsValue = Number(
+      canonicalMetrics?.holdingsValue || 0
+    );
+
+    const investedValue = Number(
+      canonicalMetrics?.investedValue || 0
+    );
+
+    const cash = Number(
+      canonicalMetrics?.availableCash || 0
+    );
+
+    const netWorth = Number(
+      canonicalMetrics?.netWorth || 0
+    );
+
+    const netGainLoss =
+      holdingsValue - investedValue;
+
+    const gainLossPct =
+      investedValue > 0
+        ? (netGainLoss / investedValue) * 100
+        : 0;
+
+    /*
+     * Historical snapshot comparison remains snapshot-based.
+     * Current financial truth comes from the canonical real
+     * portfolio contract.
+     */
+    const hasHistoricalComparison =
+      snapshots.length >= 2;
+
+    const firstValueRaw =
+      first?.totalValue ??
+      first?.netWorth ??
+      first?.currentValue ??
+      null;
+
+    const firstValue =
+      firstValueRaw !== null &&
+      Number.isFinite(
+        Number(firstValueRaw)
+      )
+        ? Number(firstValueRaw)
+        : null;
+
+    const hasValidFirstValue =
+      hasHistoricalComparison &&
+      firstValue !== null &&
+      firstValue > 0;
 
     const change =
-      latest && first
-        ? Number(latest.totalValue || 0) - Number(first.totalValue || 0)
-        : 0;
+      hasValidFirstValue
+        ? netWorth - firstValue
+        : null;
 
     const changePct =
-      first && Number(first.totalValue || 0) > 0
-        ? (change / Number(first.totalValue || 0)) * 100
-        : 0;
+      hasValidFirstValue
+        ? (change / firstValue) * 100
+        : null;
 
     return {
-      latest,
+      latest: canonicalMetrics
+        ? {
+            ...(latestSnapshot || {}),
+            currentValue: holdingsValue,
+            holdingsValue,
+            investedValue,
+            cash,
+            totalValue: netWorth,
+            netWorth,
+            netGainLoss,
+            gainLossPct,
+
+            healthScore:
+              currentHealth?.score ??
+              currentHealth?.healthScore ??
+              null,
+
+            healthRating:
+              normalizeHealthLabel(
+                currentHealth?.rating ??
+                currentHealth?.healthRating ??
+                currentHealth?.classification ??
+                currentHealth?.status ??
+                null
+              )
+          }
+        : latestSnapshot,
       first,
       change,
       changePct
     };
-  }, [snapshots]);
+  }, [
+    snapshots,
+    canonicalMetrics,
+    currentHealth
+  ]);
+
+  const timeline = useMemo(
+    () =>
+      buildTimelineView(
+        historicalSummary,
+        timelineRange
+      ),
+    [
+      historicalSummary,
+      timelineRange
+    ]
+  );
+
+  const timelineWidth =
+    Math.max(
+      280,
+      Math.min(
+        Number(windowWidth || 360) - 72,
+        860
+      )
+    );
 
   if (loading) {
     return (
@@ -68,9 +260,9 @@ export default function Performance() {
 
         <Pressable
           style={styles.dashboardButton}
-          onPress={() => router.replace("/(tabs)/dashboard")}
+          onPress={() => router.replace("/unified-portfolio-analytics")}
         >
-          <Text style={styles.dashboardText}>Dashboard</Text>
+          <Text style={styles.dashboardText}>Portfolio Analytics</Text>
         </Pressable>
       </View>
 
@@ -86,7 +278,7 @@ export default function Performance() {
         <>
           <View style={styles.summary}>
             <SummaryItem
-              label="Current Value"
+              label="Holdings Market Value"
               value={`KES ${money(metrics.latest.currentValue)}`}
               cyan
             />
@@ -97,13 +289,13 @@ export default function Performance() {
             />
 
             <SummaryItem
-              label="Cash"
+              label="Available Cash"
               value={`KES ${money(metrics.latest.cash)}`}
               green
             />
 
             <SummaryItem
-              label="Net Gain/Loss"
+              label="Unrealized Gain/Loss"
               value={`KES ${money(metrics.latest.netGainLoss)} (${Number(
                 metrics.latest.gainLossPct || 0
               ).toFixed(2)}%)`}
@@ -111,21 +303,1224 @@ export default function Performance() {
             />
 
             <SummaryItem
-              label="Change Since First Snapshot"
-              value={`KES ${money(metrics.change)} (${metrics.changePct.toFixed(
-                2
-              )}%)`}
-              positive={metrics.change >= 0}
-            />
-
-            <SummaryItem
               label="Health Score"
-              value={`${metrics.latest.healthScore || 0}/100 ${
-                metrics.latest.healthRating
-                  ? `(${metrics.latest.healthRating})`
-                  : ""
-              }`}
+              value={
+                metrics.latest.healthScore !== null &&
+                metrics.latest.healthScore !== undefined
+                  ? `${Number(
+                      metrics.latest.healthScore
+                    ).toFixed(0)}/100 ${
+                      metrics.latest.healthRating
+                        ? `(${metrics.latest.healthRating})`
+                        : ""
+                    }`
+                  : "N/A"
+              }
             />
+          </View>
+
+          <View style={styles.card}>
+            <View style={styles.sectionHeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardTitle}>
+                  Portfolio Value Timeline
+                </Text>
+
+                <Text style={styles.body}>
+                  Canonical REAL All Accounts snapshot history.
+                  Missing dates are not interpolated.
+                </Text>
+              </View>
+
+              <View style={styles.observationBadge}>
+                <Text style={styles.observationBadgeText}>
+                  {timeline?.points?.length || 0} points
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.timelineRangeRow}>
+              {["30D", "90D", "1Y", "ALL"].map(
+                (range) => (
+                  <Pressable
+                    key={range}
+                    style={[
+                      styles.timelineRangeButton,
+                      timelineRange === range &&
+                        styles.timelineRangeButtonActive
+                    ]}
+                    onPress={() => {
+                      setTimelineRange(range);
+                      setSelectedTimelinePoint(null);
+                    }}
+                  >
+                    <Text
+                      style={[
+                        styles.timelineRangeText,
+                        timelineRange === range &&
+                          styles.timelineRangeTextActive
+                      ]}
+                    >
+                      {range}
+                    </Text>
+                  </Pressable>
+                )
+              )}
+            </View>
+
+            <View style={styles.timelineSeriesRow}>
+              <View style={styles.timelinePrimarySeries}>
+                <View style={styles.netWorthLegendDot} />
+
+                <Text style={styles.timelineSeriesText}>
+                  Net Worth
+                </Text>
+              </View>
+
+              <Pressable
+                style={[
+                  styles.timelineSeriesButton,
+                  showTimelineHoldings &&
+                    styles.timelineSeriesButtonActive
+                ]}
+                onPress={() =>
+                  setShowTimelineHoldings(
+                    (value) => !value
+                  )
+                }
+              >
+                <View style={styles.holdingsLegendDot} />
+
+                <Text style={styles.timelineSeriesText}>
+                  Holdings
+                </Text>
+              </Pressable>
+
+              <Pressable
+                style={[
+                  styles.timelineSeriesButton,
+                  showTimelineCash &&
+                    styles.timelineSeriesButtonActive
+                ]}
+                onPress={() =>
+                  setShowTimelineCash(
+                    (value) => !value
+                  )
+                }
+              >
+                <View style={styles.cashLegendDot} />
+
+                <Text style={styles.timelineSeriesText}>
+                  Cash
+                </Text>
+              </Pressable>
+            </View>
+
+            {timeline?.points?.length >= 2 ? (
+              <>
+                <PortfolioTimelineChart
+                  width={timelineWidth}
+                  height={250}
+                  points={timeline.points}
+                  showHoldings={showTimelineHoldings}
+                  showCash={showTimelineCash}
+                  selectedPoint={selectedTimelinePoint}
+                  onSelectPoint={setSelectedTimelinePoint}
+                />
+
+                <Text style={styles.timelineInspectHint}>
+                  Select a genuine observation point to inspect its portfolio snapshot.
+                </Text>
+
+                {selectedTimelinePoint ? (
+                  <TimelineSelectedSnapshotSummary
+                    point={selectedTimelinePoint}
+                  />
+                ) : null}
+
+                {selectedTimelinePoint ? (
+                  <TimelineSnapshotInspector
+                    point={selectedTimelinePoint}
+                    onClose={() =>
+                      setSelectedTimelinePoint(null)
+                    }
+                  />
+                ) : null}
+
+                <View style={styles.analyticsGrid}>
+                  <AnalyticsMetric
+                    label="Start Net Worth"
+                    value={`KES ${money(
+                      timeline.startNetWorth
+                    )}`}
+                  />
+
+                  <AnalyticsMetric
+                    label="Current Net Worth"
+                    value={`KES ${money(
+                      timeline.endNetWorth
+                    )}`}
+                  />
+
+                  <AnalyticsMetric
+                    label="Change"
+                    value={
+                      timeline.change !== null
+                        ? `${timeline.change >= 0
+                            ? "+"
+                            : ""}KES ${money(
+                            timeline.change
+                          )}`
+                        : "N/A"
+                    }
+                  />
+
+                  <AnalyticsMetric
+                    label="Return"
+                    value={
+                      timeline.returnPercentage !== null
+                        ? `${timeline.returnPercentage >= 0
+                            ? "+"
+                            : ""}${Number(
+                            timeline.returnPercentage
+                          ).toFixed(2)}%`
+                        : "N/A"
+                    }
+                  />
+
+                  <AnalyticsMetric
+                    label="First Observation"
+                    value={
+                      timeline.startDate ||
+                      "N/A"
+                    }
+                  />
+
+                  <AnalyticsMetric
+                    label="Latest Observation"
+                    value={
+                      timeline.endDate ||
+                      "N/A"
+                    }
+                  />
+                </View>
+
+                {!timeline.fullCoverage ? (
+                  <View style={styles.timelineCoverageNotice}>
+                    <Text style={styles.timelineCoverageTitle}>
+                      Partial Range Coverage
+                    </Text>
+
+                    <Text style={styles.timelineCoverageText}>
+                      GateCEP is showing genuine observations
+                      available inside this range. It will not
+                      create synthetic dates or interpolate a
+                      missing historical baseline.
+                    </Text>
+                  </View>
+                ) : null}
+              </>
+            ) : (
+              <View style={styles.timelineEmpty}>
+                <Text style={styles.timelineEmptyTitle}>
+                  Building Timeline History
+                </Text>
+
+                <Text style={styles.timelineEmptyText}>
+                  At least two genuine portfolio snapshot dates
+                  are required to draw a performance timeline.
+                  GateCEP will preserve N/A until enough real
+                  history exists.
+                </Text>
+
+                {timeline?.points?.length === 1 ? (
+                  <>
+                    <Pressable
+                      style={styles.inspectSnapshotButton}
+                      onPress={() =>
+                        setSelectedTimelinePoint(
+                          timeline.points[0]
+                        )
+                      }
+                    >
+                      <Text style={styles.inspectSnapshotButtonText}>
+                        Inspect Current Snapshot
+                      </Text>
+                    </Pressable>
+
+                    {selectedTimelinePoint ? (
+                      <TimelineSnapshotInspector
+                        point={selectedTimelinePoint}
+                        onClose={() =>
+                          setSelectedTimelinePoint(null)
+                        }
+                      />
+                    ) : null}
+                  </>
+                ) : null}
+              </View>
+            )}
+          </View>
+
+          <View style={styles.card}>
+            <View style={styles.sectionHeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardTitle}>
+                  Historical Performance
+                </Text>
+
+                <Text style={styles.body}>
+                  Portfolio net-worth change across available snapshot periods.
+                </Text>
+              </View>
+
+              <View style={styles.observationBadge}>
+                <Text style={styles.observationBadgeText}>
+                  {historicalSummary?.observationCount || 0} observations
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.periodGrid}>
+              <PeriodCard
+                label="7D"
+                period={historicalSummary?.periods?.sevenDay}
+              />
+
+              <PeriodCard
+                label="30D"
+                period={historicalSummary?.periods?.thirtyDay}
+              />
+
+              <PeriodCard
+                label="90D"
+                period={historicalSummary?.periods?.ninetyDay}
+              />
+
+              <PeriodCard
+                label="YTD"
+                period={historicalSummary?.periods?.yearToDate}
+              />
+
+              <PeriodCard
+                label="1Y"
+                period={historicalSummary?.periods?.oneYear}
+              />
+
+              <PeriodCard
+                label="Since First"
+                period={
+                  historicalSummary
+                    ?.periods
+                    ?.sinceFirstSnapshot
+                }
+              />
+            </View>
+
+            {historicalSummary?.status ===
+            "INSUFFICIENT_HISTORY" ? (
+              <View style={styles.historyNotice}>
+                <Text style={styles.historyNoticeTitle}>
+                  Building Performance History
+                </Text>
+
+                <Text style={styles.historyNoticeText}>
+                  GateCEP needs additional genuine portfolio snapshots before
+                  historical returns can be calculated. Missing periods remain
+                  N/A rather than being reported as zero return.
+                </Text>
+              </View>
+            ) : null}
+          </View>
+
+          <View style={styles.card}>
+            <View style={styles.sectionHeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardTitle}>
+                  Benchmark Comparison
+                </Text>
+
+                <Text style={styles.body}>
+                  Relative performance against GateCEP&apos;s configured
+                  genuine NSE benchmark history.
+                </Text>
+              </View>
+
+              <View style={styles.observationBadge}>
+                <Text style={styles.observationBadgeText}>
+                  {formatPerformanceLabel(
+                    benchmarkGoalIntel
+                      ?.benchmark
+                      ?.relativeStatus
+                  ) || "N/A"}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.analyticsGrid}>
+              <AnalyticsMetric
+                label="Benchmark"
+                value={
+                  benchmarkGoalIntel
+                    ?.benchmark
+                    ?.benchmarkLabel ||
+                  formatPerformanceLabel(
+                    benchmarkGoalIntel
+                      ?.benchmark
+                      ?.benchmarkCode
+                  ) ||
+                  "N/A"
+                }
+              />
+
+              <AnalyticsMetric
+                label="Benchmark Status"
+                value={
+                  formatPerformanceLabel(
+                    benchmarkGoalIntel
+                      ?.benchmark
+                      ?.status
+                  ) ||
+                  "N/A"
+                }
+              />
+
+              <AnalyticsMetric
+                label="Portfolio Return"
+                value={
+                  benchmarkGoalIntel
+                    ?.benchmark
+                    ?.portfolioReturnPercentage !== null &&
+                  benchmarkGoalIntel
+                    ?.benchmark
+                    ?.portfolioReturnPercentage !== undefined
+                    ? `${Number(
+                        benchmarkGoalIntel
+                          .benchmark
+                          .portfolioReturnPercentage
+                      ).toFixed(2)}%`
+                    : "N/A"
+                }
+              />
+
+              <AnalyticsMetric
+                label="Benchmark Return"
+                value={
+                  benchmarkGoalIntel
+                    ?.benchmark
+                    ?.benchmarkReturnPercentage !== null &&
+                  benchmarkGoalIntel
+                    ?.benchmark
+                    ?.benchmarkReturnPercentage !== undefined
+                    ? `${Number(
+                        benchmarkGoalIntel
+                          .benchmark
+                          .benchmarkReturnPercentage
+                      ).toFixed(2)}%`
+                    : "N/A"
+                }
+              />
+
+              <AnalyticsMetric
+                label="Excess Return"
+                value={
+                  benchmarkGoalIntel
+                    ?.benchmark
+                    ?.activeReturnPercentage !== null &&
+                  benchmarkGoalIntel
+                    ?.benchmark
+                    ?.activeReturnPercentage !== undefined
+                    ? `${Number(
+                        benchmarkGoalIntel
+                          .benchmark
+                          .activeReturnPercentage
+                      ) >= 0
+                        ? "+"
+                        : ""}${Number(
+                        benchmarkGoalIntel
+                          .benchmark
+                          .activeReturnPercentage
+                      ).toFixed(2)}%`
+                    : "N/A"
+                }
+              />
+
+              <AnalyticsMetric
+                label="Matched Observations"
+                value={
+                  benchmarkGoalIntel
+                    ?.benchmark
+                    ?.matchedObservations !== null &&
+                  benchmarkGoalIntel
+                    ?.benchmark
+                    ?.matchedObservations !== undefined
+                    ? String(
+                        benchmarkGoalIntel
+                          .benchmark
+                          .matchedObservations
+                      )
+                    : "N/A"
+                }
+              />
+
+              <AnalyticsMetric
+                label="Alpha"
+                value={
+                  benchmarkGoalIntel
+                    ?.benchmark
+                    ?.alphaPercentage !== null &&
+                  benchmarkGoalIntel
+                    ?.benchmark
+                    ?.alphaPercentage !== undefined
+                    ? `${Number(
+                        benchmarkGoalIntel
+                          .benchmark
+                          .alphaPercentage
+                      ).toFixed(2)}%`
+                    : "N/A"
+                }
+              />
+
+              <AnalyticsMetric
+                label="Tracking Error"
+                value={
+                  benchmarkGoalIntel
+                    ?.benchmark
+                    ?.trackingErrorPercentage !== null &&
+                  benchmarkGoalIntel
+                    ?.benchmark
+                    ?.trackingErrorPercentage !== undefined
+                    ? `${Number(
+                        benchmarkGoalIntel
+                          .benchmark
+                          .trackingErrorPercentage
+                      ).toFixed(2)}%`
+                    : "N/A"
+                }
+              />
+            </View>
+
+            {!benchmarkGoalIntel?.benchmark?.available ? (
+              <View style={styles.performanceIntelNotice}>
+                <Text style={styles.performanceIntelNoticeTitle}>
+                  Benchmark History Required
+                </Text>
+
+                <Text style={styles.performanceIntelNoticeText}>
+                  {benchmarkGoalIntel
+                    ?.benchmark
+                    ?.message ||
+                    "N/A — insufficient genuine benchmark history. GateCEP will not substitute a synthetic or zero benchmark return."}
+                </Text>
+              </View>
+            ) : null}
+          </View>
+
+          <View style={styles.card}>
+            <View style={styles.sectionHeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardTitle}>
+                  Goal Progress Intelligence
+                </Text>
+
+                <Text style={styles.body}>
+                  Progress uses canonical REAL Net Worth and the existing
+                  Wealth Journey goal contract.
+                </Text>
+              </View>
+
+              <View style={styles.observationBadge}>
+                <Text style={styles.observationBadgeText}>
+                  {formatPerformanceLabel(
+                    benchmarkGoalIntel
+                      ?.goal
+                      ?.status
+                  ) || "N/A"}
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.analyticsGrid}>
+              <AnalyticsMetric
+                label="Goal"
+                value={
+                  benchmarkGoalIntel
+                    ?.goal
+                    ?.goalName ||
+                  "N/A"
+                }
+              />
+
+              <AnalyticsMetric
+                label="Current Net Worth"
+                value={
+                  benchmarkGoalIntel
+                    ?.goal
+                    ?.currentNetWorth !== null &&
+                  benchmarkGoalIntel
+                    ?.goal
+                    ?.currentNetWorth !== undefined
+                    ? `KES ${money(
+                        benchmarkGoalIntel
+                          .goal
+                          .currentNetWorth
+                      )}`
+                    : "N/A"
+                }
+              />
+
+              <AnalyticsMetric
+                label="Target Amount"
+                value={
+                  benchmarkGoalIntel
+                    ?.goal
+                    ?.targetAmount !== null &&
+                  benchmarkGoalIntel
+                    ?.goal
+                    ?.targetAmount !== undefined
+                    ? `KES ${money(
+                        benchmarkGoalIntel
+                          .goal
+                          .targetAmount
+                      )}`
+                    : "N/A"
+                }
+              />
+
+              <AnalyticsMetric
+                label="Current Progress"
+                value={
+                  benchmarkGoalIntel
+                    ?.goal
+                    ?.currentProgressPercentage !== null &&
+                  benchmarkGoalIntel
+                    ?.goal
+                    ?.currentProgressPercentage !== undefined
+                    ? `${Number(
+                        benchmarkGoalIntel
+                          .goal
+                          .currentProgressPercentage
+                      ).toFixed(1)}%`
+                    : "N/A"
+                }
+              />
+
+              <AnalyticsMetric
+                label="Remaining"
+                value={
+                  benchmarkGoalIntel
+                    ?.goal
+                    ?.remainingAmount !== null &&
+                  benchmarkGoalIntel
+                    ?.goal
+                    ?.remainingAmount !== undefined
+                    ? `KES ${money(
+                        benchmarkGoalIntel
+                          .goal
+                          .remainingAmount
+                      )}`
+                    : "N/A"
+                }
+              />
+
+              <AnalyticsMetric
+                label="Target Date"
+                value={
+                  benchmarkGoalIntel
+                    ?.goal
+                    ?.targetDate ||
+                  "N/A"
+                }
+              />
+
+              <AnalyticsMetric
+                label="Projected Value"
+                value={
+                  benchmarkGoalIntel
+                    ?.goal
+                    ?.projectedValue !== null &&
+                  benchmarkGoalIntel
+                    ?.goal
+                    ?.projectedValue !== undefined
+                    ? `KES ${money(
+                        benchmarkGoalIntel
+                          .goal
+                          .projectedValue
+                      )}`
+                    : "N/A"
+                }
+              />
+
+              <AnalyticsMetric
+                label="Required Monthly Contribution"
+                value={
+                  benchmarkGoalIntel
+                    ?.goal
+                    ?.requiredMonthlyContribution !== null &&
+                  benchmarkGoalIntel
+                    ?.goal
+                    ?.requiredMonthlyContribution !== undefined
+                    ? `KES ${money(
+                        benchmarkGoalIntel
+                          .goal
+                          .requiredMonthlyContribution
+                      )}`
+                    : "N/A"
+                }
+              />
+            </View>
+
+            <View style={styles.goalProgressTrack}>
+              <View
+                style={[
+                  styles.goalProgressFill,
+                  {
+                    width: `${Math.max(
+                      0,
+                      Math.min(
+                        Number(
+                          benchmarkGoalIntel
+                            ?.goal
+                            ?.currentProgressPercentage ||
+                          0
+                        ),
+                        100
+                      )
+                    )}%`
+                  }
+                ]}
+              />
+            </View>
+
+            <Text style={styles.performanceIntelMessage}>
+              {benchmarkGoalIntel
+                ?.goal
+                ?.message ||
+                "N/A — no active real-investor goal evidence is available."}
+            </Text>
+
+            {benchmarkGoalIntel
+              ?.goal
+              ?.nextBestAction
+              ?.label ? (
+              <View style={styles.goalActionBox}>
+                <Text style={styles.goalActionTitle}>
+                  Existing Wealth Journey Next Step
+                </Text>
+
+                <Text style={styles.goalActionLabel}>
+                  {benchmarkGoalIntel
+                    .goal
+                    .nextBestAction
+                    .label}
+                </Text>
+
+                {benchmarkGoalIntel
+                  ?.goal
+                  ?.nextBestAction
+                  ?.reason ? (
+                  <Text style={styles.goalActionReason}>
+                    {benchmarkGoalIntel
+                      .goal
+                      .nextBestAction
+                      .reason}
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
+
+            {!benchmarkGoalIntel?.goal?.hasTargetDate &&
+            benchmarkGoalIntel?.goal?.targetAmount ? (
+              <View style={styles.performanceIntelNotice}>
+                <Text style={styles.performanceIntelNoticeTitle}>
+                  Target Date Required for Track Status
+                </Text>
+
+                <Text style={styles.performanceIntelNoticeText}>
+                  GateCEP can calculate current goal progress and the
+                  remaining amount, but it will not claim the investor is
+                  on track or behind without a target date.
+                </Text>
+              </View>
+            ) : null}
+          </View>
+
+          <View style={styles.card}>
+            <View style={styles.sectionHeaderRow}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardTitle}>
+                  Performance Records
+                </Text>
+
+                <Text style={styles.body}>
+                  Record highs, lows, snapshot moves, health changes,
+                  and portfolio milestones from genuine stored observations.
+                </Text>
+              </View>
+
+              <View style={styles.observationBadge}>
+                <Text style={styles.observationBadgeText}>
+                  {historicalSummary?.records?.observationCount || 0} records
+                </Text>
+              </View>
+            </View>
+
+            <View style={styles.performanceRecordGrid}>
+              <PerformanceRecordMetric
+                label="Record High Net Worth"
+                value={
+                  historicalSummary
+                    ?.records
+                    ?.highestNetWorth
+                    ?.value !== null &&
+                  historicalSummary
+                    ?.records
+                    ?.highestNetWorth
+                    ?.value !== undefined
+                    ? `KES ${money(
+                        historicalSummary
+                          .records
+                          .highestNetWorth
+                          .value
+                      )}`
+                    : "N/A"
+                }
+                detail={
+                  historicalSummary
+                    ?.records
+                    ?.highestNetWorth
+                    ?.date ||
+                  "No observation"
+                }
+              />
+
+              <PerformanceRecordMetric
+                label="Record Low Net Worth"
+                value={
+                  historicalSummary
+                    ?.records
+                    ?.lowestNetWorth
+                    ?.value !== null &&
+                  historicalSummary
+                    ?.records
+                    ?.lowestNetWorth
+                    ?.value !== undefined
+                    ? `KES ${money(
+                        historicalSummary
+                          .records
+                          .lowestNetWorth
+                          .value
+                      )}`
+                    : "N/A"
+                }
+                detail={
+                  historicalSummary
+                    ?.records
+                    ?.lowestNetWorth
+                    ?.date ||
+                  "No observation"
+                }
+              />
+
+              <PerformanceRecordMetric
+                label="Best Snapshot Move"
+                value={
+                  historicalSummary
+                    ?.records
+                    ?.bestSnapshotChange
+                    ?.changePercentage !== null &&
+                  historicalSummary
+                    ?.records
+                    ?.bestSnapshotChange
+                    ?.changePercentage !== undefined
+                    ? `${Number(
+                        historicalSummary
+                          .records
+                          .bestSnapshotChange
+                          .changePercentage
+                      ) >= 0
+                        ? "+"
+                        : ""}${Number(
+                        historicalSummary
+                          .records
+                          .bestSnapshotChange
+                          .changePercentage
+                      ).toFixed(2)}%`
+                    : "N/A"
+                }
+                detail={
+                  historicalSummary
+                    ?.records
+                    ?.bestSnapshotChange
+                    ? `${historicalSummary.records.bestSnapshotChange.fromDate} → ${historicalSummary.records.bestSnapshotChange.toDate}`
+                    : "Insufficient history"
+                }
+                positive={
+                  historicalSummary
+                    ?.records
+                    ?.bestSnapshotChange
+                    ? true
+                    : undefined
+                }
+              />
+
+              <PerformanceRecordMetric
+                label="Worst Snapshot Move"
+                value={
+                  historicalSummary
+                    ?.records
+                    ?.worstSnapshotChange
+                    ?.changePercentage !== null &&
+                  historicalSummary
+                    ?.records
+                    ?.worstSnapshotChange
+                    ?.changePercentage !== undefined
+                    ? `${Number(
+                        historicalSummary
+                          .records
+                          .worstSnapshotChange
+                          .changePercentage
+                      ) >= 0
+                        ? "+"
+                        : ""}${Number(
+                        historicalSummary
+                          .records
+                          .worstSnapshotChange
+                          .changePercentage
+                      ).toFixed(2)}%`
+                    : "N/A"
+                }
+                detail={
+                  historicalSummary
+                    ?.records
+                    ?.worstSnapshotChange
+                    ? `${historicalSummary.records.worstSnapshotChange.fromDate} → ${historicalSummary.records.worstSnapshotChange.toDate}`
+                    : "Insufficient history"
+                }
+                positive={
+                  historicalSummary
+                    ?.records
+                    ?.worstSnapshotChange
+                    ? Number(
+                        historicalSummary
+                          .records
+                          .worstSnapshotChange
+                          .changePercentage
+                      ) >= 0
+                    : undefined
+                }
+              />
+
+              <PerformanceRecordMetric
+                label="Best Health Improvement"
+                value={
+                  historicalSummary
+                    ?.records
+                    ?.bestHealthImprovement
+                    ?.change !== null &&
+                  historicalSummary
+                    ?.records
+                    ?.bestHealthImprovement
+                    ?.change !== undefined
+                    ? `+${Number(
+                        historicalSummary
+                          .records
+                          .bestHealthImprovement
+                          .change
+                      ).toFixed(0)} points`
+                    : "N/A"
+                }
+                detail={
+                  historicalSummary
+                    ?.records
+                    ?.bestHealthImprovement
+                    ? `${historicalSummary.records.bestHealthImprovement.fromDate} → ${historicalSummary.records.bestHealthImprovement.toDate}`
+                    : "Insufficient health history"
+                }
+                positive={
+                  historicalSummary
+                    ?.records
+                    ?.bestHealthImprovement
+                    ? true
+                    : undefined
+                }
+              />
+
+              <PerformanceRecordMetric
+                label="Largest Health Decline"
+                value={
+                  historicalSummary
+                    ?.records
+                    ?.worstHealthDecline
+                    ?.change !== null &&
+                  historicalSummary
+                    ?.records
+                    ?.worstHealthDecline
+                    ?.change !== undefined
+                    ? `${Number(
+                        historicalSummary
+                          .records
+                          .worstHealthDecline
+                          .change
+                      ).toFixed(0)} points`
+                    : "N/A"
+                }
+                detail={
+                  historicalSummary
+                    ?.records
+                    ?.worstHealthDecline
+                    ? `${historicalSummary.records.worstHealthDecline.fromDate} → ${historicalSummary.records.worstHealthDecline.toDate}`
+                    : "Insufficient health history"
+                }
+                positive={
+                  historicalSummary
+                    ?.records
+                    ?.worstHealthDecline
+                    ? false
+                    : undefined
+                }
+              />
+            </View>
+
+            <View style={styles.milestoneSection}>
+              <Text style={styles.performanceRecordSectionTitle}>
+                Portfolio Milestones
+              </Text>
+
+              <Text style={styles.performanceRecordSectionText}>
+                First recorded date that Net Worth reached each threshold.
+              </Text>
+
+              {Array.isArray(
+                historicalSummary
+                  ?.records
+                  ?.milestones
+              ) ? (
+                historicalSummary.records.milestones.map(
+                  (milestone) => (
+                    <View
+                      key={`milestone-${milestone.threshold}`}
+                      style={styles.milestoneRow}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.milestoneValue}>
+                          KES {money(
+                            milestone.threshold
+                          )}
+                        </Text>
+
+                        <Text style={styles.milestoneMeta}>
+                          {milestone.achieved
+                            ? `First recorded ${milestone.date}`
+                            : "Not yet recorded"}
+                        </Text>
+                      </View>
+
+                      <View
+                        style={[
+                          styles.milestoneBadge,
+                          milestone.achieved
+                            ? styles.milestoneBadgeAchieved
+                            : null
+                        ]}
+                      >
+                        <Text
+                          style={[
+                            styles.milestoneBadgeText,
+                            milestone.achieved
+                              ? styles.milestoneBadgeTextAchieved
+                              : null
+                          ]}
+                        >
+                          {milestone.achieved
+                            ? "ACHIEVED"
+                            : "PENDING"}
+                        </Text>
+                      </View>
+                    </View>
+                  )
+                )
+              ) : (
+                <Text style={styles.performanceRecordUnavailable}>
+                  N/A — No portfolio history available.
+                </Text>
+              )}
+            </View>
+
+            {historicalSummary?.records?.observationCount < 2 ? (
+              <View style={styles.performanceRecordNotice}>
+                <Text style={styles.performanceRecordNoticeTitle}>
+                  Building Performance Records
+                </Text>
+
+                <Text style={styles.performanceRecordNoticeText}>
+                  Snapshot movement and health-change records require
+                  at least two genuine portfolio observations. GateCEP
+                  will preserve N/A until real history exists.
+                </Text>
+              </View>
+            ) : null}
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>
+              Portfolio Drawdown
+            </Text>
+
+            <Text style={styles.body}>
+              Measures the decline in net worth from prior portfolio peaks.
+            </Text>
+
+            <View style={styles.analyticsGrid}>
+              <AnalyticsMetric
+                label="Peak Net Worth"
+                value={
+                  historicalSummary
+                    ?.drawdown
+                    ?.peakNetWorth !== null &&
+                  historicalSummary
+                    ?.drawdown
+                    ?.peakNetWorth !== undefined
+                    ? `KES ${money(
+                        historicalSummary
+                          .drawdown
+                          .peakNetWorth
+                      )}`
+                    : "N/A"
+                }
+              />
+
+              <AnalyticsMetric
+                label="Current Drawdown"
+                value={
+                  historicalSummary
+                    ?.drawdown
+                    ?.currentDrawdownPercentage !== null &&
+                  historicalSummary
+                    ?.drawdown
+                    ?.currentDrawdownPercentage !== undefined
+                    ? `${Number(
+                        historicalSummary
+                          .drawdown
+                          .currentDrawdownPercentage
+                      ).toFixed(2)}%`
+                    : "N/A"
+                }
+              />
+
+              <AnalyticsMetric
+                label="Maximum Drawdown"
+                value={
+                  historicalSummary
+                    ?.drawdown
+                    ?.maximumDrawdownPercentage !== null &&
+                  historicalSummary
+                    ?.drawdown
+                    ?.maximumDrawdownPercentage !== undefined
+                    ? `${Number(
+                        historicalSummary
+                          .drawdown
+                          .maximumDrawdownPercentage
+                      ).toFixed(2)}%`
+                    : "N/A"
+                }
+              />
+
+              <AnalyticsMetric
+                label="Peak Date"
+                value={
+                  historicalSummary
+                    ?.drawdown
+                    ?.peakDate ||
+                  "N/A"
+                }
+              />
+            </View>
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>
+              Portfolio Health Trend
+            </Text>
+
+            <Text style={styles.body}>
+              Tracks how the portfolio health score changes as new snapshots
+              are recorded.
+            </Text>
+
+            <View style={styles.analyticsGrid}>
+              <AnalyticsMetric
+                label="First Score"
+                value={
+                  historicalSummary
+                    ?.healthTrend
+                    ?.firstScore !== null &&
+                  historicalSummary
+                    ?.healthTrend
+                    ?.firstScore !== undefined
+                    ? `${Number(
+                        historicalSummary
+                          .healthTrend
+                          .firstScore
+                      ).toFixed(0)}/100`
+                    : "N/A"
+                }
+              />
+
+              <AnalyticsMetric
+                label="Latest Score"
+                value={
+                  historicalSummary
+                    ?.healthTrend
+                    ?.latestScore !== null &&
+                  historicalSummary
+                    ?.healthTrend
+                    ?.latestScore !== undefined
+                    ? `${Number(
+                        historicalSummary
+                          .healthTrend
+                          .latestScore
+                      ).toFixed(0)}/100`
+                    : "N/A"
+                }
+              />
+
+              <AnalyticsMetric
+                label="Score Change"
+                value={
+                  historicalSummary
+                    ?.healthTrend
+                    ?.change !== null &&
+                  historicalSummary
+                    ?.healthTrend
+                    ?.change !== undefined
+                    ? `${Number(
+                        historicalSummary
+                          .healthTrend
+                          .change
+                      ) >= 0
+                        ? "+"
+                        : ""}${Number(
+                        historicalSummary
+                          .healthTrend
+                          .change
+                      ).toFixed(0)}`
+                    : "N/A"
+                }
+              />
+
+              <AnalyticsMetric
+                label="Direction"
+                value={
+                  formatPerformanceLabel(
+                    historicalSummary
+                      ?.healthTrend
+                      ?.direction
+                  ) ||
+                  "N/A"
+                }
+              />
+            </View>
           </View>
 
           <View style={styles.card}>
@@ -136,20 +1531,39 @@ export default function Performance() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.snapshotDate}>{s.date}</Text>
                   <Text style={styles.small}>
-                    Health {s.healthScore || 0}/100 • Cash KES {money(s.cash)}
+                    Health{" "}
+                    {s.healthScore !== null &&
+                    s.healthScore !== undefined
+                      ? `${Number(
+                          s.healthScore
+                        ).toFixed(0)}/100`
+                      : "N/A"}{" "}
+                    • Cash KES {money(s.cash)}
                   </Text>
                 </View>
 
                 <View style={{ alignItems: "flex-end" }}>
-                  <Text style={styles.white}>KES {money(s.totalValue)}</Text>
+                  <Text style={styles.white}>
+                    Net Worth KES {money(
+                      s.netWorth ??
+                      s.totalValue
+                    )}
+                  </Text>
                   <Text
                     style={
-                      Number(s.netGainLoss || 0) >= 0
+                      Number(
+                        s.unrealizedGainLoss ??
+                        s.netGainLoss ??
+                        0
+                      ) >= 0
                         ? styles.green
                         : styles.red
                     }
                   >
-                    KES {money(s.netGainLoss)}
+                    KES {money(
+                      s.unrealizedGainLoss ??
+                      s.netGainLoss
+                    )}
                   </Text>
                 </View>
               </View>
@@ -160,13 +1574,1111 @@ export default function Performance() {
 
       <Pressable
         style={styles.backButton}
-        onPress={() => router.replace("/(tabs)/dashboard")}
+        onPress={() =>
+          router.replace("/unified-portfolio-analytics")
+        }
       >
-        <Text style={styles.backText}>Back to Dashboard</Text>
+        <Text style={styles.backText}>
+          Back to Portfolio Analytics
+        </Text>
       </Pressable>
     </ScrollView>
   );
 }
+
+function TimelineSelectedSnapshotSummary({
+  point
+}) {
+  if (!point) {
+    return null;
+  }
+
+  const gainPct =
+    finiteTimelineNumber(
+      point.unrealizedGainLossPct ??
+      point.gainLossPct
+    );
+
+  return (
+    <View style={styles.timelineSelectedSummary}>
+      <View style={styles.timelineSelectedSummaryItem}>
+        <Text style={styles.timelineSelectedSummaryLabel}>
+          Selected
+        </Text>
+
+        <Text style={styles.timelineSelectedSummaryValue}>
+          {formatTimelineDate(
+            point.date
+          ) || point.date || "N/A"}
+        </Text>
+      </View>
+
+      <View style={styles.timelineSelectedSummaryItem}>
+        <Text style={styles.timelineSelectedSummaryLabel}>
+          Net Worth
+        </Text>
+
+        <Text style={styles.timelineSelectedSummaryValue}>
+          {point.netWorth !== null &&
+          point.netWorth !== undefined
+            ? `KES ${money(point.netWorth)}`
+            : "N/A"}
+        </Text>
+      </View>
+
+      <View style={styles.timelineSelectedSummaryItem}>
+        <Text style={styles.timelineSelectedSummaryLabel}>
+          Return
+        </Text>
+
+        <Text style={styles.timelineSelectedSummaryValue}>
+          {gainPct !== null
+            ? `${gainPct >= 0 ? "+" : ""}${Number(
+                gainPct
+              ).toFixed(2)}%`
+            : "N/A"}
+        </Text>
+      </View>
+    </View>
+  );
+}
+
+
+function TimelineSnapshotInspector({
+  point,
+  onClose
+}) {
+  if (!point) {
+    return null;
+  }
+
+  const gain =
+    finiteTimelineNumber(
+      point.unrealizedGainLoss ??
+      point.netGainLoss
+    );
+
+  const gainPct =
+    finiteTimelineNumber(
+      point.unrealizedGainLossPct ??
+      point.gainLossPct
+    );
+
+  const healthScore =
+    finiteTimelineNumber(
+      point.healthScore
+    );
+
+  return (
+    <View style={styles.snapshotInspector}>
+      <View style={styles.snapshotInspectorHeader}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.snapshotInspectorTitle}>
+            Snapshot Inspector
+          </Text>
+
+          <Text style={styles.snapshotInspectorDate}>
+            {point.date || "Unknown date"}
+          </Text>
+        </View>
+
+        <Pressable
+          style={styles.snapshotInspectorClose}
+          onPress={onClose}
+        >
+          <Text style={styles.snapshotInspectorCloseText}>
+            Close
+          </Text>
+        </Pressable>
+      </View>
+
+      <View style={styles.analyticsGrid}>
+        <AnalyticsMetric
+          label="Net Worth"
+          value={
+            point.netWorth !== null &&
+            point.netWorth !== undefined
+              ? `KES ${money(point.netWorth)}`
+              : "N/A"
+          }
+        />
+
+        <AnalyticsMetric
+          label="Holdings Market Value"
+          value={
+            point.holdingsValue !== null &&
+            point.holdingsValue !== undefined
+              ? `KES ${money(point.holdingsValue)}`
+              : "N/A"
+          }
+        />
+
+        <AnalyticsMetric
+          label="Invested Value"
+          value={
+            point.investedValue !== null &&
+            point.investedValue !== undefined
+              ? `KES ${money(point.investedValue)}`
+              : "N/A"
+          }
+        />
+
+        <AnalyticsMetric
+          label="Available Cash"
+          value={
+            point.availableCash !== null &&
+            point.availableCash !== undefined
+              ? `KES ${money(point.availableCash)}`
+              : "N/A"
+          }
+        />
+
+        <AnalyticsMetric
+          label="Unrealized Gain/Loss"
+          value={
+            gain !== null
+              ? `${gain >= 0 ? "+" : ""}KES ${money(gain)}`
+              : "N/A"
+          }
+        />
+
+        <AnalyticsMetric
+          label="Unrealized Return"
+          value={
+            gainPct !== null
+              ? `${gainPct >= 0 ? "+" : ""}${Number(
+                  gainPct
+                ).toFixed(2)}%`
+              : "N/A"
+          }
+        />
+
+        <AnalyticsMetric
+          label="Health Score"
+          value={
+            healthScore !== null
+              ? `${Number(
+                  healthScore
+                ).toFixed(0)}/100`
+              : "N/A"
+          }
+        />
+
+        <AnalyticsMetric
+          label="Health Rating"
+          value={
+            formatPerformanceLabel(
+              point.healthRating
+            ) ||
+            "N/A"
+          }
+        />
+
+        <AnalyticsMetric
+          label="Portfolio Source"
+          value={
+            point.sourceLabel ||
+            point.sourceId ||
+            "N/A"
+          }
+        />
+
+        <AnalyticsMetric
+          label="Snapshot Trigger"
+          value={
+            formatPerformanceLabel(
+              point.triggerReason
+            ) ||
+            "N/A"
+          }
+        />
+      </View>
+
+      <Text style={styles.snapshotInspectorFootnote}>
+        Stored genuine portfolio observation. Missing historical
+        values remain N/A.
+      </Text>
+    </View>
+  );
+}
+
+
+function PortfolioTimelineChart({
+  width,
+  height,
+  points,
+  showHoldings,
+  showCash,
+  selectedPoint,
+  onSelectPoint
+}) {
+  const safePoints =
+    Array.isArray(points)
+      ? points.filter(
+          (point) =>
+            point &&
+            Number.isFinite(
+              Number(point.netWorth)
+            )
+        )
+      : [];
+
+  if (safePoints.length < 2) {
+    return null;
+  }
+
+  const padding = {
+    top: 24,
+    right: 18,
+    bottom: 38,
+    left: 64
+  };
+
+  const chartWidth =
+    Math.max(
+      width -
+      padding.left -
+      padding.right,
+      1
+    );
+
+  const chartHeight =
+    Math.max(
+      height -
+      padding.top -
+      padding.bottom,
+      1
+    );
+
+  const valueCandidates = [];
+
+  safePoints.forEach((point) => {
+    valueCandidates.push(
+      Number(point.netWorth)
+    );
+
+    if (
+      showHoldings &&
+      Number.isFinite(
+        Number(point.holdingsValue)
+      )
+    ) {
+      valueCandidates.push(
+        Number(point.holdingsValue)
+      );
+    }
+
+    if (
+      showCash &&
+      Number.isFinite(
+        Number(point.availableCash)
+      )
+    ) {
+      valueCandidates.push(
+        Number(point.availableCash)
+      );
+    }
+  });
+
+  let minimum =
+    Math.min(
+      ...valueCandidates
+    );
+
+  let maximum =
+    Math.max(
+      ...valueCandidates
+    );
+
+  if (
+    !Number.isFinite(minimum) ||
+    !Number.isFinite(maximum)
+  ) {
+    return null;
+  }
+
+  if (minimum === maximum) {
+    const buffer =
+      Math.max(
+        Math.abs(minimum) * 0.02,
+        1
+      );
+
+    minimum -= buffer;
+    maximum += buffer;
+  }
+
+  const range =
+    maximum -
+    minimum;
+
+  const xForIndex = (index) =>
+    padding.left +
+    (
+      index /
+      Math.max(
+        safePoints.length - 1,
+        1
+      )
+    ) *
+    chartWidth;
+
+  const yForValue = (value) =>
+    padding.top +
+    (
+      1 -
+      (
+        Number(value) -
+        minimum
+      ) /
+      range
+    ) *
+    chartHeight;
+
+  const pathFor = (field) => {
+    const valid =
+      safePoints
+        .map(
+          (point, index) => ({
+            index,
+            value:
+              Number(
+                point?.[field]
+              )
+          })
+        )
+        .filter(
+          (item) =>
+            Number.isFinite(
+              item.value
+            )
+        );
+
+    if (valid.length < 2) {
+      return null;
+    }
+
+    return valid
+      .map(
+        (item, position) =>
+          `${position === 0 ? "M" : "L"} ` +
+          `${xForIndex(item.index)} ` +
+          `${yForValue(item.value)}`
+      )
+      .join(" ");
+  };
+
+  const netWorthPath =
+    pathFor("netWorth");
+
+  const holdingsPath =
+    showHoldings
+      ? pathFor("holdingsValue")
+      : null;
+
+  const cashPath =
+    showCash
+      ? pathFor("availableCash")
+      : null;
+
+  const gridValues =
+    [0, 0.25, 0.5, 0.75, 1]
+      .map(
+        (ratio) =>
+          maximum -
+          range * ratio
+      );
+
+  const first =
+    safePoints[0];
+
+  const last =
+    safePoints[
+      safePoints.length - 1
+    ];
+
+  const selectedIndex =
+    safePoints.findIndex(
+      (point) =>
+        selectedPoint?.date ===
+        point?.date
+    );
+
+  const selectedChartPoint =
+    selectedIndex >= 0
+      ? safePoints[selectedIndex]
+      : null;
+
+  const selectedX =
+    selectedChartPoint
+      ? xForIndex(selectedIndex)
+      : null;
+
+  const selectedY =
+    selectedChartPoint
+      ? yForValue(
+          selectedChartPoint.netWorth
+        )
+      : null;
+
+  return (
+    <View style={styles.timelineChartContainer}>
+      <Svg
+        width={width}
+        height={height}
+      >
+        {gridValues.map(
+          (value, index) => {
+            const y =
+              yForValue(value);
+
+            return (
+              <React.Fragment
+                key={`grid-${index}`}
+              >
+                <Line
+                  x1={padding.left}
+                  x2={
+                    width -
+                    padding.right
+                  }
+                  y1={y}
+                  y2={y}
+                  stroke="#1e293b"
+                  strokeWidth="1"
+                />
+
+                <SvgText
+                  x={padding.left - 8}
+                  y={y + 4}
+                  fill="#64748b"
+                  fontSize="9"
+                  textAnchor="end"
+                >
+                  {compactMoney(value)}
+                </SvgText>
+              </React.Fragment>
+            );
+          }
+        )}
+
+        {selectedChartPoint ? (
+          <Line
+            x1={selectedX}
+            x2={selectedX}
+            y1={padding.top}
+            y2={
+              padding.top +
+              chartHeight
+            }
+            stroke="#475569"
+            strokeWidth="1"
+            strokeDasharray="4 4"
+            pointerEvents="none"
+          />
+        ) : null}
+
+        {holdingsPath ? (
+          <Path
+            d={holdingsPath}
+            fill="none"
+            stroke="#c084fc"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        ) : null}
+
+        {cashPath ? (
+          <Path
+            d={cashPath}
+            fill="none"
+            stroke="#86efac"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        ) : null}
+
+        {netWorthPath ? (
+          <Path
+            d={netWorthPath}
+            fill="none"
+            stroke="#22d3ee"
+            strokeWidth="3"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          />
+        ) : null}
+
+        {safePoints.map(
+          (point, index) => (
+            <Circle
+              key={`net-worth-hit-${point.date}-${index}`}
+              cx={xForIndex(index)}
+              cy={yForValue(
+                point.netWorth
+              )}
+              r="22"
+              fill="transparent"
+              onPress={() =>
+                onSelectPoint?.(point)
+              }
+            />
+          )
+        )}
+
+        {safePoints.map(
+          (point, index) => {
+            const selected =
+              selectedPoint?.date ===
+              point?.date;
+
+            return (
+              <React.Fragment
+                key={`net-worth-${point.date}-${index}`}
+              >
+                {selected ? (
+                  <Circle
+                    cx={xForIndex(index)}
+                    cy={yForValue(
+                      point.netWorth
+                    )}
+                    r="10"
+                    fill="none"
+                    stroke="#f8fafc"
+                    strokeWidth="2"
+                    opacity="0.9"
+                    pointerEvents="none"
+                  />
+                ) : null}
+
+                <Circle
+                  cx={xForIndex(index)}
+                  cy={yForValue(
+                    point.netWorth
+                  )}
+                r={selected ? "6" : "4"}
+                fill="#22d3ee"
+                stroke={
+                  selected
+                    ? "#f8fafc"
+                    : "#22d3ee"
+                }
+                strokeWidth={
+                  selected
+                    ? "2"
+                    : "1"
+                }
+                onPress={() =>
+                  onSelectPoint?.(point)
+                }
+              />
+              </React.Fragment>
+            );
+          }
+        )}
+
+        <SvgText
+          x={padding.left}
+          y={height - 12}
+          fill="#64748b"
+          fontSize="9"
+          textAnchor="start"
+        >
+          {formatTimelineDate(
+            first?.date
+          )}
+        </SvgText>
+
+        <SvgText
+          x={
+            width -
+            padding.right
+          }
+          y={height - 12}
+          fill="#64748b"
+          fontSize="9"
+          textAnchor="end"
+        >
+          {formatTimelineDate(
+            last?.date
+          )}
+        </SvgText>
+      </Svg>
+    </View>
+  );
+}
+
+
+function buildTimelineView(
+  historicalSummary,
+  range
+) {
+  const history =
+    Array.isArray(
+      historicalSummary?.history
+    )
+      ? historicalSummary.history
+      : [];
+
+  const normalized =
+    history
+      .map(
+        (snapshot) => ({
+          date:
+            snapshot?.date ??
+            null,
+
+          timestamp:
+            timelineTimestamp(
+              snapshot?.date
+            ),
+
+          netWorth:
+            finiteTimelineNumber(
+              snapshot?.netWorth ??
+              snapshot?.totalValue
+            ),
+
+          holdingsValue:
+            finiteTimelineNumber(
+              snapshot?.holdingsValue ??
+              snapshot?.currentValue
+            ),
+
+          availableCash:
+            finiteTimelineNumber(
+              snapshot?.availableCash ??
+              snapshot?.cash
+            ),
+
+          investedValue:
+            finiteTimelineNumber(
+              snapshot?.investedValue
+            ),
+
+          unrealizedGainLoss:
+            finiteTimelineNumber(
+              snapshot?.unrealizedGainLoss ??
+              snapshot?.netGainLoss
+            ),
+
+          unrealizedGainLossPct:
+            finiteTimelineNumber(
+              snapshot?.unrealizedGainLossPct ??
+              snapshot?.gainLossPct
+            ),
+
+          healthScore:
+            finiteTimelineNumber(
+              snapshot?.healthScore
+            ),
+
+          healthRating:
+            snapshot?.healthRating ??
+            null,
+
+          sourceId:
+            snapshot?.sourceId ??
+            null,
+
+          sourceLabel:
+            snapshot?.sourceLabel ??
+            null,
+
+          triggerReason:
+            snapshot?.triggerReason ??
+            null
+        })
+      )
+      .filter(
+        (point) =>
+          point.date &&
+          point.timestamp !== null &&
+          point.netWorth !== null
+      )
+      .sort(
+        (a, b) =>
+          a.timestamp -
+          b.timestamp
+      );
+
+  if (!normalized.length) {
+    return {
+      range,
+      points: [],
+      startDate: null,
+      endDate: null,
+      startNetWorth: null,
+      endNetWorth: null,
+      change: null,
+      returnPercentage: null,
+      fullCoverage: false
+    };
+  }
+
+  const latest =
+    normalized[
+      normalized.length - 1
+    ];
+
+  const days =
+    range === "30D"
+      ? 30
+      : range === "90D"
+        ? 90
+        : range === "1Y"
+          ? 365
+          : null;
+
+  let points =
+    normalized;
+
+  let requestedBoundary =
+    null;
+
+  if (days !== null) {
+    requestedBoundary =
+      latest.timestamp -
+      days * 86400000;
+
+    points =
+      normalized.filter(
+        (point) =>
+          point.timestamp >=
+          requestedBoundary
+      );
+
+    /*
+     * Include the last genuine observation immediately before
+     * the boundary when one exists.
+     *
+     * This gives the chart historical continuity without
+     * inventing a boundary value.
+     */
+    const beforeBoundary =
+      [...normalized]
+        .reverse()
+        .find(
+          (point) =>
+            point.timestamp <
+            requestedBoundary
+        );
+
+    if (beforeBoundary) {
+      points = [
+        beforeBoundary,
+        ...points
+      ];
+    }
+  }
+
+  const start =
+    points[0] ||
+    null;
+
+  const end =
+    points[
+      points.length - 1
+    ] ||
+    null;
+
+  const startValue =
+    start?.netWorth ??
+    null;
+
+  const endValue =
+    end?.netWorth ??
+    null;
+
+  const change =
+    startValue !== null &&
+    endValue !== null &&
+    points.length >= 2
+      ? endValue -
+        startValue
+      : null;
+
+  const returnPercentage =
+    change !== null &&
+    startValue !== null &&
+    startValue > 0
+      ? (
+          change /
+          startValue
+        ) * 100
+      : null;
+
+  let fullCoverage =
+    false;
+
+  if (range === "ALL") {
+    fullCoverage =
+      points.length >= 2;
+  } else if (
+    requestedBoundary !== null
+  ) {
+    fullCoverage =
+      normalized.some(
+        (point) =>
+          point.timestamp <=
+          requestedBoundary
+      );
+  }
+
+  return {
+    range,
+
+    points,
+
+    startDate:
+      start?.date ??
+      null,
+
+    endDate:
+      end?.date ??
+      null,
+
+    startNetWorth:
+      startValue,
+
+    endNetWorth:
+      endValue,
+
+    change,
+
+    returnPercentage,
+
+    fullCoverage
+  };
+}
+
+
+function finiteTimelineNumber(value) {
+  if (
+    value === null ||
+    value === undefined ||
+    value === ""
+  ) {
+    return null;
+  }
+
+  const parsed =
+    Number(value);
+
+  return Number.isFinite(parsed)
+    ? parsed
+    : null;
+}
+
+
+function timelineTimestamp(value) {
+  if (!value) {
+    return null;
+  }
+
+  const parsed =
+    new Date(value)
+      .getTime();
+
+  return Number.isFinite(parsed)
+    ? parsed
+    : null;
+}
+
+
+function compactMoney(value) {
+  const number =
+    Number(value || 0);
+
+  const absolute =
+    Math.abs(number);
+
+  if (absolute >= 1000000000) {
+    return `${(
+      number /
+      1000000000
+    ).toFixed(1)}B`;
+  }
+
+  if (absolute >= 1000000) {
+    return `${(
+      number /
+      1000000
+    ).toFixed(1)}M`;
+  }
+
+  if (absolute >= 1000) {
+    return `${(
+      number /
+      1000
+    ).toFixed(0)}K`;
+  }
+
+  return number.toFixed(0);
+}
+
+
+function formatTimelineDate(value) {
+  if (!value) {
+    return "";
+  }
+
+  const date =
+    new Date(value);
+
+  if (
+    Number.isNaN(
+      date.getTime()
+    )
+  ) {
+    return String(value);
+  }
+
+  return date.toLocaleDateString(
+    undefined,
+    {
+      month: "short",
+      day: "numeric"
+    }
+  );
+}
+
+
+function PeriodCard({
+  label,
+  period
+}) {
+  const available =
+    Boolean(
+      period?.available
+    );
+
+  const change =
+    available
+      ? Number(
+          period?.change || 0
+        )
+      : null;
+
+  const returnPercentage =
+    available &&
+    period?.returnPercentage !== null &&
+    period?.returnPercentage !== undefined
+      ? Number(
+          period.returnPercentage
+        )
+      : null;
+
+  const positive =
+    change !== null
+      ? change >= 0
+      : null;
+
+  return (
+    <View style={styles.periodCard}>
+      <Text style={styles.periodLabel}>
+        {label}
+      </Text>
+
+      {available ? (
+        <>
+          <Text
+            style={
+              positive
+                ? styles.green
+                : styles.red
+            }
+          >
+            {positive ? "+" : ""}
+            {returnPercentage !== null
+              ? returnPercentage.toFixed(2)
+              : "0.00"}
+            %
+          </Text>
+
+          <Text style={styles.periodChange}>
+            {change >= 0 ? "+" : ""}
+            KES {money(change)}
+          </Text>
+
+          <Text style={styles.periodDates}>
+            {period?.startDate || "—"}
+            {" → "}
+            {period?.endDate || "—"}
+          </Text>
+        </>
+      ) : (
+        <>
+          <Text style={styles.periodUnavailable}>
+            N/A
+          </Text>
+
+          <Text style={styles.periodDates}>
+            Insufficient history
+          </Text>
+        </>
+      )}
+    </View>
+  );
+}
+
+
+function PerformanceRecordMetric({
+  label,
+  value,
+  detail,
+  positive
+}) {
+  let valueStyle =
+    styles.performanceRecordValue;
+
+  if (positive === true) {
+    valueStyle =
+      styles.green;
+  }
+
+  if (positive === false) {
+    valueStyle =
+      styles.red;
+  }
+
+  return (
+    <View style={styles.performanceRecordMetric}>
+      <Text style={styles.performanceRecordLabel}>
+        {label}
+      </Text>
+
+      <Text style={valueStyle}>
+        {value}
+      </Text>
+
+      <Text style={styles.performanceRecordDetail}>
+        {detail}
+      </Text>
+    </View>
+  );
+}
+
+
+function AnalyticsMetric({
+  label,
+  value
+}) {
+  return (
+    <View style={styles.analyticsMetric}>
+      <Text style={styles.small}>
+        {label}
+      </Text>
+
+      <Text style={styles.white}>
+        {value}
+      </Text>
+    </View>
+  );
+}
+
 
 function SummaryItem({ label, value, cyan, green, positive }) {
   let valueStyle = styles.white;
@@ -181,6 +2693,62 @@ function SummaryItem({ label, value, cyan, green, positive }) {
       <Text style={valueStyle}>{value}</Text>
     </View>
   );
+}
+
+function formatPerformanceLabel(value) {
+  if (!value) {
+    return null;
+  }
+
+  return String(value)
+    .replaceAll("_", " ")
+    .toLowerCase()
+    .replace(
+      /\b\w/g,
+      (letter) =>
+        letter.toUpperCase()
+    );
+}
+
+
+function normalizeHealthLabel(value) {
+  if (
+    value === null ||
+    value === undefined ||
+    value === ""
+  ) {
+    return null;
+  }
+
+  if (typeof value === "string") {
+    return value;
+  }
+
+  if (typeof value === "number") {
+    return String(value);
+  }
+
+  if (typeof value === "object") {
+    const candidate =
+      value.label ??
+      value.rating ??
+      value.classification ??
+      value.status ??
+      value.name ??
+      value.title ??
+      value.grade ??
+      null;
+
+    if (
+      candidate !== null &&
+      candidate !== undefined &&
+      typeof candidate !== "object"
+    ) {
+      return String(candidate);
+    }
+  }
+
+  return null;
 }
 
 function money(v) {
@@ -265,5 +2833,550 @@ const styles = StyleSheet.create({
     borderColor: "#334155",
     borderWidth: 1
   },
-  backText: { color: "#67e8f9", textAlign: "center", fontWeight: "900" }
+  backText: { color: "#67e8f9", textAlign: "center", fontWeight: "900" },
+
+  sectionHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    gap: 12
+  },
+
+  observationBadge: {
+    backgroundColor: "#164e63",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6
+  },
+
+  observationBadgeText: {
+    color: "#67e8f9",
+    fontSize: 10,
+    fontWeight: "900"
+  },
+
+  periodGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 16
+  },
+
+  periodCard: {
+    width: "47%",
+    minWidth: 145,
+    backgroundColor: "#020617",
+    borderColor: "#1e293b",
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 13
+  },
+
+  periodLabel: {
+    color: "#67e8f9",
+    fontWeight: "900",
+    marginBottom: 7
+  },
+
+  periodChange: {
+    color: "#cbd5e1",
+    fontSize: 12,
+    marginTop: 4
+  },
+
+  periodDates: {
+    color: "#64748b",
+    fontSize: 10,
+    marginTop: 7
+  },
+
+  periodUnavailable: {
+    color: "#64748b",
+    fontWeight: "900"
+  },
+
+  historyNotice: {
+    backgroundColor: "rgba(245,158,11,.08)",
+    borderColor: "rgba(245,158,11,.30)",
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 13,
+    marginTop: 15
+  },
+
+  historyNoticeTitle: {
+    color: "#fde68a",
+    fontWeight: "900"
+  },
+
+  historyNoticeText: {
+    color: "#fef3c7",
+    marginTop: 6,
+    lineHeight: 19,
+    fontSize: 12
+  },
+
+  analyticsGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 15
+  },
+
+  analyticsMetric: {
+    width: "47%",
+    minWidth: 145,
+    backgroundColor: "#020617",
+    borderRadius: 13,
+    padding: 12
+  },
+
+  timelineRangeRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 8,
+    marginTop: 16
+  },
+
+  timelineRangeButton: {
+    backgroundColor: "#1e293b",
+    borderColor: "#334155",
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 9
+  },
+
+  timelineRangeButtonActive: {
+    backgroundColor: "#0891b2",
+    borderColor: "#22d3ee"
+  },
+
+  timelineRangeText: {
+    color: "#94a3b8",
+    fontWeight: "900",
+    fontSize: 12
+  },
+
+  timelineRangeTextActive: {
+    color: "white"
+  },
+
+  timelineSeriesRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    alignItems: "center",
+    gap: 9,
+    marginTop: 13,
+    marginBottom: 4
+  },
+
+  timelinePrimarySeries: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#0c4a6e",
+    borderRadius: 999,
+    paddingHorizontal: 11,
+    paddingVertical: 7
+  },
+
+  timelineSeriesButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#1e293b",
+    borderColor: "#334155",
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingHorizontal: 11,
+    paddingVertical: 7
+  },
+
+  timelineSeriesButtonActive: {
+    borderColor: "#67e8f9"
+  },
+
+  timelineSeriesText: {
+    color: "#e2e8f0",
+    fontSize: 11,
+    fontWeight: "800"
+  },
+
+  netWorthLegendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#22d3ee"
+  },
+
+  holdingsLegendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#c084fc"
+  },
+
+  cashLegendDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#86efac"
+  },
+
+  timelineChartContainer: {
+    marginTop: 14,
+    backgroundColor: "#020617",
+    borderColor: "#1e293b",
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingVertical: 8,
+    overflow: "hidden",
+    alignItems: "center"
+  },
+
+  timelineCoverageNotice: {
+    backgroundColor: "rgba(59,130,246,.08)",
+    borderColor: "rgba(59,130,246,.30)",
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 13,
+    marginTop: 14
+  },
+
+  timelineCoverageTitle: {
+    color: "#93c5fd",
+    fontWeight: "900"
+  },
+
+  timelineCoverageText: {
+    color: "#bfdbfe",
+    fontSize: 12,
+    lineHeight: 19,
+    marginTop: 6
+  },
+
+  timelineEmpty: {
+    backgroundColor: "#020617",
+    borderColor: "#1e293b",
+    borderWidth: 1,
+    borderRadius: 15,
+    padding: 16,
+    marginTop: 16
+  },
+
+  timelineEmptyTitle: {
+    color: "#fde68a",
+    fontWeight: "900"
+  },
+
+  timelineEmptyText: {
+    color: "#94a3b8",
+    lineHeight: 20,
+    marginTop: 7
+  },
+
+  timelineInspectHint: {
+    color: "#64748b",
+    fontSize: 11,
+    marginTop: 8,
+    textAlign: "center"
+  },
+
+  inspectSnapshotButton: {
+    marginTop: 14,
+    alignSelf: "flex-start",
+    backgroundColor: "#164e63",
+    borderColor: "#0891b2",
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 10
+  },
+
+  inspectSnapshotButtonText: {
+    color: "#67e8f9",
+    fontWeight: "900",
+    fontSize: 12
+  },
+
+  snapshotInspector: {
+    marginTop: 14,
+    backgroundColor: "#020617",
+    borderColor: "#0891b2",
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 15
+  },
+
+  snapshotInspectorHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 12
+  },
+
+  snapshotInspectorTitle: {
+    color: "#67e8f9",
+    fontSize: 16,
+    fontWeight: "900"
+  },
+
+  snapshotInspectorDate: {
+    color: "#e2e8f0",
+    marginTop: 5,
+    fontWeight: "800"
+  },
+
+  snapshotInspectorClose: {
+    backgroundColor: "#1e293b",
+    borderColor: "#334155",
+    borderWidth: 1,
+    borderRadius: 10,
+    paddingHorizontal: 11,
+    paddingVertical: 7
+  },
+
+  snapshotInspectorCloseText: {
+    color: "#cbd5e1",
+    fontSize: 11,
+    fontWeight: "900"
+  },
+
+  snapshotInspectorFootnote: {
+    color: "#64748b",
+    fontSize: 10,
+    lineHeight: 16,
+    marginTop: 13
+  },
+
+  timelineSelectedSummary: {
+    marginTop: 10,
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    backgroundColor: "#0f172a",
+    borderColor: "#164e63",
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12
+  },
+
+  timelineSelectedSummaryItem: {
+    minWidth: 105,
+    flexGrow: 1
+  },
+
+  timelineSelectedSummaryLabel: {
+    color: "#64748b",
+    fontSize: 10,
+    fontWeight: "800",
+    textTransform: "uppercase"
+  },
+
+  timelineSelectedSummaryValue: {
+    color: "#e2e8f0",
+    fontSize: 13,
+    fontWeight: "900",
+    marginTop: 4
+  },
+
+  performanceRecordGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 16
+  },
+
+  performanceRecordMetric: {
+    width: "47%",
+    minWidth: 145,
+    backgroundColor: "#020617",
+    borderColor: "#1e293b",
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 13
+  },
+
+  performanceRecordLabel: {
+    color: "#94a3b8",
+    fontSize: 10,
+    fontWeight: "800",
+    textTransform: "uppercase"
+  },
+
+  performanceRecordValue: {
+    color: "#f8fafc",
+    fontSize: 15,
+    fontWeight: "900",
+    marginTop: 7
+  },
+
+  performanceRecordDetail: {
+    color: "#64748b",
+    fontSize: 10,
+    marginTop: 6,
+    lineHeight: 15
+  },
+
+  milestoneSection: {
+    marginTop: 18,
+    backgroundColor: "#020617",
+    borderColor: "#1e293b",
+    borderWidth: 1,
+    borderRadius: 15,
+    padding: 14
+  },
+
+  performanceRecordSectionTitle: {
+    color: "#67e8f9",
+    fontWeight: "900",
+    fontSize: 15
+  },
+
+  performanceRecordSectionText: {
+    color: "#94a3b8",
+    fontSize: 11,
+    marginTop: 5,
+    lineHeight: 17
+  },
+
+  milestoneRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    borderTopColor: "#1e293b",
+    borderTopWidth: 1,
+    paddingVertical: 12
+  },
+
+  milestoneValue: {
+    color: "#f8fafc",
+    fontWeight: "900"
+  },
+
+  milestoneMeta: {
+    color: "#64748b",
+    fontSize: 10,
+    marginTop: 4
+  },
+
+  milestoneBadge: {
+    backgroundColor: "#1e293b",
+    borderRadius: 999,
+    paddingHorizontal: 9,
+    paddingVertical: 5
+  },
+
+  milestoneBadgeAchieved: {
+    backgroundColor: "rgba(34,197,94,.14)"
+  },
+
+  milestoneBadgeText: {
+    color: "#94a3b8",
+    fontSize: 9,
+    fontWeight: "900"
+  },
+
+  milestoneBadgeTextAchieved: {
+    color: "#86efac"
+  },
+
+  performanceRecordUnavailable: {
+    color: "#64748b",
+    marginTop: 12,
+    fontSize: 11
+  },
+
+  performanceRecordNotice: {
+    marginTop: 15,
+    backgroundColor: "rgba(59,130,246,.08)",
+    borderColor: "rgba(59,130,246,.30)",
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 13
+  },
+
+  performanceRecordNoticeTitle: {
+    color: "#93c5fd",
+    fontWeight: "900"
+  },
+
+  performanceRecordNoticeText: {
+    color: "#bfdbfe",
+    fontSize: 11,
+    lineHeight: 18,
+    marginTop: 6
+  },
+
+  performanceIntelNotice: {
+    marginTop: 15,
+    backgroundColor: "rgba(245,158,11,.08)",
+    borderColor: "rgba(245,158,11,.30)",
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 13
+  },
+
+  performanceIntelNoticeTitle: {
+    color: "#fde68a",
+    fontWeight: "900"
+  },
+
+  performanceIntelNoticeText: {
+    color: "#fef3c7",
+    fontSize: 11,
+    lineHeight: 18,
+    marginTop: 6
+  },
+
+  performanceIntelMessage: {
+    color: "#cbd5e1",
+    fontSize: 12,
+    lineHeight: 19,
+    marginTop: 14
+  },
+
+  goalProgressTrack: {
+    height: 10,
+    backgroundColor: "#1e293b",
+    borderRadius: 999,
+    overflow: "hidden",
+    marginTop: 16
+  },
+
+  goalProgressFill: {
+    height: "100%",
+    backgroundColor: "#22d3ee",
+    borderRadius: 999
+  },
+
+  goalActionBox: {
+    marginTop: 14,
+    backgroundColor: "#020617",
+    borderColor: "#164e63",
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 13
+  },
+
+  goalActionTitle: {
+    color: "#64748b",
+    fontSize: 10,
+    fontWeight: "900",
+    textTransform: "uppercase"
+  },
+
+  goalActionLabel: {
+    color: "#67e8f9",
+    fontWeight: "900",
+    marginTop: 6
+  },
+
+  goalActionReason: {
+    color: "#94a3b8",
+    fontSize: 11,
+    lineHeight: 17,
+    marginTop: 6
+  }
 });

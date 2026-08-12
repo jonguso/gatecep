@@ -26,6 +26,9 @@ import {
   userRemoveItem
 } from "../src/auth/userStorage";
 import { getCurrentSession } from "../src/auth/authStore";
+import {
+  refreshCanonicalRealPortfolioSnapshot
+} from "../src/services/portfolio/portfolioSnapshotTrigger";
 
 export default function ReviewPortfolioImport() {
   const [fileInfo, setFileInfo] = useState(null);
@@ -261,6 +264,10 @@ if (!token) {
     await userRemoveItem("importedPortfolioDraft");
     await userRemoveItem("ImportedPortfolioDraft");
     await AsyncStorage.removeItem("gatecepImportedPortfolioDraft");
+
+    await refreshCanonicalRealPortfolioSnapshot({
+      reason: "CONFIRMED_PORTFOLIO_IMPORT"
+    });
 
     Alert.alert("Portfolio Saved", "Your holdings have been saved.");
     router.replace("/broker-upload");

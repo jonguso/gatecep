@@ -1,0 +1,51 @@
+import React, { useEffect } from "react";
+import {
+  ActivityIndicator,
+  StyleSheet,
+  Text,
+  View
+} from "react-native";
+import { router } from "expo-router";
+
+/*
+ * PC-030C1
+ *
+ * Legacy compatibility route.
+ *
+ * Canonical Coach G:
+ *   /(tabs)/coach
+ *
+ * The former Portfolio Analysis screen duplicated portfolio
+ * review, risk, recommendation, and simulation capabilities
+ * now owned by the canonical Coach G experience.
+ */
+export default function PortfolioAnalysisCompatibilityRoute() {
+  useEffect(() => {
+    router.replace("/(tabs)/coach");
+  }, []);
+
+  return (
+    <View style={styles.screen}>
+      <ActivityIndicator />
+
+      <Text style={styles.text}>
+        Opening Coach G...
+      </Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: "#020617",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12
+  },
+
+  text: {
+    color: "#cbd5e1",
+    fontWeight: "700"
+  }
+});

@@ -1,6 +1,6 @@
 import {
-  loadInvestorContext
-} from "../investor/investorContextStore";
+  loadCanonicalRealWealthMetrics
+} from "../wealth-journey/canonicalRealWealthMetricsService";
 
 import {
   loadBrokerMirror
@@ -235,23 +235,67 @@ function buildPortfolioSummary({
       portfolio?.holdings
     );
 
+    /*
+   * ============================================================
+   * PC-030C2B3
+   * CANONICAL PORTFOLIO VALUE RECONCILIATION
+   * ============================================================
+   *
+   * Financial contract:
+   *
+   * holdingsValue
+   *   = current market value of securities
+   *
+   * investedAmount
+   *   = cost basis of securities currently held
+   *
+   * totalGainLoss
+   *   = holdingsValue - investedAmount
+   *
+   * totalValue
+   *   = holdingsValue + availableCash
+   *   = net worth
+   *
+   * Never substitute investedAmount for holdingsValue.
+   * ============================================================
+   */
+
   const holdingsValue =
     roundMoney(
-      nullableNumber(
-        portfolio
-          ?.investedAmount
-      ) ??
       holdings.reduce(
-        (
-          total,
-          holding
-        ) =>
+        (total, holding) =>
           total +
           number(
-            holding
-              ?.marketValue ??
-            holding
-              ?.value
+            holding?.marketValue ??
+            holding?.value ??
+            (
+              number(holding?.quantity) *
+              number(
+                holding?.marketPrice ??
+                holding?.price
+              )
+            )
+          ),
+        0
+      )
+    );
+
+  const investedAmount =
+    roundMoney(
+      holdings.reduce(
+        (total, holding) =>
+          total +
+          number(
+            holding?.investedValue ??
+            holding?.costValue ??
+            holding?.costBasis ??
+            (
+              number(holding?.quantity) *
+              number(
+                holding?.averageCost ??
+                holding?.averagePrice
+              )
+            )
           ),
         0
       )
@@ -259,21 +303,33 @@ function buildPortfolioSummary({
 
   const availableCash =
     roundMoney(
-      portfolio
-        ?.availableCash
+      portfolio?.availableCash
     );
 
   const totalValue =
     roundMoney(
-      nullableNumber(
-        portfolio
-          ?.totalValue
-      ) ??
-      (
-        holdingsValue +
-        availableCash
-      )
+      holdingsValue +
+      availableCash
     );
+
+  const calculatedGainLoss =
+    roundMoney(
+      holdingsValue -
+      investedAmount
+    );
+
+  const performanceGainLoss =
+    nullableNumber(
+      performanceAdvice
+        ?.portfolio
+        ?.totalGainLoss
+    );
+
+  const totalGainLoss =
+    performanceGainLoss !== null &&
+    Math.abs(performanceGainLoss) > 0.005
+      ? roundMoney(performanceGainLoss)
+      : calculatedGainLoss;
 
   return {
     id:
@@ -288,23 +344,24 @@ function buildPortfolioSummary({
       portfolio?.currency ||
       "KES",
 
-    totalValue,
+        totalValue,
+
+    netWorth:
+      totalValue,
 
     holdingsValue,
 
-    investedAmount:
-      holdingsValue,
+    investedAmount,
+
+    investedValue:
+      investedAmount,
 
     availableCash,
 
     holdingsCount:
       holdings.length,
 
-    totalGainLoss:
-      performanceAdvice
-        ?.portfolio
-        ?.totalGainLoss ??
-      null,
+        totalGainLoss,
 
     riskScore:
       riskAdvice
@@ -1192,13 +1249,78 @@ function getUnifiedGrade(
  */
 
 export async function buildUnifiedPortfolioAnalytics() {
-  const investorContext =
-    await loadInvestorContext();
+  const realMetrics =
+    await loadCanonicalRealWealthMetrics();
+
+  const portfolioSource =
+    realMetrics?.active
+      ? {
+          id: "REAL-ALL",
+
+          name:
+            realMetrics?.sourceLabel ||
+            "All Accounts",
+
+          currency:
+            "KES",
+
+          holdings:
+            Array.isArray(
+              realMetrics?.holdings
+            )
+              ? realMetrics.holdings
+              : [],
+
+          holdingsValue:
+            Number(
+              realMetrics?.holdingsValue ||
+              0
+            ),
+
+          investedAmount:
+            Number(
+              realMetrics?.investedValue ||
+              0
+            ),
+
+          availableCash:
+            Number(
+              realMetrics?.availableCash ||
+              0
+            ),
+
+          totalValue:
+            Number(
+              realMetrics?.netWorth ||
+              0
+            ),
+
+          sourceType:
+            "REAL",
+
+          sourceId:
+            "ALL"
+        }
+      : null;
+
+  /*
+   * Compatibility shape for the existing PC-022 helper
+   * functions. The object in practicePortfolio is REAL data.
+   * This prevents a broad rewrite of proven scoring logic.
+   */
+  const investorContext = {
+    practicePortfolio:
+      portfolioSource,
+
+    analyticsPortfolioSource:
+      "REAL",
+
+    canonicalRealMetrics:
+      realMetrics
+  };
 
   const practicePortfolio =
-    investorContext
-      ?.practicePortfolio ||
-    null;
+    portfolioSource;
 
   if (
     !practicePortfolio
@@ -1207,7 +1329,7 @@ export async function buildUnifiedPortfolioAnalytics() {
       investorContext,
 
       message:
-        "A Practice Portfolio is required before unified analytics can be generated."
+        "A real portfolio is required before unified analytics can be generated."
     });
   }
 

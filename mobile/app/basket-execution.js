@@ -137,7 +137,7 @@ export default function BasketExecution() {
 
             <Pressable
               style={styles.secondary}
-              onPress={() => router.push("/portfolio")}
+              onPress={() => router.push("/portfolio-hub")}
             >
               <Text style={styles.secondaryText}>Open Portfolio</Text>
             </Pressable>
@@ -186,14 +186,14 @@ export default function BasketExecution() {
 
       <Pressable
         style={styles.primary}
-        onPress={() => router.push("/trading")}
+        onPress={() => router.push("/(tabs)/trading")}
       >
         <Text style={styles.primaryText}>Open Broker Routing</Text>
       </Pressable>
 
       <Pressable
         style={styles.secondary}
-        onPress={() => router.push("/trading")}
+        onPress={() => router.push("/(tabs)/trading")}
       >
         <Text style={styles.secondaryText}>Open Queue Manager</Text>
       </Pressable>

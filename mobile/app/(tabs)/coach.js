@@ -9,14 +9,19 @@ import {
   TextInput,
   View
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useFocusEffect } from "expo-router";
 import { loadUnifiedPortfolio } from "../../src/portfolio/unifiedPortfolioApi";
 import { buildCoachPortfolioReview } from "../../src/portfolio/coachPortfolioReview";
 import {
-  userGetItem,
-  userSetItem
+  userGetItem
 } from "../../src/auth/userStorage";
+
+import {
+  RECOMMENDATION_STATUS,
+  saveRecommendationRecord
+} from "../../src/coach/recommendationLifecycleStore";
+
+import CoachGReconciliationCard from "../../src/features/wealth-journey/components/CoachGReconciliationCard";
 
 export default function Coach() {
   const [portfolio, setPortfolio] = useState([]);
@@ -47,9 +52,14 @@ export default function Coach() {
     const portfolioData = await loadUnifiedPortfolio();
     const savedPortfolio = portfolioData?.holdings || [];
     const contextRaw = await userGetItem("coachContext");
-    const txUploadedRaw = await AsyncStorage.getItem("gatecepTransactionsUploaded");
-    const txRaw = await AsyncStorage.getItem("gatecepTransactionHistory");
-    const historyRaw = await AsyncStorage.getItem("gatecepRecommendationHistory");
+    const txUploadedRaw =
+      await userGetItem("transactionsUploaded");
+
+    const txRaw =
+      await userGetItem("transactionHistory");
+
+    const historyRaw =
+      await userGetItem("recommendationHistory");
 
     setPortfolio(savedPortfolio);
 
@@ -163,29 +173,43 @@ export default function Coach() {
   }
 
   async function saveRecommendation() {
-    const raw = await AsyncStorage.getItem("gatecepRecommendationHistory");
-    const history = raw ? JSON.parse(raw) : [];
+    const record =
+      await saveRecommendationRecord({
+        portfolioValue: value,
+        largestSector,
+        amount,
+        goal,
+        scenario,
+        intensity,
+        sectorPlan,
 
-    history.unshift({
-      savedAt: new Date().toISOString(),
-      portfolioValue: value,
-      largestSector,
-      amount,
-      goal,
-      scenario,
-      intensity,
-      sectorPlan,
-      status: "SAVED_NOT_EXECUTED"
-    });
+        status:
+          RECOMMENDATION_STATUS.SAVED,
 
-    await AsyncStorage.setItem(
-      "gatecepRecommendationHistory",
-      JSON.stringify(history)
+        executionStatus:
+          "NOT_STARTED",
+
+        source:
+          "CANONICAL_COACH_G"
+      });
+
+    const historyRaw =
+      await userGetItem(
+        "recommendationHistory"
+      );
+
+    setRecommendationHistory(
+      historyRaw
+        ? JSON.parse(historyRaw)
+        : []
     );
 
-    setRecommendationHistory(history);
+    Alert.alert(
+      "Saved",
+      "Coach G strategy saved to your profile."
+    );
 
-    Alert.alert("Saved", "Coach G strategy saved to your profile.");
+    return record;
   }
 
   function buildBehaviorInsights() {
@@ -358,6 +382,8 @@ export default function Coach() {
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <Text style={styles.title}>Coach G Insights</Text>
 
+      <CoachGReconciliationCard compact={true} />
+
       <View style={styles.card}>
         <Text style={styles.section}>Coach G Portfolio Review</Text>
 
@@ -404,6 +430,9 @@ export default function Coach() {
         <Text style={styles.section}>Analysis Center</Text>
 
         <View style={styles.quickGrid}>
+          <QuickCard title="Wealth Journey" desc="Review goals, progress, and Coach G check-ins" route="/wealth-journey" />
+          <QuickCard title="Recommendation Workspace" desc="Review saved recommendations and prepare a trade basket" route="/coach-insights" />
+          <QuickCard title="Portfolio Hub" desc="Open your current portfolio view" route="/portfolio-hub" />
           <QuickCard title="My Holdings" desc="View current positions" route="/holding-details" />
           <QuickCard title="Performance" desc="Track portfolio growth" route="/performance" />
           <QuickCard title="Activity" desc="View portfolio audit trail" route="/portfolio-activity" />

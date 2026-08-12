@@ -20,6 +20,9 @@ import {
 import { getCurrentSession } from "../../src/auth/authStore";
 import { API_URL } from "../../src/config/apiConfig";
 import { getStoredAccessToken } from "../../src/features/auth/storage/authStorage";
+import {
+  refreshCanonicalRealPortfolioSnapshot
+} from "../../src/services/portfolio/portfolioSnapshotTrigger";
 
 export default function Funds() {
   const [cash, setCash] = useState("");
@@ -265,6 +268,10 @@ const token =
       if (!response.ok || data.ok === false) {
         throw new Error(data.error || "Unable to update backend cash");
       }
+
+      await refreshCanonicalRealPortfolioSnapshot({
+        reason: "CASH_STATEMENT_UPDATE"
+      });
 
       Alert.alert("Statement Saved", "Available cash updated.");
       router.replace("/broker-upload");

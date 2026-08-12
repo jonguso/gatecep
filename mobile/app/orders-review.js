@@ -108,7 +108,7 @@ export default function OrdersReview() {
           onPress: async () => {
             const updated = await queueExecutionOrders();
             setExecution(updated);
-            router.push("/trading")
+            router.push("/(tabs)/trading")
           }
         }
       ]
@@ -186,7 +186,7 @@ export default function OrdersReview() {
 
           <Pressable
             style={styles.primary}
-            onPress={() => router.push("/trading")}
+            onPress={() => router.push("/(tabs)/trading")}
           >
             <Text style={styles.primaryText}>Open Trading</Text>
           </Pressable>

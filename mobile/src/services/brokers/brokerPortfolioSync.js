@@ -7,6 +7,11 @@ import { savePortfolio } from "../portfolio/portfolioStore";
 import { userSetItem } from "../auth/userStorage";
 import { buildSyncStatus } from "../portfolio/syncStatus";
 
+import {
+  refreshCanonicalRealPortfolioSnapshot
+} from "../portfolio/portfolioSnapshotTrigger";
+
+
 export async function syncAllBrokerPortfolios() {
   const accounts = await loadBrokerAccounts();
 
@@ -47,6 +52,10 @@ export async function syncAllBrokerPortfolios() {
   );
 
   await buildSyncStatus();
+
+  await refreshCanonicalRealPortfolioSnapshot({
+    reason: "BROKER_PORTFOLIO_SYNC"
+  });
 
   return {
     ok: true,

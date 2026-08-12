@@ -131,18 +131,74 @@ export default function UnifiedPortfolioAnalyticsScreen() {
         </View>
       </View>
 
-      <View style={styles.grid}>
-        <Metric label="Portfolio Value" value={`KES ${money(analytics?.portfolio?.totalValue)}`} />
-        <Metric label="Available Cash" value={`KES ${money(analytics?.portfolio?.availableCash)}`} />
+            <View style={styles.grid}>
         <Metric
-          label="Total Gain / Loss"
-          value={nullableMoney(analytics?.portfolio?.totalGainLoss)}
-          danger={Number(analytics?.portfolio?.totalGainLoss || 0) < 0}
-          positive={Number(analytics?.portfolio?.totalGainLoss || 0) > 0}
+          label="Net Worth"
+          value={`KES ${money(
+            analytics?.portfolio?.netWorth ??
+            analytics?.portfolio?.totalValue
+          )}`}
         />
-        <Metric label="Holdings" value={analytics?.portfolio?.holdingsCount || 0} />
-        <Metric label="Priorities" value={analytics?.summary?.priorities || 0} />
-        <Metric label="Open Actions" value={queue?.summary?.actionable || 0} />
+
+        <Metric
+          label="Holdings Value"
+          value={`KES ${money(
+            analytics?.portfolio?.holdingsValue
+          )}`}
+        />
+
+        <Metric
+          label="Invested Value"
+          value={`KES ${money(
+            analytics?.portfolio?.investedValue ??
+            analytics?.portfolio?.investedAmount
+          )}`}
+        />
+
+        <Metric
+          label="Available Cash"
+          value={`KES ${money(
+            analytics?.portfolio?.availableCash
+          )}`}
+        />
+
+        <Metric
+          label="Unrealized Gain / Loss"
+          value={nullableMoney(
+            analytics?.portfolio?.totalGainLoss
+          )}
+          danger={
+            Number(
+              analytics?.portfolio?.totalGainLoss || 0
+            ) < 0
+          }
+          positive={
+            Number(
+              analytics?.portfolio?.totalGainLoss || 0
+            ) > 0
+          }
+        />
+
+        <Metric
+          label="Holdings"
+          value={
+            analytics?.portfolio?.holdingsCount || 0
+          }
+        />
+
+        <Metric
+          label="Priorities"
+          value={
+            analytics?.summary?.priorities || 0
+          }
+        />
+
+        <Metric
+          label="Open Actions"
+          value={
+            queue?.summary?.actionable || 0
+          }
+        />
       </View>
 
       <Section
@@ -289,6 +345,57 @@ export default function UnifiedPortfolioAnalyticsScreen() {
         </View>
       </Section>
 
+      <Section
+        title="Specialist Analysis"
+        description="Open the detailed engines behind the executive portfolio view."
+      >
+        <View style={styles.specialistGrid}>
+          <Pressable
+            style={styles.specialistButton}
+            onPress={() =>
+              router.push("/portfolio-risk")
+            }
+          >
+            <Text style={styles.specialistButtonText}>
+              Risk Analytics
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.specialistButton}
+            onPress={() =>
+              router.push("/performance")
+            }
+          >
+            <Text style={styles.specialistButtonText}>
+              Performance
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.specialistButton}
+            onPress={() =>
+              router.push("/portfolio-rebalancing")
+            }
+          >
+            <Text style={styles.specialistButtonText}>
+              Rebalancing
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.specialistButton}
+            onPress={() =>
+              router.push("/portfolio-hub")
+            }
+          >
+            <Text style={styles.specialistButtonText}>
+              Portfolio Hub
+            </Text>
+          </Pressable>
+        </View>
+      </Section>
+
       <View style={styles.protectionCard}>
         <Text style={styles.protectionTitle}>Executive Analytics Only</Text>
         <Text style={styles.protectionText}>
@@ -312,9 +419,9 @@ export default function UnifiedPortfolioAnalyticsScreen() {
 
       <Pressable
         style={styles.secondaryButton}
-        onPress={() => router.replace("/(tabs)/dashboard")}
+        onPress={() => router.replace("/portfolio-hub")}
       >
-        <Text style={styles.secondaryButtonText}>Back to Dashboard</Text>
+        <Text style={styles.secondaryButtonText}>Back to Portfolio Hub</Text>
       </Pressable>
     </ScrollView>
   );
@@ -625,5 +732,26 @@ const styles = StyleSheet.create({
   positive: { color: "#86efac" },
   warning: { color: "#fde68a" },
   info: { color: "#93c5fd" },
-  disabled: { opacity: 0.6 }
+  disabled: { opacity: 0.6 },
+
+  specialistGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 12
+  },
+
+  specialistButton: {
+    backgroundColor: "#1e293b",
+    borderWidth: 1,
+    borderColor: "#334155",
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14
+  },
+
+  specialistButtonText: {
+    color: "#e2e8f0",
+    fontWeight: "800"
+  }
 });

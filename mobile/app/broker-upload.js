@@ -81,7 +81,7 @@ export default function BrokerUpload() {
 
         <Pressable
           style={styles.docOption}
-          onPress={() => router.push("/funds")}
+          onPress={() => router.push("/(tabs)/funds")}
         >
           <Text style={styles.docTitle}>Cash / Ledger Statement</Text>
           <Text style={cashUploaded ? styles.complete : styles.required}>

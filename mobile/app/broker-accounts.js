@@ -385,7 +385,7 @@ export default function BrokerAccounts() {
          
       <Pressable
   style={styles.primary}
-  onPress={() => router.replace("/trading")}
+  onPress={() => router.replace("/(tabs)/trading")}
 >
   <Text style={styles.primaryText}>Return to Trading</Text>
 </Pressable>

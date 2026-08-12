@@ -9,6 +9,9 @@ import {
   View
 } from "react-native";
 import { router } from "expo-router";
+import {
+  refreshCanonicalRealPortfolioSnapshot
+} from "../src/services/portfolio/portfolioSnapshotTrigger";
 
 import { validateOrder } from "../src/utils/orderValidator";
 import { loadPortfolio, savePortfolio } from "../src/portfolio/portfolioStore";
@@ -272,6 +275,10 @@ export default function Trade() {
     );
 
     await buildSyncStatus();
+
+    await refreshCanonicalRealPortfolioSnapshot({
+      reason: "TRADE_COMMIT"
+    });
   }
 
   async function confirmTrade() {
@@ -527,6 +534,10 @@ export default function Trade() {
       await userSetItem("simulatedTrades", JSON.stringify(trades));
       await saveBasketExecution(updatedExecution);
       await buildSyncStatus();
+
+      await refreshCanonicalRealPortfolioSnapshot({
+        reason: "BASKET_TRADE_COMMIT"
+      });
 
       setPortfolio(workingPortfolio);
       setCash(workingCash);

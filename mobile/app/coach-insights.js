@@ -248,7 +248,7 @@ if (latestStrategy?.id) {
 setShowResults(false);
 setShowSimulator(false);
 
-router.push("/trading");
+router.push("/(tabs)/trading");
   }
 
   function buildBehaviorInsights() {
@@ -420,7 +420,7 @@ router.push("/trading");
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Coach G Insights</Text>
+        <Text style={styles.title}>Coach G Recommendation Workspace</Text>
 
         <Pressable
           style={styles.dashboardButton}
@@ -428,12 +428,23 @@ router.push("/trading");
         >
           <Text style={styles.dashboardButtonText}>Dashboard</Text>
         </Pressable>
+
+        <Pressable
+          style={styles.dashboardButton}
+          onPress={() =>
+            router.replace("/(tabs)/coach")
+          }
+        >
+          <Text style={styles.dashboardButtonText}>
+            Coach G
+          </Text>
+        </Pressable>
       </View>
 
       <ActiveUserBanner />
 
       <View style={styles.card}>
-        <Text style={styles.section}>Coach G Portfolio Review</Text>
+        <Text style={styles.section}>Recommendation & Execution Review</Text>
 
         <Text style={styles.metric2}>
           {portfolioReview.score}/100 ({portfolioReview.rating})

@@ -46,12 +46,17 @@ const items = [
 {
   title: "Activity",
   detail: "View buys, sells, deposits, withdrawals, dividends, and fees",
-  route: "/transactions"
+  route: "/portfolio-activity"
 },
 {
   title: "Coach G",
   detail: "Personalized portfolio, cash, risk, and wealth recommendations",
-  route: "/coach-dashboard"
+  route: "/(tabs)/coach"
+},
+{
+  title: "Wealth Journey",
+  detail: "Goals, progress, reconciliation, and Coach G guidance over time",
+  route: "/wealth-journey"
 },
 
   {

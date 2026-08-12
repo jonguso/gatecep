@@ -245,7 +245,8 @@ export default function LiveDashboard() {
 
       <View style={styles.quickGrid}>
         <Quick title="Portfolio Hub" route="/portfolio-hub" />
-        <Quick title="Command Center" route="/portfolio-command-center" />
+        <Quick title="Portfolio Analytics" route="/unified-portfolio-analytics" />
+        <Quick title="Coach G" route="/(tabs)/coach" />
         <Quick title="Trade" route="/trade" />
         <Quick title="Order Book" route="/order-book" />
       </View>
