@@ -12,8 +12,8 @@ import {
 } from "./brokerSyncService";
 
 import {
-  loadInvestorContext
-} from "../investor/investorContextStore";
+  loadCanonicalRealBrokerPortfolio
+} from "./canonicalRealBrokerPortfolioService";
 
 /*
  * ============================================================
@@ -28,17 +28,13 @@ export async function buildBrokerPortfolioImportPreview() {
   actions,
   requests,
   brokerMirror,
-  investorContext
+  portfolio
 ] = await Promise.all([
   loadBrokerReconciliationActions(),
   loadBrokerPortfolioImportRequests(),
   loadBrokerMirror(),
-  loadInvestorContext()
+  loadCanonicalRealBrokerPortfolio()
 ]);
-
-const portfolio =
-  investorContext?.practicePortfolio ||
-  null;
 
   /*
    * Find approved Queue Import Review actions.

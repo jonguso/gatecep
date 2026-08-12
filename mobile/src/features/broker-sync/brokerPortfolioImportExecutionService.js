@@ -31,9 +31,9 @@ import {
 } from "./brokerSyncAuditStore";
 
 import {
-  loadInvestorContext,
-  savePracticePortfolio
-} from "../investor/investorContextStore";
+  loadCanonicalRealBrokerPortfolio,
+  saveCanonicalRealBrokerPortfolio
+} from "./canonicalRealBrokerPortfolioService";
 
 import {
   normalizePortfolioHolding
@@ -82,10 +82,7 @@ export async function executeBrokerPortfolioImport({
       request,
 
       portfolio:
-        (
-          await loadInvestorContext()
-        )?.practicePortfolio ||
-        null,
+        await loadCanonicalRealBrokerPortfolio(),
 
       reconciliation:
         await buildBrokerReconciliation()
@@ -169,13 +166,8 @@ export async function executeBrokerPortfolioImport({
   );
 
   try {
-    const investorContext =
-      await loadInvestorContext();
-
     const currentPortfolio =
-      investorContext
-        ?.practicePortfolio ||
-      {};
+      await loadCanonicalRealBrokerPortfolio();
 
     const portfolioValueBefore =
   Number(
@@ -239,7 +231,7 @@ const cashBefore =
 
       await completeBrokerReconciliationAction(
         action.id,
-        "Controlled portfolio import was already reflected in the GateCEP practice portfolio."
+        "Controlled portfolio import was already reflected in the canonical REAL portfolio."
       );
 
       const reconciliation =
@@ -331,11 +323,8 @@ const cashBefore =
     }
 
     const updatedPortfolio =
-      await savePracticePortfolio({
-        ...currentPortfolio,
-
-        holdings:
-          nextHoldings
+      await saveCanonicalRealBrokerPortfolio(nextHoldings, {
+        reason: "BROKER_RECONCILIATION_IMPORT"
       });
 
    const portfolioEvent =
@@ -456,7 +445,7 @@ const cashBefore =
     const completedAction =
       await completeBrokerReconciliationAction(
         action.id,
-        `Imported ${currentBrokerQuantity} ${symbol} shares into the GateCEP practice portfolio through PC-015.`
+        `Imported ${currentBrokerQuantity} ${symbol} shares into the canonical REAL portfolio through controlled reconciliation.`
       );
 
     const reconciliation =
@@ -491,7 +480,7 @@ const cashBefore =
 
       gatecepTotal:
         reconciliation
-          ?.practicePortfolio
+          ?.realPortfolio
           ?.totalValue ||
         0,
 
@@ -509,7 +498,7 @@ const cashBefore =
 
       holdingsCount:
         reconciliation
-          ?.practicePortfolio
+          ?.realPortfolio
           ?.holdingsCount ||
         0,
 
@@ -554,7 +543,7 @@ const cashBefore =
             action.id,
 
           message:
-            `${currentBrokerQuantity} ${symbol} shares were imported into the GateCEP practice portfolio.`
+            `${currentBrokerQuantity} ${symbol} shares were imported into the canonical REAL portfolio.`
         }
       ]
     });

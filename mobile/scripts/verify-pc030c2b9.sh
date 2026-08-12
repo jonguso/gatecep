@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-set -e
+set -euo pipefail
 
-cd ~/gatecep/mobile
+ROOT="${GATECEP_MOBILE_ROOT:-$(cd "$(dirname "$0")/.." && pwd)}"
+cd "$ROOT"
 
 echo "============================================================"
 echo "PC-030C2B9 — SNAPSHOT LIFECYCLE VERIFICATION"
@@ -105,18 +106,23 @@ else
 fi
 
 echo
-echo "===== 11. PRACTICE IMPORT EXCLUSION ====="
+echo "===== 11. REAL BROKER RECONCILIATION BOUNDARY ====="
 
-if grep -n \
-  'refreshCanonicalRealPortfolioSnapshot' \
-  src/features/broker-sync/brokerPortfolioImportExecutionService.js
+if grep -n -E \
+  'savePracticePortfolio|practicePortfolio' \
+  src/features/broker-sync/brokerPortfolioImportExecutionService.js \
+  src/features/broker-sync/brokerReconciliationService.js
 then
   echo
-  echo "ERROR — Practice Portfolio reconciliation triggers real snapshot."
+  echo "ERROR — active broker reconciliation still depends on Practice."
   exit 1
-else
-  echo "PASS — Practice reconciliation remains outside REAL snapshots."
 fi
+
+grep -q 'saveCanonicalRealBrokerPortfolio' \
+  src/features/broker-sync/brokerPortfolioImportExecutionService.js
+grep -q 'refreshCanonicalRealPortfolioSnapshot' \
+  src/features/broker-sync/canonicalRealBrokerPortfolioService.js
+echo "PASS — approved broker reconciliation uses the canonical REAL mutation boundary."
 
 echo
 echo "===== 12. CORPORATE ACTION EXCLUSION ====="
@@ -165,7 +171,6 @@ if grep -Rni \
   src/features/wealth-journey \
   src/features/rebalancing \
   src/features/risk \
-  src/features/performance \
   --include="*.js"
 then
   echo
@@ -173,6 +178,28 @@ then
   exit 1
 else
   echo "PASS — no analytics -> snapshot dependency detected."
+fi
+
+echo
+echo "===== 15A. PERFORMANCE READER BOUNDARY ====="
+
+grep -q \
+  'from "../src/services/portfolio/portfolioSnapshot"' \
+  app/performance.js
+
+grep -q \
+  'from "../../services/portfolio/portfolioSnapshot"' \
+  src/features/performance/historicalPerformanceSummaryService.js
+
+if grep -Rni \
+  'src/portfolio/portfolioSnapshot\|../../portfolio/portfolioSnapshot' \
+  app/performance.js \
+  src/features/performance/historicalPerformanceSummaryService.js
+then
+  echo "ERROR — Performance still reads through the legacy wrapper."
+  exit 1
+else
+  echo "PASS — Performance readers use the canonical service boundary."
 fi
 
 echo
@@ -200,7 +227,12 @@ python scripts/audit-pc029c-visible-routes.py
 echo
 echo "===== 18. WEB BUILD ====="
 
-npx expo export --platform web
+EXPO_STATE="${GATECEP_EXPO_STATE:-${TMPDIR:-/tmp}/gatecep-expo-state}"
+mkdir -p "$EXPO_STATE"
+
+CI=1 EXPO_NO_TELEMETRY=1 \
+  __UNSAFE_EXPO_HOME_DIRECTORY="$EXPO_STATE" \
+  npx expo export --platform web
 
 echo
 echo "============================================================"

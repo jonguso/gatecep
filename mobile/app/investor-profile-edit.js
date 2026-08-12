@@ -10,13 +10,22 @@ import {
 } from "react-native";
 import { router } from "expo-router";
 
+import { useAuth } from "../src/features/auth/hooks/useAuth";
 import {
   getInvestorProfile,
   saveInvestorProfile
 } from "../src/features/profile/api/investorProfileApi";
-import { userSetItem } from "../src/auth/userStorage";
+import {
+  userGetItem,
+  userSetItem
+} from "../src/auth/userStorage";
+import {
+  mergeInvestorProfileStorage,
+  mergeProfileSources,
+  normalizeInvestorProfile
+} from "../src/features/profile/investorProfileContract";
 
-const GOALS = ["Build Wealth", "Dividend Income", "Retirement", "Education", "Preserve Capital"];
+const GOALS = ["Build Wealth", "Family Security", "Home Purchase", "Dividend Income", "Retirement", "Education", "Preserve Capital", "Need Guidance"];
 const RISKS = ["Conservative", "Balanced", "Growth", "Aggressive"];
 const EXPERIENCE = ["Beginner", "Intermediate", "Advanced"];
 const TIME_HORIZONS = ["Under 1 Year", "1-3 Years", "3-5 Years", "5+ Years"];
@@ -24,6 +33,7 @@ const CONTRIBUTIONS = ["One Time", "Monthly", "Quarterly", "Flexible"];
 const MARKET_DROP = ["Sell", "Wait", "Buy More", "Unsure"];
 
 export default function InvestorProfileEdit() {
+  const { user } = useAuth();
   const [saving, setSaving] = useState(false);
 
   const [name, setName] = useState("");
@@ -34,6 +44,7 @@ export default function InvestorProfileEdit() {
   const [contribution, setContribution] = useState("Monthly");
   const [marketDrop, setMarketDrop] = useState("Wait");
   const [amount, setAmount] = useState("10000");
+  const [saveStatus, setSaveStatus] = useState("");
 
   useEffect(() => {
     load();
@@ -41,16 +52,25 @@ export default function InvestorProfileEdit() {
 
   async function load() {
     try {
-      const data = await getInvestorProfile();
-      const saved = data?.profile || {};
-const constraints = saved.constraints || {};
+      const localRaw = await userGetItem("investorProfile");
+      const local = localRaw ? JSON.parse(localRaw) : {};
+      const data = await getInvestorProfile().catch(() => null);
+      const cloud =
+        data?.profile ||
+        data?.investorProfile ||
+        data ||
+        {};
+      const saved = mergeProfileSources(cloud, local);
+      const constraints = saved.constraints || {};
 
-setName(
-    constraints.name ||
-    user?.username ||
-    user?.email?.split("@")[0] ||
-    ""
-);
+      setName(
+        saved.name ||
+        constraints.name ||
+        user?.firstName ||
+        user?.username ||
+        user?.email?.split("@")[0] ||
+        ""
+      );
       setGoal(saved.goal || "Build Wealth");
       setRisk(saved.risk || "Balanced");
       setExperience(saved.experience || "Beginner");
@@ -66,6 +86,7 @@ setName(
   async function save() {
     try {
       setSaving(true);
+      setSaveStatus("Saving profile...");
 
       const investorType =
         goal === "Dividend Income"
@@ -76,31 +97,66 @@ setName(
           ? "Growth Seeker"
           : "Balanced Builder";
 
-      const profile = {
-  name,
-  goal,
-  risk,
-  experience,
-  timeHorizon,
-  contribution,
-  investorType,
-  marketDrop,
-  amount,
-  monthlyContribution,
-  goalTarget,
-  riskScore,
-  confidence,
-  brokerRecommendation
-};
+      const normalizedAmount = Number(amount);
 
-      const result = await saveInvestorProfile(profile);
+      const profile = {
+        name: name.trim(),
+        goal,
+        risk,
+        experience,
+        timeHorizon,
+        contribution,
+        investorType,
+        marketDrop,
+        amount: Number.isFinite(normalizedAmount)
+          ? normalizedAmount
+          : 0,
+        constraints: {
+          name: name.trim(),
+          marketDrop,
+          amount: Number.isFinite(normalizedAmount)
+            ? normalizedAmount
+            : 0
+        }
+      };
+
+      const existingRaw = await userGetItem("investorProfile");
+      const existing = existingRaw ? JSON.parse(existingRaw) : {};
+      const locallySaved = mergeInvestorProfileStorage(existing, profile);
 
       await userSetItem(
         "investorProfile",
-        JSON.stringify(result.profile || profile)
+        JSON.stringify(locallySaved)
       );
 
-      Alert.alert("Profile Saved", "Investor profile saved to GateCEP cloud.");
+      setSaveStatus("Profile saved. Cloud sync continues in the background.");
+
+      saveInvestorProfile(profile)
+        .then(async (result) => {
+          const cloudProfile = normalizeInvestorProfile(
+            result?.profile || result?.investorProfile || {}
+          );
+          const synced = mergeInvestorProfileStorage(
+            locallySaved,
+            {
+              ...profile,
+              ...cloudProfile,
+              name: cloudProfile.name || profile.name,
+              goal: cloudProfile.goal || profile.goal,
+              risk: cloudProfile.risk || profile.risk,
+              experience: cloudProfile.experience || profile.experience,
+              timeHorizon: cloudProfile.timeHorizon || profile.timeHorizon,
+              contribution: cloudProfile.contribution || profile.contribution,
+              marketDrop: cloudProfile.marketDrop || profile.marketDrop,
+              amount: cloudProfile.amount || profile.amount
+            }
+          );
+          await userSetItem("investorProfile", JSON.stringify(synced));
+        })
+        .catch((error) => {
+          console.log("Investor profile cloud sync deferred:", error.message);
+        });
+
       router.replace("/my-profile");
     } catch (error) {
       Alert.alert("Save Failed", error.message);
@@ -127,6 +183,10 @@ setName(
           placeholderTextColor="#64748b"
           style={styles.input}
         />
+
+        {saveStatus ? (
+          <Text style={styles.saveStatus}>{saveStatus}</Text>
+        ) : null}
 
         <PickerGroup title="Goal" items={GOALS} value={goal} onChange={setGoal} />
         <PickerGroup title="Risk" items={RISKS} value={risk} onChange={setRisk} />
@@ -236,5 +296,6 @@ const styles = StyleSheet.create({
     padding: 16,
     borderRadius: 16
   },
-  secondaryText: { color: "#67e8f9", fontWeight: "900", textAlign: "center" }
+  secondaryText: { color: "#67e8f9", fontWeight: "900", textAlign: "center" },
+  saveStatus: { color: "#67e8f9", marginTop: 14, fontWeight: "800" }
 });

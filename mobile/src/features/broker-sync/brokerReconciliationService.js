@@ -1,6 +1,6 @@
 import {
-  loadInvestorContext
-} from "../investor/investorContextStore";
+  loadCanonicalRealBrokerPortfolio
+} from "./canonicalRealBrokerPortfolioService";
 
 import {
   loadBrokerMirror
@@ -78,27 +78,22 @@ function buildHoldingMap(
 
 export async function buildBrokerReconciliation() {
   const [
-    investorContext,
+    realPortfolio,
     brokerMirror
   ] = await Promise.all([
-    loadInvestorContext(),
+    loadCanonicalRealBrokerPortfolio(),
     loadBrokerMirror()
   ]);
 
-  const practicePortfolio =
-    investorContext
-      ?.practicePortfolio ||
-    null;
-
-  if (!practicePortfolio) {
+  if (!realPortfolio?.holdings?.length) {
     return {
       status:
-        "NO_PRACTICE_PORTFOLIO",
+        "NO_REAL_PORTFOLIO",
 
       message:
-        "No Practice Portfolio is available for reconciliation.",
+        "No canonical REAL portfolio is available for reconciliation.",
 
-      practicePortfolio:
+      realPortfolio:
         null,
 
       brokerMirror,
@@ -119,7 +114,7 @@ export async function buildBrokerReconciliation() {
       message:
         "No synchronized broker portfolio is available yet.",
 
-      practicePortfolio,
+      realPortfolio,
 
       brokerMirror:
         null,
@@ -132,12 +127,12 @@ export async function buildBrokerReconciliation() {
     };
   }
 
-  const practiceHoldings =
+  const realHoldings =
     Array.isArray(
-      practicePortfolio
+      realPortfolio
         ?.holdings
     )
-      ? practicePortfolio
+      ? realPortfolio
           .holdings
       : [];
 
@@ -148,9 +143,9 @@ export async function buildBrokerReconciliation() {
       ? brokerMirror.holdings
       : [];
 
-  const practiceMap =
+  const realMap =
     buildHoldingMap(
-      practiceHoldings
+      realHoldings
     );
 
   const brokerMap =
@@ -161,7 +156,7 @@ export async function buildBrokerReconciliation() {
   const allSymbols =
     Array.from(
       new Set([
-        ...practiceMap.keys(),
+        ...realMap.keys(),
         ...brokerMap.keys()
       ])
     ).sort();
@@ -169,8 +164,8 @@ export async function buildBrokerReconciliation() {
   const holdingResults =
     allSymbols.map(
       (symbol) => {
-        const practice =
-          practiceMap.get(
+        const real =
+          realMap.get(
             symbol
           );
 
@@ -180,7 +175,7 @@ export async function buildBrokerReconciliation() {
           );
 
         if (
-          practice &&
+          real &&
           !broker
         ) {
           return {
@@ -189,20 +184,20 @@ export async function buildBrokerReconciliation() {
             status:
               "MISSING_AT_BROKER",
 
-            practice,
+            real,
             broker:
               null,
 
             quantityDifference:
-              -practice.quantity,
+              -real.quantity,
 
             valueDifference:
-              -practice.marketValue
+              -real.marketValue
           };
         }
 
         if (
-          !practice &&
+          !real &&
           broker
         ) {
           return {
@@ -211,7 +206,7 @@ export async function buildBrokerReconciliation() {
             status:
               "EXTRA_AT_BROKER",
 
-            practice:
+            real:
               null,
             broker,
 
@@ -226,13 +221,13 @@ export async function buildBrokerReconciliation() {
         const quantityDifference =
           roundMoney(
             broker.quantity -
-            practice.quantity
+            real.quantity
           );
 
         const valueDifference =
           roundMoney(
             broker.marketValue -
-            practice.marketValue
+            real.marketValue
           );
 
         const quantityMatches =
@@ -254,7 +249,7 @@ export async function buildBrokerReconciliation() {
               ? "MATCHED"
               : "DIFFERENT",
 
-          practice,
+          real,
           broker,
 
           quantityDifference,
@@ -263,9 +258,9 @@ export async function buildBrokerReconciliation() {
       }
     );
 
-  const practiceValue =
+  const realValue =
   roundMoney(
-    practiceHoldings.reduce(
+    realHoldings.reduce(
       (sum, holding) => {
         const quantity =
           number(
@@ -297,17 +292,17 @@ export async function buildBrokerReconciliation() {
     )
   );
 
-  const practiceCash =
+  const realCash =
     roundMoney(
-      practicePortfolio
+      realPortfolio
         ?.availableCash ||
       0
     );
 
-  const practiceTotal =
+  const realTotal =
     roundMoney(
-      practiceValue +
-      practiceCash
+      realValue +
+      realCash
     );
 
   const brokerValue =
@@ -375,13 +370,13 @@ export async function buildBrokerReconciliation() {
   const cashDifference =
     roundMoney(
       brokerCash -
-      practiceCash
+      realCash
     );
 
   const totalDifference =
     roundMoney(
       brokerTotal -
-      practiceTotal
+      realTotal
     );
 
   const holdingsFullyMatched =
@@ -441,18 +436,18 @@ if (fullyMatched) {
             .length
       }),
 
-    practicePortfolio: {
+    realPortfolio: {
       investedAmount:
-        practiceValue,
+        realValue,
 
       availableCash:
-        practiceCash,
+        realCash,
 
       totalValue:
-        practiceTotal,
+        realTotal,
 
       holdingsCount:
-        practiceHoldings
+        realHoldings
           .length
     },
 

@@ -305,7 +305,7 @@ function buildPhysicalDiscrepancies(
         gatecepQuantity:
           Number(
             holding
-              ?.practice
+              ?.real
               ?.quantity ||
             0
           ),
@@ -321,7 +321,7 @@ function buildPhysicalDiscrepancies(
         gatecepValue:
           roundMoney(
             holding
-              ?.practice
+              ?.real
               ?.marketValue ||
             0
           ),
@@ -393,7 +393,7 @@ function buildPhysicalDiscrepancies(
       gatecepValue:
         roundMoney(
           reconciliation
-            ?.practicePortfolio
+            ?.realPortfolio
             ?.availableCash ||
           0
         ),
@@ -474,7 +474,7 @@ async function createNewCase({
     gatecepTotal:
       roundMoney(
         reconciliation
-          ?.practicePortfolio
+          ?.realPortfolio
           ?.totalValue ||
         0
       ),
@@ -635,7 +635,7 @@ async function updateActiveCase({
       gatecepTotal:
         roundMoney(
           reconciliation
-            ?.practicePortfolio
+            ?.realPortfolio
             ?.totalValue ||
           0
         ),
@@ -787,7 +787,7 @@ function buildReconciliationFingerprint({
     gatecepTotal:
       roundMoney(
         reconciliation
-          ?.practicePortfolio
+          ?.realPortfolio
           ?.totalValue ||
         0
       ),

@@ -16,11 +16,11 @@ import {
  */
 
 export const ACTION_LIBRARY = {
-  PRACTICE_ONLY: {
+  GATECEP_REAL_ONLY: {
     actionCode: "NO_ACTION_REQUIRED",
     actionLabel: "No action required",
     actionDescription:
-      "Position exists only for practice. No broker action is required.",
+      "Position exists only in GateCEP's REAL portfolio. Review the broker statement before changing either record.",
     priority: "LOW",
     requiresApproval: false
   },

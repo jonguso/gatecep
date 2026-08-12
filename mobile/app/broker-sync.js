@@ -19,7 +19,7 @@ import {
 import {
   loadBrokerMirror,
   loadBrokerSyncStatus,
-  syncMockBrokerAccount
+  syncConnectedBrokerMirror
 } from "../src/features/broker-sync/brokerSyncService";
 
 export default function BrokerSync() {
@@ -93,7 +93,7 @@ export default function BrokerSync() {
       setError("");
 
       const synced =
-        await syncMockBrokerAccount();
+        await syncConnectedBrokerMirror();
 
       setMirror(
         synced
@@ -442,9 +442,8 @@ export default function BrokerSync() {
               styles.emptyText
             }
           >
-            Run the sandbox synchronization
-            to validate the GateCEP broker
-            synchronization pipeline.
+            Connect a broker account, then synchronize it to create a
+            read-only mirror for REAL portfolio reconciliation.
           </Text>
         </View>
       )}
@@ -474,9 +473,28 @@ export default function BrokerSync() {
           >
             {mirror
               ? "Sync Broker Again"
-              : "Run Broker Sandbox Sync"}
+              : "Sync Connected Broker"}
           </Text>
         )}
+      </Pressable>
+
+      <Pressable
+        style={
+          styles.secondaryButton
+        }
+        onPress={() =>
+          router.push(
+            "/broker-reconciliation"
+          )
+        }
+      >
+        <Text
+          style={
+            styles.secondaryButtonText
+          }
+        >
+          Compare Broker with REAL Portfolio
+        </Text>
       </Pressable>
 
       <Pressable

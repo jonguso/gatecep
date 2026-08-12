@@ -28,13 +28,13 @@ import {
 export const RESOLUTION_OPTIONS = [
   {
     code:
-      "PRACTICE_ONLY",
+      "GATECEP_REAL_ONLY",
 
     label:
-      "Practice-only position",
+      "GateCEP-only REAL position",
 
     description:
-      "This position belongs only to the GateCEP learning portfolio and is not expected at the broker."
+      "This REAL position exists in GateCEP but is missing from the synchronized broker account."
   },
 
   {
@@ -154,8 +154,8 @@ export async function buildBrokerResolutionWorkflow() {
             holding
           ),
 
-        practice:
-          holding.practice,
+        real:
+          holding.real,
 
         broker:
           holding.broker,
@@ -299,7 +299,7 @@ export async function resolveBrokerDiscrepancy({
    */
   const gatecepQuantity =
     Number(
-      discrepancy?.practice
+      discrepancy?.real
         ?.quantity ||
       0
     );
@@ -313,7 +313,7 @@ export async function resolveBrokerDiscrepancy({
 
   const gatecepValue =
     Number(
-      discrepancy?.practice
+      discrepancy?.real
         ?.marketValue ||
       0
     );
@@ -541,7 +541,7 @@ const updatedWorkflow =
     gatecepTotal:
       updatedWorkflow
         ?.reconciliation
-        ?.practicePortfolio
+        ?.realPortfolio
         ?.totalValue ||
       0,
 
@@ -664,7 +664,7 @@ function buildHoldingDescription(
     "MISSING_AT_BROKER"
   ) {
     return (
-      `GateCEP records ${holding.practice?.quantity || 0} shares, ` +
+      `GateCEP records ${holding.real?.quantity || 0} shares, ` +
       "but the broker mirror records none."
     );
   }
@@ -680,7 +680,7 @@ function buildHoldingDescription(
   }
 
   return (
-    `GateCEP quantity: ${holding.practice?.quantity || 0}. ` +
+    `GateCEP quantity: ${holding.real?.quantity || 0}. ` +
     `Broker quantity: ${holding.broker?.quantity || 0}.`
   );
 }

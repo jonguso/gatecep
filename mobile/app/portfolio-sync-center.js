@@ -164,9 +164,16 @@ export default function PortfolioSyncCenter() {
 
         <Pressable
           style={styles.primary}
+          onPress={() => router.push("/broker-sync")}
+        >
+          <Text style={styles.primaryText}>Open Broker Reconciliation</Text>
+        </Pressable>
+
+        <Pressable
+          style={styles.secondary}
           onPress={() => router.push("/(tabs)/coach")}
         >
-          <Text style={styles.primaryText}>Open Coach G Insights</Text>
+          <Text style={styles.secondaryText}>Open Coach G Insights</Text>
         </Pressable>
       </View>
     </ScrollView>
@@ -367,6 +374,17 @@ syncNote: {
 
   primaryText: {
     color: "white",
+    textAlign: "center",
+    fontWeight: "900"
+  },
+  secondary: {
+    marginTop: 12,
+    backgroundColor: "#1e293b",
+    padding: 16,
+    borderRadius: 16
+  },
+  secondaryText: {
+    color: "#67e8f9",
     textAlign: "center",
     fontWeight: "900"
   }

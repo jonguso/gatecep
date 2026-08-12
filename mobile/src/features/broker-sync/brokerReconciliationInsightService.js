@@ -207,7 +207,7 @@ export async function buildBrokerReconciliationInsight() {
 
       gatecepTotal:
         reconciliation
-          ?.practicePortfolio
+          ?.realPortfolio
           ?.totalValue ||
         0,
 
@@ -523,7 +523,7 @@ function buildNextAction({
             (item) =>
               item.symbol
           )
-          .join(", ")} should exist in the broker account or whether the GateCEP record represents a planned or practice-only position.`
+          .join(", ")} should exist in the broker account or whether the synchronized statement is incomplete.`
       );
 
     case "EXTRA_HOLDINGS":

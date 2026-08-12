@@ -13,8 +13,12 @@ import { getInvestorProfile } from "../src/features/profile/api/investorProfileA
 import { loadUnifiedPortfolio } from "../src/portfolio/unifiedPortfolioApi";
 import { getUserCash } from "../src/features/cash/api/userCashApi";
 import { getUserBrokers } from "../src/features/brokers/api/userBrokerApi";
+import { userGetItem } from "../src/auth/userStorage";
 import { logout } from "../src/auth/authStore";
 import ActiveUserBanner from "../src/components/ActiveUserBanner";
+import {
+  mergeProfileSources
+} from "../src/features/profile/investorProfileContract";
 
 export default function MyProfile() {
   const { user } = useAuth();
@@ -32,19 +36,32 @@ export default function MyProfile() {
 
   async function load() {
     try {
-      const [investor, portfolio, cashResult, brokerResult] =
+      const [investor, localProfileRaw, portfolio, cashResult, brokerResult] =
         await Promise.all([
           getInvestorProfile().catch(() => ({ profile: null })),
+          userGetItem("investorProfile").catch(() => null),
           loadUnifiedPortfolio().catch(() => ({ holdings: [] })),
           getUserCash().catch(() => ({ summary: { totalCash: 0 } })),
           getUserBrokers().catch(() => ({ brokers: [] }))
         ]);
 
-      const investorProfile =
-        investor?.profile || investor?.investorProfile || investor || null;
+      const localProfile = localProfileRaw
+        ? JSON.parse(localProfileRaw)
+        : {};
+      const cloudProfile =
+        investor?.profile ||
+        investor?.investorProfile ||
+        investor ||
+        {};
+      const investorProfile = mergeProfileSources(
+        cloudProfile,
+        localProfile
+      );
 
       const holdings = portfolio?.holdings || [];
-      const brokerList = brokerResult?.brokers || [];
+      const brokerList = Array.isArray(brokerResult)
+        ? brokerResult
+        : brokerResult?.brokers || [];
 
       setProfile(investorProfile);
       setBroker(brokerList.length ? brokerList[0] : null);
@@ -122,14 +139,14 @@ const displayName =
           </Pressable>
         </View>
 
-        <Info label="Name" value={constraints.name || profile?.name || "User"} />
+        <Info label="Name" value={profile?.name || constraints.name || displayName || "User"} />
         <Info label="Goal" value={profile?.goal || "Not set"} />
         <Info label="Risk" value={profile?.risk || "Not set"} />
         <Info label="Experience" value={profile?.experience || "Not set"} />
         <Info label="Time Horizon" value={profile?.timeHorizon || profile?.time_horizon || "Not set"} />
         <Info label="Contribution" value={profile?.contribution || "Not set"} />
-        <Info label="Market Drop Response" value={constraints.marketDrop || "Not set"} />
-        <Info label="Starting Amount" value={`KES ${money(constraints.amount || 0)}`} />
+        <Info label="Market Drop Response" value={profile?.marketDrop || constraints.marketDrop || "Not set"} />
+        <Info label="Starting Amount" value={`KES ${money(profile?.amount ?? constraints.amount ?? 0)}`} />
       </View>
 
       <View style={styles.card}>
@@ -139,7 +156,7 @@ const displayName =
           label="Status"
           value={broker ? "Connected / Profile Added" : "No broker connected"}
         />
-        <Info label="Broker" value={broker?.broker || "N/A"} />
+        <Info label="Broker" value={broker?.broker || broker?.brokerName || broker?.name || "N/A"} />
         <Info label="Client Number" value={broker?.clientNumber || "N/A"} />
         <Info label="CDS Number" value={broker?.cdsNumber || "N/A"} />
 

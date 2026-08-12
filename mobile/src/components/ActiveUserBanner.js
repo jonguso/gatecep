@@ -10,6 +10,9 @@ import { useAuth } from "../features/auth/hooks/useAuth";
 import { router, useFocusEffect } from "expo-router";
 import { getCurrentSession } from "../auth/authStore";
 import { userGetItem } from "../auth/userStorage";
+import {
+  normalizeInvestorProfile
+} from "../features/profile/investorProfileContract";
 
 export default function ActiveUserBanner() {
   const [session, setSession] = useState(null);
@@ -45,7 +48,7 @@ export default function ActiveUserBanner() {
 
   setProfile(
     profileRaw
-      ? JSON.parse(profileRaw)
+      ? normalizeInvestorProfile(JSON.parse(profileRaw))
       : null
   );
 

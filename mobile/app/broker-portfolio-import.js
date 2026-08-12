@@ -148,7 +148,7 @@ export default function BrokerPortfolioImportScreen() {
   const message =
     `Import ${quantity} ${
       request?.symbol || ""
-    } shares into the GateCEP Practice Portfolio?`;
+    } shares into the canonical REAL portfolio?`;
 
   /*
    * React Native Alert button callbacks are not reliable
@@ -317,7 +317,7 @@ if (
       >
         Review and execute approved broker reconciliation imports.
         Every import is validated against the current broker mirror
-        before the Practice Portfolio is updated.
+        before the canonical REAL portfolio is updated.
       </Text>
 
       {error ? (
@@ -501,7 +501,7 @@ if (
                   style={styles.safetyText}
                 >
                   PC-015 validates the approved action and current
-                  broker holding before updating the Practice Portfolio.
+                  broker holding before updating the canonical REAL portfolio.
                   Repeated execution will not add the same shares twice.
                 </Text>
               </View>

@@ -39,7 +39,7 @@
 
 import {
   loadPortfolioSnapshots
-} from "../../portfolio/portfolioSnapshot";
+} from "../../services/portfolio/portfolioSnapshot";
 
 
 /*

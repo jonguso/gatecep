@@ -144,7 +144,7 @@ export default function BrokerReconciliation() {
             }
           />
 
-          {result.practicePortfolio &&
+          {result.realPortfolio &&
           result.brokerMirror ? (
             <>
               <View
@@ -200,7 +200,7 @@ export default function BrokerReconciliation() {
                   label="GateCEP Total"
                   value={`KES ${money(
                     result
-                      .practicePortfolio
+                      .realPortfolio
                       .totalValue
                   )}`}
                 />
@@ -413,7 +413,7 @@ function HoldingComparison({
           }
         >
           Qty{" "}
-          {item.practice
+          {item.real
             ?.quantity ??
             0}
         </Text>

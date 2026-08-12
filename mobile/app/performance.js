@@ -18,7 +18,7 @@ import Svg, {
 import {
   loadPortfolioSnapshots,
   saveCanonicalRealPortfolioSnapshot
-} from "../src/portfolio/portfolioSnapshot";
+} from "../src/services/portfolio/portfolioSnapshot";
 import { loadCanonicalRealWealthMetrics } from "../src/features/wealth-journey/canonicalRealWealthMetricsService";
 import { buildPortfolioHealthScore } from "../src/features/analytics/portfolioHealthScoreService";
 import {

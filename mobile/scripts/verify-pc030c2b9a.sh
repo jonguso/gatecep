@@ -158,17 +158,22 @@ fi
 echo "PASS — portfolioStore remains snapshot-independent."
 
 echo
-echo "===== 6. PRACTICE PORTFOLIO MUST REMAIN CLEAN ====="
+echo "===== 6. REAL BROKER RECONCILIATION BOUNDARY ====="
 
-if grep -q \
-  'refreshCanonicalRealPortfolioSnapshot' \
-  src/features/broker-sync/brokerPortfolioImportExecutionService.js
+if grep -q -E \
+  'savePracticePortfolio|practicePortfolio' \
+  src/features/broker-sync/brokerPortfolioImportExecutionService.js \
+  src/features/broker-sync/brokerReconciliationService.js
 then
-  echo "ERROR — Practice Portfolio import creates REAL snapshot."
+  echo "ERROR — active broker reconciliation still depends on Practice."
   exit 1
 fi
 
-echo "PASS — Practice reconciliation remains excluded."
+grep -q 'saveCanonicalRealBrokerPortfolio' \
+  src/features/broker-sync/brokerPortfolioImportExecutionService.js
+grep -q 'refreshCanonicalRealPortfolioSnapshot' \
+  src/features/broker-sync/canonicalRealBrokerPortfolioService.js
+echo "PASS — broker reconciliation mutates REAL only after approval."
 
 echo
 echo "===== 7. BACKUPS INSIDE APP ====="

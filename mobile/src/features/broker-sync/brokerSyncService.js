@@ -2,6 +2,12 @@ import {
   userGetItem,
   userSetItem
 } from "../../auth/userStorage";
+import {
+  loadBrokerAccounts
+} from "../../services/brokers/brokerAccountStore";
+import {
+  syncBrokerPortfolio
+} from "../../services/brokers/brokerPortfolioSync";
 
 const BROKER_MIRROR_KEY =
   "brokerMirrorPortfolio";
@@ -468,4 +474,53 @@ export async function syncMockBrokerAccount() {
   return saveBrokerMirror(
     mockAccount
   );
+}
+
+/*
+ * Read connected broker accounts into the reconciliation mirror.
+ * This does not mutate GateCEP's canonical REAL portfolio.
+ */
+export async function syncConnectedBrokerMirror() {
+  const accounts = await loadBrokerAccounts();
+
+  if (!accounts.length) {
+    throw new Error("No connected broker account is available to synchronize.");
+  }
+
+  const results = [];
+
+  for (const account of accounts) {
+    results.push(await syncBrokerPortfolio(account));
+  }
+
+  const failed = results.find((result) => result?.ok === false);
+  if (failed) {
+    throw new Error(
+      `Unable to synchronize ${failed?.brokerName || failed?.brokerId || "broker account"}.`
+    );
+  }
+
+  const holdings = results.flatMap((result) => result?.holdings || []);
+  const cashBalance = results.reduce(
+    (total, result) => total + moneyNumber(result?.cash),
+    0
+  );
+  const brokerNames = [...new Set(
+    results.map((result) => result?.brokerName).filter(Boolean)
+  )];
+
+  return saveBrokerMirror({
+    brokerAccountId:
+      accounts.length === 1 ? accounts[0]?.id || null : "ALL_CONNECTED",
+    broker:
+      brokerNames.length === 1 ? brokerNames[0] : "All Connected Brokers",
+    accountName:
+      accounts.length === 1
+        ? accounts[0]?.accountName || accounts[0]?.name || "Broker Account"
+        : `${accounts.length} connected accounts`,
+    currency: "KES",
+    cashBalance,
+    holdings,
+    source: "CONNECTED_BROKER_ACCOUNTS"
+  });
 }
