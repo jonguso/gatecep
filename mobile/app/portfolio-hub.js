@@ -12,7 +12,7 @@ import { router, useFocusEffect } from "expo-router";
 
 import ActiveUserBanner from "../src/components/ActiveUserBanner";
 import {
-  loadUnifiedPortfolio,
+  loadUnifiedPortfolioRuntime,
   loadPortfolioAccounts
 } from "../src/portfolio/unifiedPortfolioApi";
 
@@ -24,10 +24,6 @@ import {
 import {
   calculatePortfolioSummary as calculateSharedPortfolioSummary
 } from "../src/shared/portfolio/engine.js";
-import {
-  loadInvestorContext
-} from "../src/features/investor/investorContextStore";
-
 import {
   loadCanonicalRealAvailableCash
 } from "../src/features/portfolio-cash/canonicalPortfolioCashService";
@@ -57,8 +53,8 @@ export default function PortfolioHub() {
 });
   const [accountModalOpen, setAccountModalOpen] = useState(false);
   const [selectedSector, setSelectedSector] = useState(null);
-  const [practicePortfolio, setPracticePortfolio] = useState(null);
   const [portfolioCash, setPortfolioCash] = useState(0);
+  const [realPortfolioNotice, setRealPortfolioNotice] = useState(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -70,7 +66,6 @@ export default function PortfolioHub() {
   try {
     const [
       accountResult,
-      investorContext,
       canonicalRealCash
     ] =
       await Promise.all([
@@ -85,15 +80,6 @@ export default function PortfolioHub() {
           };
         }),
 
-        loadInvestorContext().catch((error) => {
-          console.log(
-            "Investor context load error:",
-            error.message
-          );
-
-          return null;
-        }),
-
         loadCanonicalRealAvailableCash().catch((error) => {
           console.log(
             "Canonical real cash load error:",
@@ -104,15 +90,6 @@ export default function PortfolioHub() {
         })
       ]);
 
-    const practice =
-      investorContext?.practicePortfolio || null;
-
-    setPracticePortfolio(practice);
-
-    /*
-     * Add the Practice Portfolio as its own explicit
-     * portfolio source when one exists.
-     */
     const liveAccounts = Array.isArray(
       accountResult?.accounts
     )
@@ -120,71 +97,39 @@ export default function PortfolioHub() {
       : [];
 
     const sourceAccounts = [
-      ...liveAccounts
+      {
+        broker: "ALL",
+        label: "All Accounts",
+        type: "ALL"
+      },
+      ...liveAccounts.filter(
+        (item) => item?.type !== "ALL" && item?.broker !== "ALL"
+      )
     ];
-
-    if (
-      Array.isArray(practice?.holdings) &&
-      practice.holdings.length > 0
-    ) {
-      sourceAccounts.push({
-        broker: "PRACTICE",
-        label: "Practice Portfolio",
-        type: "PRACTICE"
-      });
-    }
 
     setAccounts(sourceAccounts);
 
-    /*
-     * Practice Portfolio is never passed into the
-     * unified/live portfolio loader.
-     */
-    if (account?.type === "PRACTICE") {
-      setPortfolio(
-        Array.isArray(practice?.holdings)
-          ? practice.holdings
-          : []
-      );
-
-      setPortfolioCash(
-        Number(
-          practice?.availableCash ||
-          0
-        )
-      );
-
-      return;
-    }
-
     const portfolioResult =
-      await loadUnifiedPortfolio({
+      await loadUnifiedPortfolioRuntime({
         broker:
           account?.broker || "ALL"
       });
+
+    setRealPortfolioNotice(
+      portfolioResult?.runtimeStatus && portfolioResult.runtimeStatus !== "LIVE"
+        ? {
+            status: portfolioResult.runtimeStatus,
+            message:
+              portfolioResult.runtimeMessage ||
+              "REAL portfolio data is temporarily unavailable."
+          }
+        : null
+    );
 
     const realHoldings =
       Array.isArray(portfolioResult?.holdings)
         ? portfolioResult.holdings
         : [];
-
-    if (
-      realHoldings.length === 0 &&
-      liveAccounts.length === 0 &&
-      Array.isArray(practice?.holdings) &&
-      practice.holdings.length > 0 &&
-      account?.type !== "PRACTICE"
-    ) {
-      const practiceAccount = {
-        broker: "PRACTICE",
-        label: "Practice Portfolio",
-        type: "PRACTICE"
-      };
-
-      setSelectedAccount(practiceAccount);
-      setPortfolio(practice.holdings);
-      return;
-    }
 
     setPortfolio(realHoldings);
 
@@ -205,6 +150,10 @@ export default function PortfolioHub() {
     );
 
     setPortfolio([]);
+    setRealPortfolioNotice({
+      status: error?.code || "REAL_DATA_UNAVAILABLE",
+      message: error?.message || "REAL portfolio data is unavailable."
+    });
   }
 }
   const hubAnalytics = useMemo(
@@ -321,6 +270,24 @@ export default function PortfolioHub() {
 
       <ActiveUserBanner />
 
+      {realPortfolioNotice ? (
+        <View style={styles.realDataNotice}>
+          <Text style={styles.realDataNoticeTitle}>REAL portfolio unavailable</Text>
+          <Text style={styles.realDataNoticeText}>
+            {realPortfolioNotice.message} GateCEP did not switch to Practice.
+          </Text>
+          {realPortfolioNotice.status === "AUTH_EXPIRED" ||
+          realPortfolioNotice.status === "AUTH_REQUIRED" ? (
+            <Pressable
+              style={styles.realDataNoticeButton}
+              onPress={() => router.push("/login")}
+            >
+              <Text style={styles.realDataNoticeButtonText}>Sign In Again</Text>
+            </Pressable>
+          ) : null}
+        </View>
+      ) : null}
+
       <Pressable
   style={styles.accountSelector}
   onPress={() => setAccountModalOpen(true)}
@@ -328,11 +295,6 @@ export default function PortfolioHub() {
   <View>
     <Text style={styles.accountLabel}>Portfolio Source</Text>
     <Text style={styles.accountName}>{selectedAccount.label}</Text>
- {selectedAccount?.type === "PRACTICE" ? (
-  <Text style={styles.practiceSourceText}>
-    Simulated learning portfolio • No real money
-  </Text>
-) : null}   
   </View>
 
   <Text style={styles.accountChevron}>⌄</Text>
@@ -340,9 +302,7 @@ export default function PortfolioHub() {
 
       <View style={styles.hero}>
         <Text style={styles.heroLabel}>
-  {selectedAccount?.type === "PRACTICE"
-    ? "Practice Net Worth"
-    : selectedAccount?.type === "ALL"
+  {selectedAccount?.type === "ALL"
       ? "Real Investment Net Worth"
       : "Account Net Worth"}
 </Text>
@@ -690,6 +650,24 @@ export default function PortfolioHub() {
               Portfolio Analytics
             </Text>
           </Pressable>
+
+          <Pressable
+            style={styles.specialistButton}
+            onPress={() => router.push("/portfolio-sync-center")}
+          >
+            <Text style={styles.specialistButtonText}>
+              Sync & Reconcile
+            </Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.specialistButton}
+            onPress={() => router.push("/starter-plan")}
+          >
+            <Text style={styles.specialistButtonText}>
+              Open Separate Practice Demo
+            </Text>
+          </Pressable>
         </View>
       </View>
 
@@ -729,12 +707,9 @@ export default function PortfolioHub() {
 </Text>
 
             <Text style={styles.accountOptionMeta}>
-  {account.type === "PRACTICE"
-    ? "Practice • Simulated learning portfolio"
-    : account.type || account.broker || "BROKER"}
+  {account.type || account.broker || "BROKER"}
 
-  {account.type !== "PRACTICE" &&
-  account.totalValue !== undefined
+  {account.totalValue !== undefined
     ? ` • KES ${money(account.totalValue)}`
     : ""}
 </Text>
@@ -1398,12 +1373,6 @@ pendingText: {
   fontWeight: "800",
   marginTop: 3
 },
-practiceSourceText: {
-  color: "#67e8f9",
-  fontSize: 11,
-  marginTop: 4,
-  fontWeight: "800"
-},
 settlementBadge: {
   color: "#facc15",
   fontSize: 10,
@@ -1452,5 +1421,34 @@ settlementBadge: {
   specialistButtonText: {
     color: "#e2e8f0",
     fontWeight: "800"
+  },
+  realDataNotice: {
+    marginTop: 14,
+    backgroundColor: "rgba(127,29,29,.25)",
+    borderColor: "#ef4444",
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14
+  },
+  realDataNoticeTitle: {
+    color: "#fecaca",
+    fontWeight: "900"
+  },
+  realDataNoticeText: {
+    color: "#fca5a5",
+    marginTop: 6,
+    lineHeight: 19
+  },
+  realDataNoticeButton: {
+    marginTop: 12,
+    alignSelf: "flex-start",
+    backgroundColor: "#ef4444",
+    borderRadius: 12,
+    paddingVertical: 9,
+    paddingHorizontal: 14
+  },
+  realDataNoticeButtonText: {
+    color: "white",
+    fontWeight: "900"
   }
 });

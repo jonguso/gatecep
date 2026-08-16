@@ -1,391 +1,191 @@
 import React, { useCallback, useState } from "react";
-import {
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View
-} from "react-native";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
+
 import { userGetItem } from "../src/auth/userStorage";
 import { loadUnifiedPortfolio } from "../src/portfolio/unifiedPortfolioApi";
+import { loadBrokerMirror } from "../src/features/broker-sync/brokerSyncService";
+import { buildBrokerReconciliation } from "../src/features/broker-sync/brokerReconciliationService";
 import ActiveUserBanner from "../src/components/ActiveUserBanner";
-import { buildSyncStatus } from "../src/portfolio/syncStatus";
+import {
+  CollapsibleSection,
+  DeveloperIdentifier,
+  JourneyStepper,
+  MetricStrip,
+  MobileHeader,
+  MobileScreen,
+  StatusBanner,
+  StickyActionBar
+} from "../src/components/mobile/MobileUI";
+
+const STEPS = ["Evidence", "Compare", "Review", "Resolve", "Complete"];
 
 export default function PortfolioSyncCenter() {
-  const [cash, setCash] = useState(0);
-  const [holdingsCount, setHoldingsCount] = useState(0);
-  const [portfolioValue, setPortfolioValue] = useState(0);
-  const [portfolioUploaded, setPortfolioUploaded] = useState(false);
-  const [cashUploaded, setCashUploaded] = useState(false);
-  const [transactionsUploaded, setTransactionsUploaded] = useState(false);
-  const [syncStatus, setSyncStatus] = useState(null);
-  const [portfolioSource, setPortfolioSource] = useState("");
+  const [state, setState] = useState({ loading: true, error: "", holdingsCount: 0, portfolioValue: 0, cash: 0, source: "", mirror: null, reconciliation: null });
 
-  useFocusEffect(
-    useCallback(() => {
-      load();
-    }, [])
-  );
+  useFocusEffect(useCallback(() => { load(); }, []));
 
   async function load() {
-    const portfolio = await loadUnifiedPortfolio();
-    const holdings = portfolio?.holdings || [];
-    const cashRaw = await userGetItem("availableCash");
-    const portfolioUploadedRaw = await userGetItem("statementUploaded");
-    const cashUploadedRaw = await userGetItem("cashStatementUploaded");
-    const transactionsUploadedRaw = await userGetItem("transactionsUploaded");
-    const status = await buildSyncStatus();
-    setSyncStatus(status);
-
-    setCash(Number(cashRaw || 0));
-    setHoldingsCount(holdings.length);
-    setPortfolioValue(
-      holdings.reduce(
-        (sum, h) => sum + Number(h.marketValue || h.value || 0),
-        0
-      )
-    );
-
-    setPortfolioUploaded(portfolioUploadedRaw === "true");
-    setCashUploaded(cashUploadedRaw === "true");
-    setTransactionsUploaded(transactionsUploadedRaw === "true");
-    setPortfolioSource(portfolio?.priceSource || portfolio?.source || "");
+    try {
+      const [portfolio, cashRaw, mirror, reconciliation] = await Promise.all([
+        loadUnifiedPortfolio(),
+        userGetItem("availableCash"),
+        loadBrokerMirror(),
+        buildBrokerReconciliation()
+      ]);
+      const holdings = portfolio?.holdings || [];
+      setState({
+        loading: false,
+        error: "",
+        holdingsCount: holdings.length,
+        portfolioValue: holdings.reduce((sum, item) => sum + Number(item.marketValue || item.value || 0), 0),
+        cash: Number(cashRaw || 0),
+        source: portfolio?.priceSource || portfolio?.source || "",
+        mirror,
+        reconciliation
+      });
+    } catch (error) {
+      setState((current) => ({ ...current, loading: false, error: error?.message || "Unable to load the REAL synchronization state." }));
+    }
   }
 
+  const valuationReady = Boolean(state.mirror);
+  const cashEvidenceReady = state.mirror?.cashEvidenceAvailable === true;
+  const evidenceReady = valuationReady && cashEvidenceReady;
+
+  function continueJourney() {
+    if (!valuationReady) return router.push("/import-portfolio?mode=RECONCILE");
+    if (!cashEvidenceReady) return router.push("/(tabs)/funds?mode=RECONCILE");
+    router.push("/broker-reconciliation");
+  }
+
+  const primaryLabel = !valuationReady
+    ? "Upload Portfolio Valuation"
+    : !cashEvidenceReady
+    ? "Upload Cash / Ledger Evidence"
+    : "Continue to Comparison";
+
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <View style={styles.headerRow}>
-        <Text style={styles.title}>Portfolio Sync Center</Text>
-
-        <Pressable
-          style={styles.dashboardButton}
-          onPress={() => router.replace("/(tabs)/dashboard")}
-        >
-          <Text style={styles.dashboardButtonText}>Dashboard</Text>
-        </Pressable>
-      </View>
-
-      <Text style={styles.subtitle}>
-        Sync holdings, cash, transactions, and Coach G intelligence from one
-        place.
-      </Text>
-
+    <MobileScreen
+      testID="portfolio-sync-mobile"
+      footer={
+        <StickyActionBar
+          secondaryLabel="Portfolio"
+          onSecondary={() => router.replace("/portfolio-hub")}
+          primaryLabel={primaryLabel}
+          onPrimary={continueJourney}
+        />
+      }
+    >
+      <DeveloperIdentifier>PC-030M3A</DeveloperIdentifier>
+      <MobileHeader
+        title="Sync & Reconcile"
+        subtitle="Step 1: collect independent broker evidence without changing the canonical REAL portfolio."
+        onBack={() => router.replace("/portfolio-hub")}
+        actionLabel="History"
+        onAction={() => router.push("/broker-sync-history")}
+      />
+      <JourneyStepper steps={STEPS} activeIndex={0} />
       <ActiveUserBanner />
 
-      {portfolioSource ? (
-  <Text style={styles.syncNote}>Portfolio source: {portfolioSource}</Text>
-) : null}
+      {state.error ? <StatusBanner tone="danger" title="REAL data unavailable" message={state.error} /> : null}
 
-<View style={styles.summary}>
-        <Metric label="Holdings" value={String(holdingsCount)} />
-        <Metric label="Portfolio" value={`KES ${money(portfolioValue)}`} />
-        <Metric label="Cash" value={`KES ${money(cash)}`} />
-      </View>
+      <MetricStrip items={[
+        { label: "REAL Holdings", value: state.loading ? "…" : state.holdingsCount },
+        { label: "REAL Portfolio", value: `KES ${money(state.portfolioValue)}` },
+        { label: "REAL Cash", value: `KES ${money(state.cash)}` }
+      ]} />
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Sync Status</Text>
-
-        <StatusRow label="Portfolio Valuation" done={portfolioUploaded} />
-        <StatusRow label="Cash Statement" done={cashUploaded} />
-        <StatusRow label="Transaction History" done={transactionsUploaded} />
-      </View>
-
-       <View style={styles.card}>
-  <Text style={styles.cardTitle}>Portfolio Sync Status</Text>
-
-  <StatusRow
-    label="Broker"
-    done={syncStatus?.brokerConnected}
-    value={syncStatus?.broker || "No broker"}
-  />
-
-  <StatusRow
-    label="Portfolio Holdings"
-    done={Number(syncStatus?.holdingsCount || 0) > 0}
-    value={`${syncStatus?.holdingsCount || 0} holdings`}
-  />
-
-  <StatusRow
-    label="Transactions"
-    done={Number(syncStatus?.transactionCount || 0) > 0}
-    value={`${syncStatus?.transactionCount || 0} records`}
-  />
-
-  <StatusRow
-    label="Available Cash"
-    done={Number(syncStatus?.availableCash || 0) > 0}
-    value={`KES ${money(syncStatus?.availableCash || 0)}`}
-  />
-
-  <Text style={styles.syncNote}>
-    Last updated:{" "}
-    {syncStatus?.updatedAt
-      ? new Date(syncStatus.updatedAt).toLocaleString()
-      : "N/A"}
-  </Text>
-</View>
+      <StatusBanner
+        tone={evidenceReady ? "success" : "warning"}
+        title={evidenceReady ? "Broker evidence complete" : "Broker evidence required"}
+        message={evidenceReady
+          ? "Portfolio valuation and cash/ledger evidence are ready for comparison."
+          : "Both the current portfolio valuation and cash/ledger statement are required."}
+      />
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Upload & Sync</Text>
-
-        <SyncAction
-          title="Upload Portfolio Valuation"
-          detail="Import holdings and market value from broker valuation."
-          route="/broker-upload"
+        <EvidenceRow
+          label="Portfolio Valuation"
+          ready={valuationReady}
+          value={valuationReady ? `${state.mirror.holdings?.length || 0} holdings • ${state.mirror.accountName || state.mirror.broker}` : "Required"}
+          actionLabel={valuationReady ? "Replace" : "Upload"}
+          onPress={() => router.push("/import-portfolio?mode=RECONCILE")}
         />
-
-        <SyncAction
-          title="Upload Cash Statement"
-          detail="Import available cash, ledger balance, or trading space."
-          route="/funds"
-        />
-
-        <SyncAction
-          title="Upload Transaction History"
-          detail="Import buy/sell activity for Coach G behavior analysis."
-          route="/transactions-upload"
-        />
-
-        <SyncAction
-          title="Manual Portfolio Entry"
-          detail="Manually enter or edit holdings."
-          route="/manual-portfolio-entry"
+        <EvidenceRow
+          label="Cash / Ledger Statement"
+          ready={cashEvidenceReady}
+          value={cashEvidenceReady ? `KES ${money(state.mirror.cashBalance)}` : valuationReady ? "Required to complete comparison" : "Upload valuation first"}
+          actionLabel={cashEvidenceReady ? "Replace" : "Upload"}
+          disabled={!valuationReady}
+          onPress={() => router.push("/(tabs)/funds?mode=RECONCILE")}
         />
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>After Sync</Text>
+      <CollapsibleSection title="Connected Broker API" summary="Optional when a live adapter is available">
+        <Text style={styles.body}>A live broker adapter can supply both valuation and cash evidence. Pending API profiles do not count as synchronized.</Text>
+        <ActionButton label="Open Connected Broker Sync" onPress={() => router.push("/broker-sync")} />
+      </CollapsibleSection>
 
-        <Text style={styles.body}>
-          Gatecep updates Dashboard, Holdings, Performance, Coach G Insights,
-          Watchlist, and Portfolio Activity using the latest synced data.
-        </Text>
+      <CollapsibleSection title="Manage Canonical REAL Data" summary="Initial portfolio, cash, transactions, and manual entry">
+        <Text style={styles.body}>These actions change or establish GateCEP's REAL record. They are separate from read-only reconciliation evidence.</Text>
+        <ActionButton label="Create Initial REAL Portfolio" onPress={() => router.push("/broker-upload")} />
+        <ActionButton label="Update REAL Cash" onPress={() => router.push("/(tabs)/funds")} />
+        <ActionButton label="Upload Transaction History" onPress={() => router.push("/transactions-upload")} />
+        <ActionButton label="Manual Portfolio Entry" onPress={() => router.push("/manual-portfolio-entry")} />
+      </CollapsibleSection>
 
-        <Pressable
-          style={styles.primary}
-          onPress={() => router.push("/broker-sync")}
-        >
-          <Text style={styles.primaryText}>Open Broker Reconciliation</Text>
-        </Pressable>
-
-        <Pressable
-          style={styles.secondary}
-          onPress={() => router.push("/(tabs)/coach")}
-        >
-          <Text style={styles.secondaryText}>Open Coach G Insights</Text>
-        </Pressable>
-      </View>
-    </ScrollView>
+      {state.reconciliation?.status && evidenceReady ? (
+        <StatusBanner
+          tone={state.reconciliation.status === "MATCHED" ? "success" : "info"}
+          title={`Latest comparison: ${friendlyStatus(state.reconciliation.status)}`}
+          message="Continue to review the current comparison."
+        />
+      ) : null}
+    </MobileScreen>
   );
 }
 
-function Metric({ label, value }) {
+function EvidenceRow({ label, ready, value, actionLabel, onPress, disabled = false }) {
   return (
-    <View style={styles.metric}>
-      <Text style={styles.metricLabel}>{label}</Text>
-      <Text style={styles.metricValue}>{value}</Text>
+    <View style={styles.evidenceRow}>
+      <View style={styles.evidenceText}>
+        <Text style={styles.evidenceLabel}>{label}</Text>
+        <Text style={styles.evidenceValue}>{value}</Text>
+        <Text style={ready ? styles.ready : styles.required}>{ready ? "READY" : "REQUIRED"}</Text>
+      </View>
+      <Pressable style={[styles.smallButton, disabled && styles.disabled]} disabled={disabled} onPress={onPress}>
+        <Text style={styles.smallButtonText}>{actionLabel}</Text>
+      </Pressable>
     </View>
   );
 }
 
-
-function StatusRow({ label, done, value }) {
+function ActionButton({ label, onPress }) {
   return (
-    <View style={styles.statusRow}>
-      <View>
-        <Text style={styles.statusLabel}>{label}</Text>
-        {value ? <Text style={styles.statusValue}>{value}</Text> : null}
-      </View>
-
-      <Text style={done ? styles.done : styles.missing}>
-        {done ? "SYNCED" : "MISSING"}
-      </Text>
-    </View>
-  );
-}
-
-function SyncAction({ title, detail, route }) {
-  return (
-    <Pressable style={styles.syncAction} onPress={() => router.push(route)}>
-      <View style={{ flex: 1 }}>
-        <Text style={styles.actionTitle}>{title}</Text>
-        <Text style={styles.actionDetail}>{detail}</Text>
-      </View>
-
+    <Pressable style={styles.actionButton} onPress={onPress}>
+      <Text style={styles.actionButtonText}>{label}</Text>
       <Text style={styles.arrow}>›</Text>
     </Pressable>
   );
 }
 
-function money(value) {
-  return Number(value || 0).toLocaleString(undefined, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2
-  });
-}
+function friendlyStatus(value) { return String(value || "").replaceAll("_", " "); }
+function money(value) { return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: "#020617"
-  },
-  content: {
-    padding: 22,
-    paddingTop: 70,
-    paddingBottom: 100
-  },
-  headerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 12
-  },
-  title: {
-    color: "white",
-    fontSize: 30,
-    fontWeight: "900",
-    flex: 1
-  },
-  subtitle: {
-    color: "#94a3b8",
-    marginTop: 10,
-    lineHeight: 22
-  },
-  dashboardButton: {
-    backgroundColor: "#1e293b",
-    borderColor: "#334155",
-    borderWidth: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 14
-  },
-  dashboardButtonText: {
-    color: "#67e8f9",
-    fontWeight: "900"
-  },
-  summary: {
-    marginTop: 18,
-    flexDirection: "row",
-    gap: 10
-  },
-  metric: {
-    flex: 1,
-    backgroundColor: "#0f172a",
-    borderColor: "#1e293b",
-    borderWidth: 1,
-    borderRadius: 18,
-    padding: 14
-  },
-  metricLabel: {
-    color: "#94a3b8",
-    fontSize: 11
-  },
-  metricValue: {
-    color: "white",
-    fontWeight: "900",
-    marginTop: 8,
-    fontSize: 13
-  },
-  card: {
-    marginTop: 20,
-    backgroundColor: "#0f172a",
-    borderColor: "#1e293b",
-    borderWidth: 1,
-    borderRadius: 22,
-    padding: 18
-  },
-  cardTitle: {
-    color: "#67e8f9",
-    fontSize: 18,
-    fontWeight: "900",
-    marginBottom: 12
-  },
-  statusRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    borderBottomColor: "#1e293b",
-    borderBottomWidth: 1,
-    paddingVertical: 12
-  },
-  statusLabel: {
-    color: "white",
-    fontWeight: "800"
-  },
-  done: {
-    color: "#86efac",
-    fontWeight: "900"
-  },
-  missing: {
-    color: "#fca5a5",
-    fontWeight: "900"
-  },
-  syncAction: {
-    backgroundColor: "#020617",
-    borderColor: "#1e293b",
-    borderWidth: 1,
-    borderRadius: 18,
-    padding: 16,
-    marginTop: 12,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    gap: 12
-  },
-  actionTitle: {
-    color: "white",
-    fontWeight: "900",
-    fontSize: 15
-  },
-  actionDetail: {
-    color: "#94a3b8",
-    marginTop: 5,
-    lineHeight: 18,
-    fontSize: 12
-  },
-  arrow: {
-    color: "#c084fc",
-    fontSize: 28,
-    fontWeight: "900"
-  },
-  body: {
-    color: "#cbd5e1",
-    lineHeight: 21,
-    marginTop: 8
-  },
-  primary: {
-    marginTop: 18,
-    backgroundColor: "#9333ea",
-    padding: 18,
-    borderRadius: 16
-  },
-
-statusValue: {
-  color: "#94a3b8",
-  marginTop: 4,
-  fontSize: 12
-},
-
-syncNote: {
-  color: "#64748b",
-  marginTop: 14,
-  fontSize: 12
-},
-
-  primaryText: {
-    color: "white",
-    textAlign: "center",
-    fontWeight: "900"
-  },
-  secondary: {
-    marginTop: 12,
-    backgroundColor: "#1e293b",
-    padding: 16,
-    borderRadius: 16
-  },
-  secondaryText: {
-    color: "#67e8f9",
-    textAlign: "center",
-    fontWeight: "900"
-  }
+  card: { marginTop: 14, backgroundColor: "#0f172a", borderColor: "#1e293b", borderWidth: 1, borderRadius: 18, overflow: "hidden" },
+  evidenceRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 15, borderBottomColor: "#1e293b", borderBottomWidth: 1 },
+  evidenceText: { flex: 1 },
+  evidenceLabel: { color: "white", fontWeight: "900", fontSize: 15 },
+  evidenceValue: { color: "#94a3b8", marginTop: 4, lineHeight: 18, fontSize: 12 },
+  ready: { color: "#86efac", fontWeight: "900", fontSize: 10, marginTop: 6 },
+  required: { color: "#fbbf24", fontWeight: "900", fontSize: 10, marginTop: 6 },
+  smallButton: { backgroundColor: "#1e293b", borderRadius: 12, paddingVertical: 11, paddingHorizontal: 13 },
+  smallButtonText: { color: "#67e8f9", fontWeight: "900", fontSize: 12 },
+  disabled: { opacity: 0.4 },
+  body: { color: "#cbd5e1", lineHeight: 20 },
+  actionButton: { marginTop: 10, backgroundColor: "#020617", borderRadius: 14, padding: 14, flexDirection: "row", alignItems: "center" },
+  actionButtonText: { color: "white", fontWeight: "900", flex: 1 },
+  arrow: { color: "#c084fc", fontSize: 24, fontWeight: "900" }
 });

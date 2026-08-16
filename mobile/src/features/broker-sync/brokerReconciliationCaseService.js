@@ -64,7 +64,9 @@ export async function buildBrokerReconciliationCaseWorkflow() {
         new Date().toISOString(),
 
       workflowStatus:
-        "IN_SYNC",
+        reconciliation?.status === "CASH_EVIDENCE_REQUIRED"
+          ? "EVIDENCE_REQUIRED"
+          : "IN_SYNC",
 
       case:
         null,
@@ -370,6 +372,7 @@ function buildPhysicalDiscrepancies(
     );
 
   if (
+    reconciliation?.summary?.cashEvidenceAvailable === true &&
     Math.abs(
       cashDifference
     ) >= 0.01

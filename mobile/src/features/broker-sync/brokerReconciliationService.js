@@ -3,7 +3,8 @@ import {
 } from "./canonicalRealBrokerPortfolioService";
 
 import {
-  loadBrokerMirror
+  loadBrokerMirror,
+  isVerifiedRealBrokerMirror
 } from "./brokerSyncService";
 
 function number(value) {
@@ -124,6 +125,18 @@ export async function buildBrokerReconciliation() {
 
       summary:
         emptySummary()
+    };
+  }
+
+  if (!isVerifiedRealBrokerMirror(brokerMirror)) {
+    return {
+      status: "NO_VERIFIED_BROKER_MIRROR",
+      message:
+        "A fresh connected-broker synchronization is required before reconciliation.",
+      realPortfolio,
+      brokerMirror: null,
+      holdings: [],
+      summary: emptySummary()
     };
   }
 
@@ -319,18 +332,17 @@ export async function buildBrokerReconciliation() {
       )
     );
 
-  const brokerCash =
-    roundMoney(
-      brokerMirror
-        ?.cashBalance ||
-      0
-    );
+  const cashEvidenceAvailable =
+    brokerMirror?.runtimeMode === "REAL_CONNECTED" ||
+    brokerMirror?.cashEvidenceAvailable === true;
 
-  const brokerTotal =
-    roundMoney(
-      brokerValue +
-      brokerCash
-    );
+  const brokerCash = cashEvidenceAvailable
+    ? roundMoney(brokerMirror?.cashBalance || 0)
+    : null;
+
+  const brokerTotal = cashEvidenceAvailable
+    ? roundMoney(brokerValue + brokerCash)
+    : null;
 
   const matchedHoldings =
     holdingResults.filter(
@@ -367,26 +379,21 @@ export async function buildBrokerReconciliation() {
         "DIFFERENT"
     );
 
-  const cashDifference =
-    roundMoney(
-      brokerCash -
-      realCash
-    );
+  const cashDifference = cashEvidenceAvailable
+    ? roundMoney(brokerCash - realCash)
+    : null;
 
-  const totalDifference =
-    roundMoney(
-      brokerTotal -
-      realTotal
-    );
+  const totalDifference = cashEvidenceAvailable
+    ? roundMoney(brokerTotal - realTotal)
+    : null;
 
   const holdingsFullyMatched =
   mismatchedHoldings.length ===
   0;
 
 const cashFullyMatched =
-  Math.abs(
-    cashDifference
-  ) < 0.01;
+  cashEvidenceAvailable &&
+  Math.abs(cashDifference) < 0.01;
 
 const totalFullyMatched =
   Math.abs(
@@ -404,7 +411,10 @@ const partiallyMatched =
 
 let status;
 
-if (fullyMatched) {
+if (!cashEvidenceAvailable && holdingsFullyMatched) {
+  status =
+    "CASH_EVIDENCE_REQUIRED";
+} else if (fullyMatched) {
   status =
     "MATCHED";
 } else if (
@@ -474,6 +484,8 @@ if (fullyMatched) {
   cashBalance:
     brokerCash,
 
+  cashEvidenceAvailable,
+
   totalValue:
     brokerTotal,
 
@@ -513,6 +525,15 @@ if (fullyMatched) {
 
       cashDifference,
 
+      cashEvidenceAvailable,
+
+      cashReconciliationStatus:
+        cashEvidenceAvailable
+          ? cashFullyMatched
+            ? "MATCHED"
+            : "MISMATCHED"
+          : "EVIDENCE_REQUIRED",
+
       totalDifference
     }
   };
@@ -527,6 +548,8 @@ function emptySummary() {
     extraAtBroker: 0,
     differentHoldings: 0,
     cashDifference: 0,
+    cashEvidenceAvailable: false,
+    cashReconciliationStatus: "EVIDENCE_REQUIRED",
     totalDifference: 0
   };
 }
@@ -545,6 +568,11 @@ function buildStatusMessage({
     case "HOLDINGS_MATCH":
       return (
         `${matched} holdings match, but the cash balance or total account value still requires reconciliation.`
+      );
+
+    case "CASH_EVIDENCE_REQUIRED":
+      return (
+        `${matched} holdings match. Upload the current broker cash or ledger statement to complete reconciliation.`
       );
 
     case "PARTIAL_MATCH":

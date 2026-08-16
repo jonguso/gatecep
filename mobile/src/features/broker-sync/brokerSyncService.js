@@ -1,6 +1,7 @@
 import {
   userGetItem,
-  userSetItem
+  userSetItem,
+  userRemoveItem
 } from "../../auth/userStorage";
 import {
   loadBrokerAccounts
@@ -14,6 +15,20 @@ const BROKER_MIRROR_KEY =
 
 const BROKER_SYNC_STATUS_KEY =
   "brokerSyncStatus";
+
+const VERIFIED_REAL_MIRROR_MODES = new Set([
+  "REAL_CONNECTED",
+  "REAL_VERIFIED_UPLOAD"
+]);
+
+export function isVerifiedRealBrokerMirror(mirror) {
+  return Boolean(
+    mirror &&
+      VERIFIED_REAL_MIRROR_MODES.has(String(mirror.runtimeMode || "")) &&
+      !String(mirror.broker || "").toUpperCase().includes("SANDBOX") &&
+      !String(mirror.source || "").toUpperCase().includes("PRACTICE")
+  );
+}
 
 function parseStoredValue(value) {
   if (!value) {
@@ -243,7 +258,23 @@ export async function saveBrokerMirror(
       "ACTIVE",
 
     source:
-      "BROKER_SYNC",
+      brokerAccount?.source ||
+      "UNVERIFIED_BROKER_MIRROR",
+
+    runtimeMode:
+      brokerAccount?.runtimeMode ||
+      "UNVERIFIED",
+
+    evidenceFileName:
+      brokerAccount?.fileName ||
+      null,
+
+    cashEvidenceAvailable:
+      brokerAccount?.cashEvidenceAvailable === true,
+
+    cashEvidenceFileName:
+      brokerAccount?.cashEvidenceFileName ||
+      null,
 
     ...normalized,
 
@@ -274,7 +305,13 @@ export async function saveBrokerMirror(
         mirror.syncedAt,
 
       holdingsCount:
-        mirror.holdings.length
+        mirror.holdings.length,
+
+      source:
+        mirror.source,
+
+      runtimeMode:
+        mirror.runtimeMode
     })
   );
 
@@ -293,9 +330,26 @@ export async function loadBrokerMirror() {
       BROKER_MIRROR_KEY
     );
 
-  return parseStoredValue(
-    raw
-  );
+  const mirror = parseStoredValue(raw);
+
+  if (!isVerifiedRealBrokerMirror(mirror)) {
+    if (mirror) {
+      await userSetItem(
+        "quarantinedLegacyBrokerMirror",
+        JSON.stringify({
+          mirror,
+          quarantinedAt: new Date().toISOString(),
+          reason: "UNVERIFIED_OR_SANDBOX_MIRROR"
+        })
+      );
+      await userRemoveItem(BROKER_MIRROR_KEY);
+      await userRemoveItem(BROKER_SYNC_STATUS_KEY);
+    }
+
+    return null;
+  }
+
+  return mirror;
 }
 
 /*
@@ -305,14 +359,79 @@ export async function loadBrokerMirror() {
  */
 
 export async function loadBrokerSyncStatus() {
+  const mirror = await loadBrokerMirror();
+
+  if (!mirror) {
+    return null;
+  }
+
   const raw =
     await userGetItem(
       BROKER_SYNC_STATUS_KEY
     );
 
-  return parseStoredValue(
-    raw
-  );
+  const status = parseStoredValue(raw);
+
+  return status?.runtimeMode === mirror.runtimeMode
+    ? status
+    : null;
+}
+
+export async function saveVerifiedUploadedBrokerMirror({
+  holdings = [],
+  cashBalance = null,
+  broker = "Uploaded Broker Valuation",
+  accountName = "Verified Valuation Upload",
+  fileName = null
+} = {}) {
+  if (!Array.isArray(holdings) || !holdings.length) {
+    throw new Error("A verified broker upload must contain holdings.");
+  }
+
+  return saveBrokerMirror({
+    brokerAccountId: fileName ? `UPLOAD:${fileName}` : `UPLOAD:${Date.now()}`,
+    broker,
+    accountName,
+    currency: "KES",
+    cashBalance: cashBalance ?? 0,
+    cashEvidenceAvailable:
+      cashBalance !== null && cashBalance !== undefined && cashBalance !== "",
+    holdings,
+    source: "BROKER_VALUATION_UPLOAD",
+    runtimeMode: "REAL_VERIFIED_UPLOAD",
+    fileName
+  });
+}
+
+export async function attachVerifiedBrokerCashEvidence({
+  cashBalance,
+  fileName = null,
+  broker = null
+} = {}) {
+  const amount = Number(cashBalance);
+
+  if (!Number.isFinite(amount) || amount < 0) {
+    throw new Error("Verified broker cash evidence requires a valid balance.");
+  }
+
+  const mirror = await loadBrokerMirror();
+
+  if (!mirror || mirror.runtimeMode !== "REAL_VERIFIED_UPLOAD") {
+    throw new Error(
+      "Upload the current broker portfolio valuation before adding cash evidence."
+    );
+  }
+
+  return saveBrokerMirror({
+    ...mirror,
+    broker: broker || mirror.broker,
+    fileName: mirror.evidenceFileName,
+    cashBalance: amount,
+    cashEvidenceAvailable: true,
+    cashEvidenceFileName: fileName,
+    source: "BROKER_VALUATION_AND_CASH_UPLOAD",
+    runtimeMode: "REAL_VERIFIED_UPLOAD"
+  });
 }
 
 /*
@@ -481,7 +600,12 @@ export async function syncMockBrokerAccount() {
  * This does not mutate GateCEP's canonical REAL portfolio.
  */
 export async function syncConnectedBrokerMirror() {
-  const accounts = await loadBrokerAccounts();
+  const accounts = (await loadBrokerAccounts()).filter((account) => {
+    const brokerId = String(account?.brokerId || account?.id || "").toUpperCase();
+    const mode = String(account?.connectionMode || "").toUpperCase();
+
+    return brokerId !== "SIM" && !mode.includes("PRACTICE") && !mode.includes("DEMO");
+  });
 
   if (!accounts.length) {
     throw new Error("No connected broker account is available to synchronize.");
@@ -521,6 +645,8 @@ export async function syncConnectedBrokerMirror() {
     currency: "KES",
     cashBalance,
     holdings,
-    source: "CONNECTED_BROKER_ACCOUNTS"
+    cashEvidenceAvailable: true,
+    source: "CONNECTED_BROKER_ACCOUNTS",
+    runtimeMode: "REAL_CONNECTED"
   });
 }

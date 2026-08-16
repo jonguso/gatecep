@@ -1,752 +1,190 @@
-import React, {
-  useEffect,
-  useState
-} from "react";
+import React, { useCallback, useState } from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
+import { router, useFocusEffect } from "expo-router";
 
+import { buildBrokerReconciliation } from "../src/features/broker-sync/brokerReconciliationService";
 import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View
-} from "react-native";
+  CollapsibleSection,
+  DeveloperIdentifier,
+  IssuePager,
+  JourneyStepper,
+  MetricStrip,
+  MobileHeader,
+  MobileScreen,
+  StatusBanner,
+  StickyActionBar
+} from "../src/components/mobile/MobileUI";
 
-import {
-  router
-} from "expo-router";
-
-import {
-  buildBrokerReconciliation
-} from "../src/features/broker-sync/brokerReconciliationService";
+const STEPS = ["Evidence", "Compare", "Review", "Resolve", "Complete"];
 
 export default function BrokerReconciliation() {
-  const [
-    loading,
-    setLoading
-  ] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [result, setResult] = useState(null);
+  const [error, setError] = useState("");
 
-  const [
-    result,
-    setResult
-  ] = useState(null);
-
-  const [
-    error,
-    setError
-  ] = useState("");
-
-  useEffect(() => {
-    loadReconciliation();
-  }, []);
+  useFocusEffect(useCallback(() => { loadReconciliation(); }, []));
 
   async function loadReconciliation() {
     try {
       setLoading(true);
       setError("");
-
-      const data =
-        await buildBrokerReconciliation();
-
-      setResult(data);
-    } catch (err) {
-      console.error(
-        "Unable to reconcile broker portfolio:",
-        err
-      );
-
-      setError(
-        err?.message ||
-          "Unable to reconcile the broker portfolio."
-      );
-
+      setResult(await buildBrokerReconciliation());
+    } catch (loadError) {
+      setError(loadError?.message || "Unable to compare the broker evidence with the REAL portfolio.");
       setResult(null);
     } finally {
       setLoading(false);
     }
   }
 
-  if (loading) {
-    return (
-      <View
-        style={
-          styles.center
-        }
-      >
-        <ActivityIndicator
-          size="large"
-          color="#67e8f9"
-        />
+  const status = result?.status || "NOT_READY";
+  const cashRequired = status === "CASH_EVIDENCE_REQUIRED";
+  const matched = status === "MATCHED";
+  const issues = (result?.holdings || []).filter((item) => item.status !== "MATCHED");
 
-        <Text
-          style={
-            styles.loadingText
-          }
-        >
-          Reconciling broker
-          holdings...
-        </Text>
-      </View>
-    );
+  function primaryAction() {
+    if (!result?.brokerMirror) return router.replace("/portfolio-sync-center");
+    if (cashRequired) return router.push("/(tabs)/funds?mode=RECONCILE");
+    if (matched) return router.push("/broker-reconciliation-insight");
+    return router.push("/broker-reconciliation-case");
   }
 
+  const primaryLabel = !result?.brokerMirror
+    ? "Return to Evidence"
+    : cashRequired
+    ? "Upload Cash / Ledger Evidence"
+    : matched
+    ? "Continue to Completion"
+    : "Review Differences";
+
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={
-        styles.content
+    <MobileScreen
+      testID="broker-reconciliation-mobile"
+      footer={
+        <StickyActionBar
+          secondaryLabel="Evidence"
+          onSecondary={() => router.replace("/portfolio-sync-center")}
+          primaryLabel={primaryLabel}
+          onPrimary={primaryAction}
+          primaryDisabled={loading}
+        />
       }
     >
-      <Text
-        style={styles.eyebrow}
-      >
-        PC-009
-      </Text>
+      <DeveloperIdentifier>PC-030M3A</DeveloperIdentifier>
+      <MobileHeader
+        title="Portfolio Comparison"
+        subtitle="Step 2: compare independent broker evidence with GateCEP's canonical REAL record."
+        onBack={() => router.replace("/portfolio-sync-center")}
+        actionLabel="Refresh"
+        onAction={loadReconciliation}
+      />
+      <JourneyStepper steps={STEPS} activeIndex={1} />
 
-      <Text
-        style={styles.title}
-      >
-        Broker Reconciliation
-      </Text>
-
-      <Text
-        style={styles.subtitle}
-      >
-        Compare GateCEP's portfolio
-        record with the synchronized
-        broker account.
-      </Text>
-
-      {error ? (
-        <View
-          style={
-            styles.errorCard
-          }
-        >
-          <Text
-            style={
-              styles.errorText
-            }
-          >
-            {error}
-          </Text>
-        </View>
-      ) : null}
+      {loading ? <StatusBanner tone="info" title="Comparing evidence…" message="Checking holdings, cash, and total account value." /> : null}
+      {error ? <StatusBanner tone="danger" title="Comparison unavailable" message={error} /> : null}
 
       {result ? (
         <>
-          <StatusCard
-            status={
-              result.status
-            }
-            message={
-              result.message
-            }
+          <StatusBanner
+            tone={statusTone(status)}
+            title={friendlyStatus(status)}
+            message={result.message}
           />
 
-          {result.realPortfolio &&
-          result.brokerMirror ? (
-            <>
-              <View
-                style={
-                  styles.metricGrid
-                }
-              >
-                <Metric
-                  label="Matched"
-                  value={
-                    result.summary
-                      .matched
-                  }
-                />
+          <MetricStrip items={[
+            { label: "Matched", value: result.summary?.matched || 0 },
+            { label: "Differences", value: result.summary?.mismatched || 0 },
+            { label: "REAL Total", value: `KES ${money(result.realPortfolio?.totalValue)}` },
+            { label: "Broker Total", value: result.summary?.cashEvidenceAvailable ? `KES ${money(result.brokerMirror?.totalValue)}` : "Cash required" }
+          ]} />
 
-                <Metric
-                  label="Mismatched"
-                  value={
-                    result.summary
-                      .mismatched
-                  }
-                />
+          <View style={styles.summaryCard}>
+            <ComparisonRow label="Holdings" value={`${result.summary?.matched || 0} matched • ${result.summary?.mismatched || 0} different`} tone={result.summary?.mismatched ? "warning" : "success"} />
+            <ComparisonRow
+              label="Cash / Ledger"
+              value={result.summary?.cashReconciliationStatus === "EVIDENCE_REQUIRED"
+                ? "Evidence required"
+                : result.summary?.cashReconciliationStatus === "MATCHED"
+                ? "Matched"
+                : `Difference: KES ${money(result.summary?.cashDifference)}`}
+              tone={result.summary?.cashReconciliationStatus === "MATCHED" ? "success" : "warning"}
+            />
+            <ComparisonRow
+              label="Total Difference"
+              value={result.summary?.cashEvidenceAvailable ? `KES ${money(result.summary?.totalDifference)}` : "N/A until cash evidence is supplied"}
+              tone={result.summary?.cashEvidenceAvailable && Math.abs(Number(result.summary?.totalDifference || 0)) < 0.01 ? "success" : "warning"}
+            />
+          </View>
 
-                <Metric
-                  label="Missing at Broker"
-                  value={
-                    result.summary
-                      .missingAtBroker
-                  }
-                />
-
-                <Metric
-                  label="Extra at Broker"
-                  value={
-                    result.summary
-                      .extraAtBroker
-                  }
-                />
-              </View>
-
-              <View
-                style={styles.card}
-              >
-                <Text
-                  style={
-                    styles.cardTitle
-                  }
-                >
-                  Value Reconciliation
-                </Text>
-
-                <Row
-                  label="GateCEP Total"
-                  value={`KES ${money(
-                    result
-                      .realPortfolio
-                      .totalValue
-                  )}`}
-                />
-
-                <Row
-                  label="Broker Total"
-                  value={`KES ${money(
-                    result
-                      .brokerMirror
-                      .totalValue
-                  )}`}
-                />
-
-                <Row
-                  label="Difference"
-                  value={`KES ${money(
-                    result.summary
-                      .totalDifference
-                  )}`}
-                />
-
-                <Row
-                  label="Cash Difference"
-                  value={`KES ${money(
-                    result.summary
-                      .cashDifference
-                  )}`}
-                />
-              </View>
-
-              <View
-                style={styles.card}
-              >
-                <Text
-                  style={
-                    styles.cardTitle
-                  }
-                >
-                  Holding Comparison
-                </Text>
-
-                {(
-                  result.holdings ||
-                  []
-                ).map(
-                  (item) => (
-                    <HoldingComparison
-                      key={
-                        item.symbol
-                      }
-                      item={
-                        item
-                      }
-                    />
-                  )
-                )}
-              </View>
-            </>
+          {issues.length ? (
+            <IssuePager issues={issues} renderIssue={(issue) => <IssueCard issue={issue} />} />
           ) : null}
+
+          <CollapsibleSection title="History & Operations" summary="Cases, actions, and synchronization history">
+            <ActionButton label="Current Reconciliation Case" onPress={() => router.push("/broker-reconciliation-case")} />
+            <ActionButton label="Correction Action Center" onPress={() => router.push("/broker-reconciliation-actions")} />
+            <ActionButton label="Case History" onPress={() => router.push("/broker-reconciliation-cases")} />
+            <ActionButton label="Sync History" onPress={() => router.push("/broker-sync-history")} />
+          </CollapsibleSection>
         </>
       ) : null}
-
-      <Pressable
-        style={
-          styles.primaryButton
-        }
-        onPress={
-          loadReconciliation
-        }
-      >
-        <Text
-          style={
-            styles.primaryButtonText
-          }
-        >
-          Refresh Reconciliation
-        </Text>
-      </Pressable>
-
-      <Pressable
-        style={
-          styles.secondaryButton
-        }
-        onPress={() =>
-          router.push(
-            "/broker-sync"
-          )
-        }
-      >
-        <Text
-          style={
-            styles.secondaryButtonText
-          }
-        >
-          Back to Broker Sync
-        </Text>
-      </Pressable>
-
-      <Pressable
-        style={
-          styles.secondaryButton
-        }
-        onPress={() =>
-          router.replace(
-            "/(tabs)/dashboard"
-          )
-        }
-      >
-        <Text
-          style={
-            styles.secondaryButtonText
-          }
-        >
-          Back to Dashboard
-        </Text>
-      </Pressable>
-    </ScrollView>
+    </MobileScreen>
   );
 }
 
-function StatusCard({
-  status,
-  message
-}) {
-  const statusStyle =
-    status === "MATCHED"
-      ? styles.statusGood
-      : status ===
-        "PARTIAL_MATCH"
-      ? styles.statusWarn
-      : styles.statusBad;
-
+function ComparisonRow({ label, value, tone }) {
   return (
-    <View
-      style={[
-        styles.statusCard,
-        statusStyle
-      ]}
-    >
-      <Text
-        style={
-          styles.statusLabel
-        }
-      >
-        RECONCILIATION STATUS
-      </Text>
-
-      <Text
-        style={
-          styles.statusTitle
-        }
-      >
-        {status}
-      </Text>
-
-      <Text
-        style={
-          styles.statusText
-        }
-      >
-        {message}
-      </Text>
-    </View>
-  );
-}
-
-function HoldingComparison({
-  item
-}) {
-  return (
-    <View
-      style={
-        styles.holdingRow
-      }
-    >
-      <View
-        style={{ flex: 1 }}
-      >
-        <Text
-          style={styles.symbol}
-        >
-          {item.symbol}
-        </Text>
-
-        <Text
-          style={
-            styles.holdingStatus
-          }
-        >
-          {item.status}
-        </Text>
+    <View style={styles.comparisonRow}>
+      <View style={styles.holdingText}>
+        <Text style={styles.rowLabel}>{label}</Text>
+        <Text style={styles.meta}>{value}</Text>
       </View>
-
-      <View
-        style={
-          styles.holdingColumn
-        }
-      >
-        <Text
-          style={
-            styles.holdingLabel
-          }
-        >
-          GateCEP
-        </Text>
-
-        <Text
-          style={
-            styles.holdingValue
-          }
-        >
-          Qty{" "}
-          {item.real
-            ?.quantity ??
-            0}
-        </Text>
-      </View>
-
-      <View
-        style={
-          styles.holdingColumn
-        }
-      >
-        <Text
-          style={
-            styles.holdingLabel
-          }
-        >
-          Broker
-        </Text>
-
-        <Text
-          style={
-            styles.holdingValue
-          }
-        >
-          Qty{" "}
-          {item.broker
-            ?.quantity ??
-            0}
-        </Text>
-      </View>
+      <View style={[styles.statusDot, tone === "success" ? styles.dotGood : styles.dotWarn]} />
     </View>
   );
 }
 
-function Metric({
-  label,
-  value
-}) {
+function IssueCard({ issue }) {
   return (
-    <View
-      style={styles.metric}
-    >
-      <Text
-        style={
-          styles.metricLabel
-        }
-      >
-        {label}
-      </Text>
-
-      <Text
-        style={
-          styles.metricValue
-        }
-      >
-        {String(value)}
-      </Text>
+    <View>
+      <Text style={styles.issueTitle}>{friendlyStatus(issue.status)}</Text>
+      <ComparisonRow label="GateCEP Quantity" value={String(issue.real?.quantity || 0)} tone="info" />
+      <ComparisonRow label="Broker Quantity" value={String(issue.broker?.quantity || 0)} tone="info" />
+      <ComparisonRow label="Quantity Difference" value={String(issue.quantityDifference || 0)} tone="warning" />
+      <ComparisonRow label="Value Difference" value={`KES ${money(issue.valueDifference)}`} tone="warning" />
     </View>
   );
 }
 
-function Row({
-  label,
-  value
-}) {
+function ActionButton({ label, onPress }) {
   return (
-    <View
-      style={styles.row}
-    >
-      <Text
-        style={styles.rowLabel}
-      >
-        {label}
-      </Text>
-
-      <Text
-        style={styles.rowValue}
-      >
-        {String(value)}
-      </Text>
-    </View>
+    <Pressable style={styles.actionButton} onPress={onPress}>
+      <Text style={styles.actionText}>{label}</Text>
+      <Text style={styles.arrow}>›</Text>
+    </Pressable>
   );
 }
 
-function money(value) {
-  return Number(
-    value || 0
-  ).toLocaleString(
-    "en-US",
-    {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }
-  );
+function statusTone(status) {
+  if (status === "MATCHED") return "success";
+  if (status === "OUT_OF_SYNC") return "danger";
+  return "warning";
 }
 
-const styles =
-  StyleSheet.create({
-    screen: {
-      flex: 1,
-      backgroundColor:
-        "#020617"
-    },
+function friendlyStatus(value) { return String(value || "").replaceAll("_", " "); }
+function money(value) { return Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 
-    content: {
-      padding: 22,
-      paddingTop: 70,
-      paddingBottom: 110
-    },
-
-    center: {
-      flex: 1,
-      backgroundColor:
-        "#020617",
-      alignItems:
-        "center",
-      justifyContent:
-        "center"
-    },
-
-    loadingText: {
-      color: "#94a3b8",
-      marginTop: 14
-    },
-
-    eyebrow: {
-      color: "#c084fc",
-      fontSize: 13,
-      fontWeight: "900"
-    },
-
-    title: {
-      color: "white",
-      fontSize: 30,
-      fontWeight: "900",
-      marginTop: 8
-    },
-
-    subtitle: {
-      color: "#94a3b8",
-      lineHeight: 22,
-      marginTop: 8,
-      marginBottom: 20
-    },
-
-    statusCard: {
-      borderWidth: 1,
-      borderRadius: 22,
-      padding: 18
-    },
-
-    statusGood: {
-      backgroundColor:
-        "rgba(34,197,94,.10)",
-      borderColor:
-        "rgba(34,197,94,.35)"
-    },
-
-    statusWarn: {
-      backgroundColor:
-        "rgba(245,158,11,.10)",
-      borderColor:
-        "rgba(245,158,11,.35)"
-    },
-
-    statusBad: {
-      backgroundColor:
-        "rgba(239,68,68,.10)",
-      borderColor:
-        "rgba(239,68,68,.35)"
-    },
-
-    statusLabel: {
-      color: "#94a3b8",
-      fontSize: 12,
-      fontWeight: "900"
-    },
-
-    statusTitle: {
-      color: "white",
-      fontSize: 22,
-      fontWeight: "900",
-      marginTop: 6
-    },
-
-    statusText: {
-      color: "#cbd5e1",
-      lineHeight: 21,
-      marginTop: 8
-    },
-
-    metricGrid: {
-      flexDirection: "row",
-      flexWrap: "wrap",
-      gap: 10,
-      marginTop: 18
-    },
-
-    metric: {
-      width: "47%",
-      backgroundColor:
-        "#0f172a",
-      borderColor:
-        "#1e293b",
-      borderWidth: 1,
-      borderRadius: 18,
-      padding: 15
-    },
-
-    metricLabel: {
-      color: "#94a3b8",
-      fontSize: 12
-    },
-
-    metricValue: {
-      color: "white",
-      fontSize: 20,
-      fontWeight: "900",
-      marginTop: 6
-    },
-
-    card: {
-      backgroundColor:
-        "#0f172a",
-      borderColor:
-        "#1e293b",
-      borderWidth: 1,
-      borderRadius: 20,
-      padding: 18,
-      marginTop: 16
-    },
-
-    cardTitle: {
-      color: "#67e8f9",
-      fontSize: 18,
-      fontWeight: "900"
-    },
-
-    row: {
-      flexDirection:
-        "row",
-      justifyContent:
-        "space-between",
-      gap: 16,
-      marginTop: 14
-    },
-
-    rowLabel: {
-      color: "#94a3b8",
-      flex: 1
-    },
-
-    rowValue: {
-      color: "white",
-      fontWeight: "900",
-      textAlign: "right",
-      flex: 1
-    },
-
-    holdingRow: {
-      flexDirection: "row",
-      alignItems: "center",
-      borderBottomWidth: 1,
-      borderBottomColor:
-        "#1e293b",
-      paddingVertical: 14
-    },
-
-    symbol: {
-      color: "white",
-      fontWeight: "900"
-    },
-
-    holdingStatus: {
-      color: "#67e8f9",
-      fontSize: 11,
-      marginTop: 4
-    },
-
-    holdingColumn: {
-      minWidth: 100,
-      alignItems: "flex-end"
-    },
-
-    holdingLabel: {
-      color: "#64748b",
-      fontSize: 11
-    },
-
-    holdingValue: {
-      color: "#cbd5e1",
-      fontWeight: "900",
-      marginTop: 4
-    },
-
-    primaryButton: {
-      backgroundColor:
-        "#9333ea",
-      padding: 17,
-      borderRadius: 18,
-      marginTop: 22
-    },
-
-    primaryButtonText: {
-      color: "white",
-      fontWeight: "900",
-      textAlign: "center"
-    },
-
-    secondaryButton: {
-      backgroundColor:
-        "#1e293b",
-      padding: 17,
-      borderRadius: 18,
-      marginTop: 12
-    },
-
-    secondaryButtonText: {
-      color: "#67e8f9",
-      fontWeight: "900",
-      textAlign: "center"
-    },
-
-    errorCard: {
-      backgroundColor:
-        "rgba(239,68,68,.10)",
-      borderColor:
-        "rgba(239,68,68,.35)",
-      borderWidth: 1,
-      borderRadius: 18,
-      padding: 16
-    },
-
-    errorText: {
-      color: "#fca5a5"
-    }
-  });
+const styles = StyleSheet.create({
+  summaryCard: { marginTop: 4, backgroundColor: "#0f172a", borderColor: "#1e293b", borderWidth: 1, borderRadius: 18, overflow: "hidden" },
+  comparisonRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderBottomColor: "#1e293b", borderBottomWidth: 1 },
+  holdingText: { flex: 1 },
+  rowLabel: { color: "white", fontWeight: "900" },
+  meta: { color: "#94a3b8", marginTop: 4, fontSize: 12 },
+  statusDot: { width: 10, height: 10, borderRadius: 5 },
+  dotGood: { backgroundColor: "#22c55e" },
+  dotWarn: { backgroundColor: "#f59e0b" },
+  issueTitle: { color: "#fbbf24", fontSize: 17, fontWeight: "900", marginBottom: 6 },
+  actionButton: { marginTop: 9, backgroundColor: "#020617", padding: 14, borderRadius: 14, flexDirection: "row", alignItems: "center" },
+  actionText: { color: "white", fontWeight: "900", flex: 1 },
+  arrow: { color: "#c084fc", fontSize: 24, fontWeight: "900" }
+});

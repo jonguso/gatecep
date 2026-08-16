@@ -2,21 +2,28 @@
   "expo": {
     "name": "GateCEP",
     "slug": "gatecep",
+    "version": "5.0.0",
     "scheme": "gatecep",
-    "android": {
-      "package": "com.gatecep.app",
-      "usesCleartextTraffic": true
-    },
-    "ios": {
-      "bundleIdentifier": "com.gatecep.app"
-    },
-    "extra": {
-      "eas": {
-        "projectId": "8c412c28-c7a5-4541-9484-7469917a1e8c"
-      }
-    },
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
     "plugins": [
-      "expo-font"
-    ]
+      "expo-router"
+    ],
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.gatecep.mobile"
+    },
+    "android": {
+      "package": "com.gatecep.mobile",
+      "edgeToEdgeEnabled": true,
+      "softwareKeyboardLayoutMode": "resize"
+    },
+    "web": {
+      "bundler": "metro"
+    },
+    "experiments": {
+      "typedRoutes": false
+    }
   }
 }

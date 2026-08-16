@@ -1,41 +1,23 @@
-# Gatecep Mobile
+# GateCEP Broker Valuation + Cash Evidence Follow-up
 
-Clean architecture mobile app for Gatecep Coach G.
+Apply this ZIP after `gatecep-broker-evidence-reconciliation.zip`.
 
-## Active Routing
+## Corrected reconciliation contract
 
-Expo Router active screens remain under:
+- Broker portfolio valuation supplies holdings evidence.
+- Broker cash/ledger statement supplies cash evidence.
+- Both are required before full account-value reconciliation is available.
+- Missing cash evidence is represented as `EVIDENCE_REQUIRED`, never KES 0.
+- A valuation-only match does not create a false cash mismatch or resolution case.
+- Reconciliation-mode cash upload does not change canonical REAL available cash.
 
-`app/`
+## Apply and verify
 
-## Clean Service Layer
+```bash
+cd ~/gatecep/mobile
+unzip -o ~/Downloads/gatecep-broker-valuation-cash-evidence.zip
+chmod +x scripts/verify-broker-evidence-reconciliation.sh
+bash scripts/verify-broker-evidence-reconciliation.sh
+```
 
-Business logic is grouped under:
-
-`src/services/`
-
-Legacy folders under `src/` are compatibility wrappers and should not receive new business logic.
-
-## Source of Truth
-
-Portfolio holdings come from backend Broker Mirror valuation through:
-
-`GET /broker-portfolio/:broker`
-
-Mobile reads this through:
-
-`loadUnifiedPortfolio()`
-
-## Environment
-
-Set:
-
-`EXPO_PUBLIC_API_URL`
-
-Local:
-
-`http://localhost:4000`
-
-Production:
-
-`https://gatecep-trader-production.up.railway.app`
+Restart Metro afterward with `npx expo start --clear`.

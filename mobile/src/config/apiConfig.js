@@ -2,8 +2,6 @@ import Constants from "expo-constants";
 
 const PROD_API_URL = "https://gatecep-trader-production.up.railway.app";
 
-const LOCALHOST_API_URL = "http://10.0.0.168:4000";
-
 function getExpoHostApiUrl() {
   const hostUri =
     Constants.expoConfig?.hostUri ||
@@ -12,7 +10,14 @@ function getExpoHostApiUrl() {
 
   const host = String(hostUri || "").split(":")[0];
 
-  if (!host) return LOCALHOST_API_URL;
+  const localHost =
+    host === "localhost" ||
+    host === "127.0.0.1" ||
+    /^10\./.test(host) ||
+    /^192\.168\./.test(host) ||
+    /^172\.(1[6-9]|2\d|3[01])\./.test(host);
+
+  if (!localHost) return PROD_API_URL;
 
   return `http://${host}:4000`;
 }

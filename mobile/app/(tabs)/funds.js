@@ -10,7 +10,7 @@ import {
   View
 } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import * as XLSX from "xlsx";
 import * as FileSystem from "expo-file-system/legacy";
 
@@ -23,8 +23,12 @@ import { getStoredAccessToken } from "../../src/features/auth/storage/authStorag
 import {
   refreshCanonicalRealPortfolioSnapshot
 } from "../../src/services/portfolio/portfolioSnapshotTrigger";
+import { attachVerifiedBrokerCashEvidence } from "../../src/features/broker-sync/brokerSyncService";
 
 export default function Funds() {
+  const params = useLocalSearchParams();
+  const reconciliationMode =
+    String(params?.mode || "").toUpperCase() === "RECONCILE";
   const [cash, setCash] = useState("");
   const [broker, setBroker] = useState("AIB");
   const [status, setStatus] = useState("");
@@ -225,6 +229,39 @@ export default function Funds() {
         fileName: selectedFile?.name || null
       };
 
+      if (reconciliationMode) {
+        if (!selectedFile) {
+          Alert.alert(
+            "Cash Evidence Required",
+            "Select the broker cash or ledger statement file before confirming reconciliation evidence."
+          );
+          return;
+        }
+
+        await attachVerifiedBrokerCashEvidence({
+          cashBalance: amount,
+          fileName: selectedFile.name,
+          broker
+        });
+
+        await userSetItem("brokerCashEvidenceUploaded", "true");
+        await userSetItem(
+          "LatestBrokerCashEvidenceUpload",
+          JSON.stringify({
+            ...summary,
+            source: "BROKER_CASH_RECONCILIATION_EVIDENCE",
+            runtimeMode: "REAL_VERIFIED_UPLOAD"
+          })
+        );
+
+        Alert.alert(
+          "Broker Cash Evidence Ready",
+          "The broker cash balance is ready for comparison. GateCEP's REAL available cash was not changed."
+        );
+        router.replace("/broker-reconciliation");
+        return;
+      }
+
       await userSetItem("availableCash", String(amount));
       await userSetItem("cashStatementUploaded", "true");
       await userSetItem("statementSummary", JSON.stringify(summary));
@@ -284,7 +321,9 @@ const token =
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Funds</Text>
+        <Text style={styles.title}>
+          {reconciliationMode ? "Broker Cash Evidence" : "Funds"}
+        </Text>
 
         <Pressable
           style={styles.dashboardButton}
@@ -295,8 +334,9 @@ const token =
       </View>
 
       <Text style={styles.subtitle}>
-        Import or enter your broker cash / ledger statement to calculate
-        available cash for Coach G.
+        {reconciliationMode
+          ? "Upload the current broker cash or ledger statement to complete reconciliation. This does not change GateCEP's REAL available cash."
+          : "Import or enter your broker cash / ledger statement to calculate available cash for Coach G."}
       </Text>
 
       <View style={styles.card}>
@@ -355,14 +395,26 @@ const token =
       </View>
 
       <Pressable style={styles.primary} onPress={saveStatement}>
-        <Text style={styles.primaryText}>Save Statement</Text>
+        <Text style={styles.primaryText}>
+          {reconciliationMode
+            ? "Confirm Broker Cash Evidence and Compare"
+            : "Save Statement"}
+        </Text>
       </Pressable>
 
       <Pressable
         style={styles.backButton}
-        onPress={() => router.replace("/broker-upload")}
+        onPress={() =>
+          router.replace(
+            reconciliationMode ? "/portfolio-sync-center" : "/broker-upload"
+          )
+        }
       >
-        <Text style={styles.backText}>Back to Upload Center</Text>
+        <Text style={styles.backText}>
+          {reconciliationMode
+            ? "Back to Portfolio Sync Center"
+            : "Back to Upload Center"}
+        </Text>
       </Pressable>
     </ScrollView>
   );

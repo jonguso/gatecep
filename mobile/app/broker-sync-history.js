@@ -1,588 +1,109 @@
-import React, {
-  useEffect,
-  useState
-} from "react";
+import React, { useCallback, useState } from "react";
+import { StyleSheet, Text, View } from "react-native";
+import { router, useFocusEffect } from "expo-router";
 
+import { loadBrokerSyncAuditHistory } from "../src/features/broker-sync/brokerSyncAuditStore";
 import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View
-} from "react-native";
-
-import {
-  router
-} from "expo-router";
-
-import {
-  loadBrokerSyncAuditHistory
-} from "../src/features/broker-sync/brokerSyncAuditStore";
+  DeveloperIdentifier, IssuePager, MetricStrip, MobileHeader,
+  MobileScreen, StatusBanner, StickyActionBar
+} from "../src/components/mobile/MobileUI";
 
 export default function BrokerSyncHistory() {
-  const [
-    loading,
-    setLoading
-  ] = useState(true);
+  const [loading, setLoading] = useState(true);
+  const [history, setHistory] = useState([]);
+  const [error, setError] = useState("");
 
-  const [
-    history,
-    setHistory
-  ] = useState([]);
-
-  const [
-    error,
-    setError
-  ] = useState("");
-
-  useEffect(() => {
-    loadHistory();
-  }, []);
+  useFocusEffect(useCallback(() => { loadHistory(); }, []));
 
   async function loadHistory() {
     try {
       setLoading(true);
       setError("");
-
-      const result =
-        await loadBrokerSyncAuditHistory();
-
-      setHistory(
-        Array.isArray(result)
-          ? result
-          : []
-      );
-    } catch (err) {
-      console.error(
-        "Unable to load broker sync history:",
-        err
-      );
-
-      setError(
-        err?.message ||
-          "Unable to load broker synchronization history."
-      );
+      const result = await loadBrokerSyncAuditHistory();
+      setHistory(Array.isArray(result) ? result : []);
+    } catch (loadError) {
+      setError(loadError?.message || "Unable to load broker synchronization history.");
     } finally {
       setLoading(false);
     }
   }
 
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator
-          size="large"
-          color="#67e8f9"
-        />
-
-        <Text
-          style={
-            styles.loadingText
-          }
-        >
-          Loading broker sync history...
-        </Text>
-      </View>
-    );
-  }
-
   return (
-    <ScrollView
-      style={styles.screen}
-      contentContainerStyle={
-        styles.content
-      }
+    <MobileScreen
+      testID="broker-sync-history-mobile"
+      footer={<StickyActionBar secondaryLabel="Completion" onSecondary={() => router.replace("/broker-reconciliation-insight")} primaryLabel="Return to Sync Center" onPrimary={() => router.replace("/portfolio-sync-center")} />}
     >
-      <Text
-        style={styles.eyebrow}
-      >
-        PC-009
-      </Text>
+      <DeveloperIdentifier>PC-030M3C</DeveloperIdentifier>
+      <MobileHeader title="Sync History" subtitle="Review one verified synchronization or reconciliation event at a time." onBack={() => router.replace("/broker-reconciliation-insight")} actionLabel="Refresh" onAction={loadHistory} />
 
-      <Text
-        style={styles.title}
-      >
-        Broker Sync History
-      </Text>
+      {loading ? <StatusBanner tone="info" title="Loading synchronization history…" /> : null}
+      {error ? <StatusBanner tone="danger" title="History unavailable" message={error} /> : null}
 
-      <Text
-        style={styles.subtitle}
-      >
-        Review previous synchronization
-        and reconciliation events.
-      </Text>
-
-      {error ? (
-        <View
-          style={styles.errorCard}
-        >
-          <Text
-            style={styles.errorText}
-          >
-            {error}
-          </Text>
-        </View>
-      ) : null}
-
-      <View
-        style={styles.summaryCard}
-      >
-        <Text
-          style={styles.cardTitle}
-        >
-          Audit Summary
-        </Text>
-
-        <Row
-          label="Total Events"
-          value={history.length}
-        />
-
-        <Row
-          label="Latest Status"
-          value={
-            history[0]?.classification ||
-            history[0]?.status ||
-            "None"
-          }
-        />
-
-        <Row
-          label="Latest Broker"
-          value={
-            history[0]?.broker ||
-            "None"
-          }
-        />
-      </View>
+      <MetricStrip items={[
+        { label: "Events", value: history.length },
+        { label: "Latest Status", value: friendly(history[0]?.classification || history[0]?.status || "None") },
+        { label: "Latest Broker", value: history[0]?.broker || "None" }
+      ]} />
 
       {history.length ? (
-        history.map((event) => (
-          <View
-            key={event.id}
-            style={styles.eventCard}
-          >
-            <View
-              style={styles.eventHeader}
-            >
-              <View>
-                <Text
-                  style={styles.eventType}
-                >
-                  {event.type}
-                </Text>
-
-                <Text
-                  style={styles.eventDate}
-                >
-                  {formatDate(
-                    event.createdAt
-                  )}
-                </Text>
-              </View>
-
-              <Text
-                style={styles.eventStatus}
-              >
-                {event.classification ||
-                  event.status ||
-                  "UNKNOWN"}
-              </Text>
-            </View>
-
-            <Row
-              label="Broker"
-              value={
-                event.broker ||
-                "Unknown"
-              }
-            />
-
-            <Row
-              label="GateCEP Total"
-              value={`KES ${money(
-                event.gatecepTotal
-              )}`}
-            />
-
-            <Row
-              label="Broker Total"
-              value={`KES ${money(
-                event.brokerTotal
-              )}`}
-            />
-
-            <Row
-              label="Difference"
-              value={`KES ${money(
-                event.difference
-              )}`}
-            />
-
-            <Row
-              label="Matched"
-              value={
-                event.matched || 0
-              }
-            />
-
-            <Row
-              label="Mismatched"
-              value={
-                event.mismatched || 0
-              }
-            />
-
-            {event.issues?.length ? (
-              <View
-                style={styles.issueBlock}
-              >
-                <Text
-                  style={styles.issueTitle}
-                >
-                  Issues
-                </Text>
-
-                {event.issues.map(
-                  (issue, index) => (
-                    <Text
-                      key={`${event.id}-${index}`}
-                      style={styles.issueText}
-                    >
-                      • {issue.message}
-                    </Text>
-                  )
-                )}
-              </View>
-            ) : null}
-          </View>
-        ))
+        <IssuePager issues={history} itemLabel="Event" getItemTitle={(event) => friendly(event.classification || event.status)} renderIssue={(event) => <AuditEvent event={event} />} />
       ) : (
-        <View style={styles.emptyCard}>
-          <Text style={styles.emptyTitle}>
-            No Audit Events Yet
-          </Text>
-
-          <Text style={styles.emptyText}>
-            Run a broker reconciliation
-            insight to create the first
-            audit record.
-          </Text>
-        </View>
+        <StatusBanner tone="info" title="No audit events yet" message="Run a verified broker reconciliation to create the first audit record." />
       )}
-
-      <Pressable
-        style={styles.primaryButton}
-        onPress={loadHistory}
-      >
-        <Text
-          style={
-            styles.primaryButtonText
-          }
-        >
-          Refresh History
-        </Text>
-      </Pressable>
-
-      <Pressable
-        style={
-          styles.secondaryButton
-        }
-        onPress={() =>
-          router.push(
-            "/broker-reconciliation-insight"
-          )
-        }
-      >
-        <Text
-          style={
-            styles.secondaryButtonText
-          }
-        >
-          Open Coach G Insight
-        </Text>
-      </Pressable>
-
-      <Pressable
-        style={
-          styles.secondaryButton
-        }
-        onPress={() =>
-          router.replace(
-            "/(tabs)/dashboard"
-          )
-        }
-      >
-        <Text
-          style={
-            styles.secondaryButtonText
-          }
-        >
-          Back to Dashboard
-        </Text>
-      </Pressable>
-    </ScrollView>
+    </MobileScreen>
   );
 }
 
-function Row({
-  label,
-  value
-}) {
+function AuditEvent({ event }) {
+  const issues = Array.isArray(event.issues) ? event.issues : [];
   return (
-    <View style={styles.row}>
-      <Text
-        style={styles.rowLabel}
-      >
-        {label}
-      </Text>
+    <View>
+      <View style={styles.header}>
+        <View style={styles.flex}>
+          <Text style={styles.eventType}>{friendly(event.type)}</Text>
+          <Text style={styles.date}>{formatDate(event.createdAt)}</Text>
+        </View>
+        <Text style={styles.status}>{friendly(event.classification || event.status)}</Text>
+      </View>
 
-      <Text
-        style={styles.rowValue}
-      >
-        {String(
-          value ?? "N/A"
-        )}
-      </Text>
+      <View style={styles.details}>
+        <DataRow label="Broker" value={event.broker || "Unknown"} />
+        <DataRow label="GateCEP Total" value={`KES ${money(event.gatecepTotal)}`} />
+        <DataRow label="Broker Total" value={`KES ${money(event.brokerTotal)}`} />
+        <DataRow label="Difference" value={`KES ${money(event.difference)}`} warning />
+        <DataRow label="Matched / Different" value={`${event.matched || 0} / ${event.mismatched || 0}`} />
+      </View>
+
+      {issues.length ? (
+        <View style={styles.issues}>
+          <Text style={styles.issuesTitle}>Issues recorded</Text>
+          {issues.slice(0, 4).map((issue, index) => <Text key={`${event.id}-${index}`} style={styles.issueText}>• {issue.message || friendly(issue.type)}</Text>)}
+        </View>
+      ) : <StatusBanner tone="success" title="No issues recorded" />}
     </View>
   );
 }
 
-function money(value) {
-  return Number(
-    value || 0
-  ).toLocaleString(
-    "en-US",
-    {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2
-    }
-  );
+function DataRow({ label, value, warning = false }) {
+  return <View style={styles.row}><Text style={styles.rowLabel}>{label}</Text><Text style={warning ? styles.rowWarning : styles.rowValue}>{String(value ?? "N/A")}</Text></View>;
 }
 
-function formatDate(value) {
-  if (!value) {
-    return "Unknown";
-  }
+function friendly(value) { return String(value || "Unknown").replaceAll("_", " "); }
+function money(value) { return Number(value || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
+function formatDate(value) { const date = new Date(value); return value && !Number.isNaN(date.getTime()) ? date.toLocaleString("en-US") : "Unknown"; }
 
-  const date =
-    new Date(value);
-
-  if (
-    Number.isNaN(
-      date.getTime()
-    )
-  ) {
-    return "Unknown";
-  }
-
-  return date.toLocaleString(
-    "en-US"
-  );
-}
-
-const styles =
-  StyleSheet.create({
-    screen: {
-      flex: 1,
-      backgroundColor:
-        "#020617"
-    },
-
-    content: {
-      padding: 22,
-      paddingTop: 70,
-      paddingBottom: 110
-    },
-
-    center: {
-      flex: 1,
-      backgroundColor:
-        "#020617",
-      alignItems:
-        "center",
-      justifyContent:
-        "center"
-    },
-
-    loadingText: {
-      color: "#94a3b8",
-      marginTop: 14
-    },
-
-    eyebrow: {
-      color: "#c084fc",
-      fontSize: 13,
-      fontWeight: "900"
-    },
-
-    title: {
-      color: "white",
-      fontSize: 30,
-      fontWeight: "900",
-      marginTop: 8
-    },
-
-    subtitle: {
-      color: "#94a3b8",
-      lineHeight: 22,
-      marginTop: 8,
-      marginBottom: 20
-    },
-
-    summaryCard: {
-      backgroundColor:
-        "#0f172a",
-      borderColor:
-        "#1e293b",
-      borderWidth: 1,
-      borderRadius: 20,
-      padding: 18
-    },
-
-    cardTitle: {
-      color: "#67e8f9",
-      fontSize: 18,
-      fontWeight: "900"
-    },
-
-    eventCard: {
-      backgroundColor:
-        "#0f172a",
-      borderColor:
-        "#1e293b",
-      borderWidth: 1,
-      borderRadius: 20,
-      padding: 18,
-      marginTop: 16
-    },
-
-    eventHeader: {
-      flexDirection:
-        "row",
-      justifyContent:
-        "space-between",
-      gap: 16
-    },
-
-    eventType: {
-      color: "white",
-      fontWeight: "900"
-    },
-
-    eventDate: {
-      color: "#64748b",
-      fontSize: 12,
-      marginTop: 4
-    },
-
-    eventStatus: {
-      color: "#facc15",
-      fontWeight: "900"
-    },
-
-    row: {
-      flexDirection:
-        "row",
-      justifyContent:
-        "space-between",
-      gap: 16,
-      marginTop: 14
-    },
-
-    rowLabel: {
-      color: "#94a3b8",
-      flex: 1
-    },
-
-    rowValue: {
-      color: "white",
-      fontWeight: "900",
-      textAlign: "right",
-      flex: 1
-    },
-
-    issueBlock: {
-      marginTop: 16,
-      paddingTop: 12,
-      borderTopWidth: 1,
-      borderTopColor:
-        "#1e293b"
-    },
-
-    issueTitle: {
-      color: "#facc15",
-      fontWeight: "900"
-    },
-
-    issueText: {
-      color: "#cbd5e1",
-      lineHeight: 21,
-      marginTop: 6
-    },
-
-    emptyCard: {
-      backgroundColor:
-        "#0f172a",
-      borderColor:
-        "#1e293b",
-      borderWidth: 1,
-      borderRadius: 20,
-      padding: 18
-    },
-
-    emptyTitle: {
-      color: "#67e8f9",
-      fontSize: 18,
-      fontWeight: "900"
-    },
-
-    emptyText: {
-      color: "#94a3b8",
-      lineHeight: 22,
-      marginTop: 8
-    },
-
-    primaryButton: {
-      backgroundColor:
-        "#9333ea",
-      padding: 17,
-      borderRadius: 18,
-      marginTop: 22
-    },
-
-    primaryButtonText: {
-      color: "white",
-      fontWeight: "900",
-      textAlign: "center"
-    },
-
-    secondaryButton: {
-      backgroundColor:
-        "#1e293b",
-      padding: 17,
-      borderRadius: 18,
-      marginTop: 12
-    },
-
-    secondaryButtonText: {
-      color: "#67e8f9",
-      fontWeight: "900",
-      textAlign: "center"
-    },
-
-    errorCard: {
-      backgroundColor:
-        "rgba(239,68,68,.10)",
-      borderColor:
-        "rgba(239,68,68,.35)",
-      borderWidth: 1,
-      borderRadius: 18,
-      padding: 16
-    },
-
-    errorText: {
-      color: "#fca5a5"
-    }
-  });
+const styles = StyleSheet.create({
+  header: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  flex: { flex: 1 },
+  eventType: { color: "white", fontSize: 17, fontWeight: "900" },
+  date: { color: "#94a3b8", marginTop: 5, fontSize: 12 },
+  status: { color: "#fbbf24", fontSize: 11, fontWeight: "900", maxWidth: "42%", textAlign: "right" },
+  details: { marginTop: 13, backgroundColor: "#020617", borderRadius: 14, paddingHorizontal: 12 },
+  row: { minHeight: 45, flexDirection: "row", alignItems: "center", gap: 12, borderBottomColor: "#1e293b", borderBottomWidth: 1 },
+  rowLabel: { color: "#94a3b8", flex: 1, fontSize: 12 },
+  rowValue: { color: "white", flex: 1, textAlign: "right", fontWeight: "900" },
+  rowWarning: { color: "#fbbf24", flex: 1, textAlign: "right", fontWeight: "900" },
+  issues: { marginTop: 13, backgroundColor: "rgba(245,158,11,.08)", borderRadius: 14, padding: 13 },
+  issuesTitle: { color: "#fbbf24", fontWeight: "900" },
+  issueText: { color: "#cbd5e1", lineHeight: 19, marginTop: 7 }
+});

@@ -9,7 +9,7 @@ import {
   TextInput,
   View
 } from "react-native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { getStoredAccessToken } from "../src/features/auth/storage/authStorage";
 
@@ -29,8 +29,12 @@ import { getCurrentSession } from "../src/auth/authStore";
 import {
   refreshCanonicalRealPortfolioSnapshot
 } from "../src/services/portfolio/portfolioSnapshotTrigger";
+import {
+  saveVerifiedUploadedBrokerMirror
+} from "../src/features/broker-sync/brokerSyncService";
 
 export default function ReviewPortfolioImport() {
+  const params = useLocalSearchParams();
   const [fileInfo, setFileInfo] = useState(null);
   const [rows, setRows] = useState([]);
   const [editingIndex, setEditingIndex] = useState(null);
@@ -219,6 +223,43 @@ export default function ReviewPortfolioImport() {
       return;
     }
 
+    const reconciliationMode =
+      String(params?.mode || "").toUpperCase() === "RECONCILE" ||
+      fileInfo?.importMode === "BROKER_RECONCILIATION_EVIDENCE";
+
+    if (reconciliationMode) {
+      await saveVerifiedUploadedBrokerMirror({
+        holdings: cleanPortfolio,
+        broker: "Uploaded Broker Valuation",
+        accountName: fileInfo?.fileName || "Verified Statement Upload",
+        fileName: fileInfo?.fileName || null
+      });
+
+      await userSetItem("brokerEvidenceUploaded", "true");
+      await userSetItem(
+        "LatestBrokerEvidenceUpload",
+        JSON.stringify({
+          uploadedAt: new Date().toISOString(),
+          fileName: fileInfo?.fileName || "Uploaded Broker Valuation",
+          holdingsCount: cleanPortfolio.length,
+          source: "BROKER_VALUATION_UPLOAD",
+          runtimeMode: "REAL_VERIFIED_UPLOAD"
+        })
+      );
+
+      await userRemoveItem("importedPortfolioDraft");
+      await userRemoveItem("ImportedPortfolioDraft");
+      await userRemoveItem("pendingPortfolioImport");
+      await AsyncStorage.removeItem("gatecepImportedPortfolioDraft");
+
+      Alert.alert(
+        "Broker Evidence Ready",
+        "The uploaded statement is ready to compare with your existing REAL portfolio. No REAL holdings were changed."
+      );
+      router.replace("/broker-reconciliation");
+      return;
+    }
+
     const session = await getCurrentSession();
 
 const token =
@@ -278,7 +319,10 @@ if (!token) {
       <Text style={styles.title}>Review Extracted Holdings</Text>
 
       <Text style={styles.subtitle}>
-        Tap any security to review or edit before confirming.
+        {String(params?.mode || "").toUpperCase() === "RECONCILE" ||
+        fileInfo?.importMode === "BROKER_RECONCILIATION_EVIDENCE"
+          ? "Review the broker evidence before comparison. Confirming creates a read-only verified mirror and does not change the REAL portfolio."
+          : "Tap any security to review or edit before confirming the initial REAL portfolio."}
       </Text>
 
       <View style={styles.fileCard}>
@@ -350,7 +394,12 @@ if (!token) {
       </Pressable>
 
       <Pressable style={styles.primary} onPress={confirmPortfolio}>
-        <Text style={styles.primaryText}>Confirm Portfolio</Text>
+        <Text style={styles.primaryText}>
+          {String(params?.mode || "").toUpperCase() === "RECONCILE" ||
+          fileInfo?.importMode === "BROKER_RECONCILIATION_EVIDENCE"
+            ? "Confirm Broker Evidence and Compare"
+            : "Confirm Initial REAL Portfolio"}
+        </Text>
       </Pressable>
 
       <Modal visible={editingRow !== null} transparent animationType="slide">

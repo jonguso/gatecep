@@ -36,6 +36,9 @@ const practicePortfolio = {
 const brokerMirror = {
   broker: "Connected Broker",
   accountName: "REAL Account",
+  source: "BROKER_STATEMENT_UPLOAD",
+  runtimeMode: "REAL_VERIFIED_UPLOAD",
+  cashEvidenceAvailable: true,
   cashBalance: 100,
   holdingsValue: 250,
   totalValue: 350,
@@ -65,6 +68,9 @@ const realModule = moduleFrom(
 const mirrorModule = moduleFrom(
   `export async function loadBrokerMirror() {
      return globalThis.__brokerMirror;
+   }
+   export function isVerifiedRealBrokerMirror(mirror) {
+     return ["REAL_CONNECTED", "REAL_VERIFIED_UPLOAD"].includes(mirror?.runtimeMode);
    }`,
   "mock:broker-mirror"
 );
@@ -91,6 +97,23 @@ assert.equal(result.holdings.find((holding) => holding.symbol === "SCOM").status
 assert.equal(result.holdings.find((holding) => holding.symbol === "EQTY").status, "EXTRA_AT_BROKER");
 assert.equal(result.summary.extraAtBroker, 1);
 
+context.__brokerMirror = {
+  ...brokerMirror,
+  cashEvidenceAvailable: false,
+  cashBalance: 0,
+  holdingsValue: 200,
+  totalValue: 200,
+  holdings: [
+    { symbol: "SCOM", quantity: 10, marketPrice: 20, marketValue: 200 }
+  ]
+};
+
+const cashPending = await service.namespace.buildBrokerReconciliation();
+assert.equal(cashPending.status, "CASH_EVIDENCE_REQUIRED");
+assert.equal(cashPending.summary.cashDifference, null);
+assert.equal(cashPending.summary.cashReconciliationStatus, "EVIDENCE_REQUIRED");
+
 console.log("PASS — reconciliation reads canonical REAL All Accounts.");
 console.log("PASS — Practice holdings cannot enter reconciliation.");
 console.log("PASS — broker-only REAL discrepancies remain reviewable.");
+console.log("PASS — missing broker cash evidence is not converted to a zero balance.");

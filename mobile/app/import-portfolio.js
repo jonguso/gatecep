@@ -9,7 +9,7 @@ import {
   View
 } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import * as FileSystem from "expo-file-system/legacy";
 import * as XLSX from "xlsx";
 
@@ -18,6 +18,9 @@ import { userSetItem } from "../src/auth/userStorage";
 import { buildSyncStatus } from "../src/portfolio/syncStatus";
 
 export default function ImportPortfolio() {
+  const params = useLocalSearchParams();
+  const reconciliationMode =
+    String(params?.mode || "").toUpperCase() === "RECONCILE";
   const [status, setStatus] = useState("");
 
   async function pickFile() {
@@ -53,7 +56,10 @@ export default function ImportPortfolio() {
         JSON.stringify({
           fileName: file.name,
           uri: file.uri,
-          uploadedAt: new Date().toISOString()
+          uploadedAt: new Date().toISOString(),
+          importMode: reconciliationMode
+            ? "BROKER_RECONCILIATION_EVIDENCE"
+            : "INITIAL_REAL_PORTFOLIO"
         })
       );
 
@@ -69,14 +75,18 @@ export default function ImportPortfolio() {
       }
 
       await userSetItem("importedPortfolioDraft", JSON.stringify(draftRows));
-      await userSetItem("statementUploaded", "true");
+      if (!reconciliationMode) {
+        await userSetItem("statementUploaded", "true");
+      }
 
       await userSetItem(
         "statementSummary",
         JSON.stringify({
           count: draftRows.length,
           fileName: file.name,
-          source: "PORTFOLIO_VALUATION_UPLOAD",
+          source: reconciliationMode
+            ? "BROKER_RECONCILIATION_EVIDENCE"
+            : "PORTFOLIO_VALUATION_UPLOAD",
           uploadedAt: new Date().toISOString()
         })
       );
@@ -87,7 +97,12 @@ export default function ImportPortfolio() {
         `${file.name} extracted. ${draftRows.length} holdings ready for review.`
       );
 
-      router.push("/review-portfolio-import");
+      router.push({
+        pathname: "/review-portfolio-import",
+        params: {
+          mode: reconciliationMode ? "RECONCILE" : "INITIAL"
+        }
+      });
     } catch (error) {
       setStatus(`Import failed: ${error.message}`);
       Alert.alert("Import failed", error.message);
@@ -366,7 +381,11 @@ export default function ImportPortfolio() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Import Portfolio</Text>
+        <Text style={styles.title}>
+          {reconciliationMode
+            ? "Upload Broker Evidence"
+            : "Import Portfolio"}
+        </Text>
 
         <Pressable
           style={styles.dashboardButton}
@@ -377,8 +396,9 @@ export default function ImportPortfolio() {
       </View>
 
       <Text style={styles.subtitle}>
-        Upload a broker valuation CSV or Excel file. Gatecep will extract
-        holdings, then let you review and edit before analysis.
+        {reconciliationMode
+          ? "Upload a current broker valuation for read-only comparison with GateCEP's existing REAL portfolio. It will not change REAL holdings until you review and approve a correction."
+          : "Upload a broker valuation CSV or Excel file. GateCEP will extract holdings, then let you review and edit before creating the initial REAL portfolio."}
       </Text>
 
       <View style={styles.card}>
@@ -392,7 +412,11 @@ export default function ImportPortfolio() {
       </View>
 
       <Pressable style={styles.primary} onPress={pickFile}>
-        <Text style={styles.primaryText}>Upload CSV / Excel and Review</Text>
+        <Text style={styles.primaryText}>
+          {reconciliationMode
+            ? "Upload Broker Evidence and Review"
+            : "Upload CSV / Excel and Review"}
+        </Text>
       </Pressable>
 
       {status ? (

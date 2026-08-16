@@ -57,13 +57,8 @@ export default function BrokerSync() {
       setLoading(true);
       setError("");
 
-      const [
-        savedMirror,
-        savedStatus
-      ] = await Promise.all([
-        loadBrokerMirror(),
-        loadBrokerSyncStatus()
-      ]);
+      const savedMirror = await loadBrokerMirror();
+      const savedStatus = await loadBrokerSyncStatus();
 
       setMirror(
         savedMirror
@@ -168,9 +163,8 @@ export default function BrokerSync() {
           styles.subtitle
         }
       >
-        Mirror broker holdings into GateCEP
-        without allowing GateCEP to place an
-        order during this synchronization phase.
+        Load independent REAL broker evidence for read-only comparison with
+        GateCEP's canonical REAL portfolio.
       </Text>
 
       {error ? (
@@ -442,8 +436,8 @@ export default function BrokerSync() {
               styles.emptyText
             }
           >
-            Connect a broker account, then synchronize it to create a
-            read-only mirror for REAL portfolio reconciliation.
+            A live broker API is not required. Upload the current broker
+            portfolio valuation and cash evidence for REAL reconciliation.
           </Text>
         </View>
       )}
@@ -498,12 +492,30 @@ export default function BrokerSync() {
       </Pressable>
 
       <Pressable
+        style={styles.secondaryButton}
+        onPress={() => router.push("/import-portfolio?mode=RECONCILE")}
+      >
+        <Text style={styles.secondaryButtonText}>
+          Upload Current Portfolio Valuation
+        </Text>
+      </Pressable>
+
+      <Pressable
+        style={styles.secondaryButton}
+        onPress={() => router.push("/(tabs)/funds?mode=RECONCILE")}
+      >
+        <Text style={styles.secondaryButtonText}>
+          Upload Current Cash / Ledger Statement
+        </Text>
+      </Pressable>
+
+      <Pressable
         style={
           styles.secondaryButton
         }
         onPress={() =>
           router.push(
-            "/portfolio-hub"
+            "/portfolio-sync-center"
           )
         }
       >
@@ -512,7 +524,7 @@ export default function BrokerSync() {
             styles.secondaryButtonText
           }
         >
-          Open Portfolio Hub
+          Back to Portfolio Sync Center
         </Text>
       </Pressable>
 
