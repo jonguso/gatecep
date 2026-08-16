@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -8,444 +8,247 @@ import {
   View
 } from "react-native";
 import { router, useFocusEffect } from "expo-router";
-import { loadUnifiedPortfolio } from "../src/portfolio/unifiedPortfolioApi";
+import { SafeAreaView } from "react-native-safe-area-context";
+
+import { loadUnifiedPortfolioRuntime } from "../src/portfolio/unifiedPortfolioApi";
+import { calculatePortfolioSummary } from "../src/shared/portfolio/engine";
+import { StatusBanner } from "../src/components/mobile/MobileUI";
 
 export default function HoldingDetails() {
   const [holdings, setHoldings] = useState([]);
-  const [expandedSector, setExpandedSector] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [hasVerifiedData, setHasVerifiedData] = useState(false);
+  const [notice, setNotice] = useState(null);
+  const [expandedSymbol, setExpandedSymbol] = useState(null);
 
-  useFocusEffect(
-  useCallback(() => {
+  useFocusEffect(useCallback(() => {
     load();
-  }, [])
-);
+  }, []));
 
   async function load() {
-    setLoading(true);
-   const portfolio = await loadUnifiedPortfolio();
-
-    setHoldings(portfolio.holdings || []);
-    setLoading(false);
-  }
-
-  const totals = useMemo(() => {
-    const investedValue = holdings.reduce(
-      (sum, h) =>
-        sum +
-        Number(h.quantity || 0) *
-          Number(h.averagePrice || h.averageCost || 0),
-      0
-    );
-
-    const currentValue = holdings.reduce(
-      (sum, h) => sum + Number(h.marketValue || h.value || 0),
-      0
-    );
-
-    const netGainLoss = currentValue - investedValue;
-
-    const gainLossPct =
-      investedValue > 0 ? (netGainLoss / investedValue) * 100 : 0;
-
-    return {
-      investedValue,
-      currentValue,
-      netGainLoss,
-      gainLossPct
-    };
-  }, [holdings]);
-
-  const sectorRows = useMemo(() => {
-    const grouped = {};
-
-    holdings.forEach((h) => {
-      const sector = h.sector || "Unknown";
-
-      if (!grouped[sector]) {
-        grouped[sector] = {
-          sector,
-          securities: [],
-          totalValue: 0,
-          investedValue: 0,
-          profitLoss: 0
-        };
-      }
-
-      const qty = Number(h.quantity || 0);
-      const avg = Number(h.averagePrice || h.averageCost || 0);
-      const invested = qty * avg;
-      const value = Number(h.marketValue || h.value || 0);
-      const pl = value - invested;
-
-      grouped[sector].securities.push({
-        ...h,
-        investedValue: invested,
-        profitLoss: pl
+    try {
+      setLoading(true);
+      const result = await loadUnifiedPortfolioRuntime({ broker: "ALL" });
+      setHoldings(Array.isArray(result?.holdings) ? result.holdings : []);
+      setHasVerifiedData(true);
+      setNotice(result?.runtimeStatus && result.runtimeStatus !== "LIVE"
+        ? {
+            status: result.runtimeStatus,
+            message: result.runtimeMessage || "REAL holdings are temporarily unavailable."
+          }
+        : null);
+    } catch (error) {
+      setHoldings([]);
+      setHasVerifiedData(false);
+      setNotice({
+        status: error?.code || "REAL_DATA_UNAVAILABLE",
+        message: error?.message || "REAL holdings are unavailable."
       });
-
-      grouped[sector].totalValue += value;
-      grouped[sector].investedValue += invested;
-      grouped[sector].profitLoss += pl;
-    });
-
-    return Object.values(grouped).sort((a, b) => b.totalValue - a.totalValue);
-  }, [holdings]);
-
-  if (loading) {
-    return (
-      <View style={styles.center}>
-        <ActivityIndicator size="large" color="#67e8f9" />
-        <Text style={styles.small}>Loading holdings...</Text>
-      </View>
-    );
+    } finally {
+      setLoading(false);
+    }
   }
+
+  const portfolio = useMemo(
+    () => calculatePortfolioSummary({ holdings, cash: 0 }),
+    [holdings]
+  );
+
+  const securities = useMemo(
+    () => [...(portfolio?.holdings || [])].sort(
+      (a, b) => number(b.marketValue) - number(a.marketValue)
+    ),
+    [portfolio]
+  );
+
+  const summary = portfolio?.summary || {};
+  const authRequired = notice?.status === "AUTH_REQUIRED" || notice?.status === "AUTH_EXPIRED";
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <View style={styles.headerRow}>
-        <View>
-          <Text style={styles.title}>My Holdings</Text>
-          <Text style={styles.subtitle}>
-            Current portfolio positions by sector.
-          </Text>
-        </View>
-
-        <Pressable
-          style={styles.dashboardButton}
-          onPress={() => router.replace("/(tabs)/dashboard")}
-        >
-          <Text style={styles.dashboardText}>Dashboard</Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.summary}>
-        <SummaryItem
-          label="Invested Value"
-          value={`KES ${money(totals.investedValue)}`}
-        />
-
-        <SummaryItem
-          label="Current Value"
-          value={`KES ${money(totals.currentValue)}`}
-          cyan
-        />
-
-        <SummaryItem
-          label="Net Gain/Loss"
-          value={`KES ${money(totals.netGainLoss)} (${totals.gainLossPct.toFixed(
-            2
-          )}%)`}
-          positive={totals.netGainLoss >= 0}
-        />
-      </View>
-
-      {sectorRows.length === 0 ? (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>No Holdings Found</Text>
-          <Text style={styles.body}>
-            Upload a portfolio valuation or use Trade to buy your first security.
-          </Text>
-
-          <Pressable
-            style={styles.primary}
-            onPress={() => router.push("/trade")}
-          >
-            <Text style={styles.primaryText}>Open Trade</Text>
-          </Pressable>
-        </View>
-      ) : (
-        sectorRows.map((sector) => {
-          const expanded = expandedSector === sector.sector;
-
-          const weight =
-            totals.currentValue > 0
-              ? (sector.totalValue / totals.currentValue) * 100
-              : 0;
-
-          return (
-            <View key={sector.sector} style={styles.card}>
-              <Pressable
-                onPress={() =>
-                  setExpandedSector(expanded ? null : sector.sector)
-                }
-              >
-                <View style={styles.row}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.sectorTitle}>{sector.sector}</Text>
-                    <Text style={styles.small}>
-                      {sector.securities.length} securities •{" "}
-                      {weight.toFixed(2)}%
-                    </Text>
-                  </View>
-
-                  <View style={{ alignItems: "flex-end" }}>
-                    <Text style={styles.value}>
-                      KES {money(sector.totalValue)}
-                    </Text>
-
-                    <Text
-                      style={
-                        sector.profitLoss >= 0 ? styles.green : styles.red
-                      }
-                    >
-                      KES {money(sector.profitLoss)}
-                    </Text>
-                  </View>
-                </View>
-              </Pressable>
-
-              {expanded &&
-                sector.securities.map((sec, index) => {
-                  const qty = Number(sec.quantity || 0);
-                  const avg = Number(sec.averagePrice || sec.averageCost || 0);
-                  const marketPrice = Number(sec.marketPrice || sec.price || 0);
-                  const invested = qty * avg;
-                  const value = Number(sec.marketValue || sec.value || 0);
-                  const pnl = value - invested;
-                  const pnlPct = invested > 0 ? (pnl / invested) * 100 : 0;
-
-                  return (
-                    <View key={`${sec.symbol}-${index}`} style={styles.security}>
-                      <View style={styles.row}>
-                        <View>
-                          <Text style={styles.symbol}>{sec.symbol}</Text>
-                          <Text style={styles.small}>
-                            {sec.name || sector.sector}
-                          </Text>
-                        </View>
-
-                        <Text style={pnl >= 0 ? styles.green : styles.red}>
-                          KES {money(pnl)}
-                        </Text>
-                      </View>
-
-                      <View style={styles.grid}>
-                        <Info label="Qty" value={qty.toLocaleString()} />
-                        <Info label="Avg Price" value={`KES ${money(avg)}`} />
-                        <Info
-                          label="Market Price"
-                          value={`KES ${money(marketPrice)}`}
-                        />
-                        <Info
-                          label="Invested"
-                          value={`KES ${money(invested)}`}
-                        />
-                        <Info label="Value" value={`KES ${money(value)}`} />
-                        <Info
-                          label="Return"
-                          value={`${pnlPct.toFixed(2)}%`}
-                          valueStyle={pnl >= 0 ? styles.green : styles.red}
-                        />
-                      </View>
-                    </View>
-                  );
-                })}
-            </View>
-          );
-        })
-      )}
-
-      <Pressable
-        style={styles.backButton}
-        onPress={() => router.replace("/(tabs)/dashboard")}
+    <SafeAreaView style={styles.safe} edges={["top"]}>
+      <ScrollView
+        style={styles.screen}
+        contentContainerStyle={styles.content}
+        showsVerticalScrollIndicator={false}
       >
-        <Text style={styles.backText}>Back to Dashboard</Text>
-      </Pressable>
-    </ScrollView>
+        <View style={styles.header}>
+          <Pressable
+            accessibilityRole="button"
+            style={styles.backIcon}
+            onPress={() => router.back()}
+          >
+            <Text style={styles.backIconText}>‹</Text>
+          </Pressable>
+          <View style={styles.headerCopy}>
+            <Text style={styles.title}>Holdings</Text>
+            <Text style={styles.subtitle}>Individual securities in your REAL portfolio</Text>
+          </View>
+          <Text style={styles.count}>{securities.length}</Text>
+        </View>
+
+        {notice ? (
+          <StatusBanner
+            tone="danger"
+            title="REAL holdings status"
+            message={`${notice.message} GateCEP did not switch to Practice.`}
+          />
+        ) : null}
+
+        {authRequired ? (
+          <Pressable style={styles.signIn} onPress={() => router.push("/login")}>
+            <Text style={styles.signInText}>Sign In Again</Text>
+          </Pressable>
+        ) : null}
+
+        <View style={styles.summary}>
+          <Summary label="Current Value" value={loading ? "Loading…" : hasVerifiedData ? `KES ${money(summary.totalValue)}` : "N/A"} />
+          <Summary label="Invested" value={loading ? "Loading…" : hasVerifiedData ? `KES ${money(summary.investedValue)}` : "N/A"} />
+          <Summary
+            label="Total Return"
+            value={loading ? "Loading…" : hasVerifiedData ? `${number(summary.totalGain) >= 0 ? "+" : ""}KES ${money(summary.totalGain)}` : "N/A"}
+            positive={hasVerifiedData ? number(summary.totalGain) >= 0 : undefined}
+          />
+        </View>
+
+        {loading ? (
+          <View style={styles.loading}>
+            <ActivityIndicator size="large" color="#67e8f9" />
+            <Text style={styles.muted}>Loading REAL securities…</Text>
+          </View>
+        ) : securities.length === 0 ? (
+          <View style={styles.empty}>
+            <Text style={styles.emptyTitle}>No REAL securities available</Text>
+            <Text style={styles.muted}>Import, enter, or synchronize a REAL portfolio to populate this list.</Text>
+            <Pressable style={styles.primary} onPress={() => router.push("/portfolio-sync-center")}>
+              <Text style={styles.primaryText}>Open Portfolio Sync</Text>
+            </Pressable>
+          </View>
+        ) : (
+          <View style={styles.list}>
+            <Text style={styles.listTitle}>All Securities</Text>
+            <Text style={styles.listHint}>Tap a security to see price, cost, quantity, and return.</Text>
+            {securities.map((security, index) => {
+              const symbol = security.symbol || `SECURITY-${index}`;
+              const expanded = expandedSymbol === symbol;
+              const gain = number(security.profitLoss);
+
+              return (
+                <Pressable
+                  accessibilityRole="button"
+                  accessibilityLabel={`Open ${symbol} holding details`}
+                  key={`${symbol}-${index}`}
+                  style={({ pressed }) => [styles.security, pressed && styles.securityPressed]}
+                  onPress={() => setExpandedSymbol(expanded ? null : symbol)}
+                >
+                  <View style={styles.securityHeader}>
+                    <View style={styles.securityCopy}>
+                      <Text style={styles.symbol}>{symbol}</Text>
+                      <Text numberOfLines={1} style={styles.name}>{security.name || security.securityName || "Listed security"}</Text>
+                      <Text style={styles.sector}>{security.sector || "Other"}</Text>
+                    </View>
+                    <View style={styles.securityValue}>
+                      <Text style={styles.value}>KES {money(security.marketValue)}</Text>
+                      <Text style={gain >= 0 ? styles.positive : styles.negative}>{gain >= 0 ? "+" : ""}KES {money(gain)}</Text>
+                      <Text style={styles.chevron}>{expanded ? "⌃" : "⌄"}</Text>
+                    </View>
+                  </View>
+
+                  {expanded ? (
+                    <View style={styles.details}>
+                      <Detail label="Quantity" value={number(security.quantity).toLocaleString()} />
+                      <Detail label="Average Cost" value={`KES ${money(security.averageCost || security.averagePrice)}`} />
+                      <Detail label="Market Price" value={`KES ${money(security.marketPrice || security.price)}`} />
+                      <Detail label="Invested Value" value={`KES ${money(security.investedValue)}`} />
+                      <Detail label="Current Value" value={`KES ${money(security.marketValue)}`} />
+                      <Detail label="Return" value={`${number(security.profitLossPct).toFixed(2)}%`} positive={gain >= 0} />
+                    </View>
+                  ) : null}
+                </Pressable>
+              );
+            })}
+          </View>
+        )}
+
+        <Pressable style={styles.homeButton} onPress={() => router.replace("/(tabs)/dashboard")}>
+          <Text style={styles.homeText}>Back to Home</Text>
+        </Pressable>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
-function SummaryItem({ label, value, cyan, positive }) {
-  let valueStyle = styles.white;
-
-  if (cyan) valueStyle = styles.cyan;
-  if (positive !== undefined) valueStyle = positive ? styles.green : styles.red;
-
+function Summary({ label, value, positive }) {
   return (
     <View style={styles.summaryItem}>
-      <Text style={styles.small}>{label}</Text>
-      <Text style={valueStyle}>{value}</Text>
+      <Text style={styles.summaryLabel}>{label}</Text>
+      <Text numberOfLines={1} style={positive === undefined ? styles.summaryValue : positive ? styles.positive : styles.negative}>{value}</Text>
     </View>
   );
 }
 
-function Info({ label, value, valueStyle }) {
+function Detail({ label, value, positive }) {
   return (
-    <View style={styles.info}>
-      <Text style={styles.small}>{label}</Text>
-      <Text style={valueStyle || styles.white}>{value}</Text>
+    <View style={styles.detail}>
+      <Text style={styles.detailLabel}>{label}</Text>
+      <Text style={positive === undefined ? styles.detailValue : positive ? styles.positive : styles.negative}>{value}</Text>
     </View>
   );
 }
 
-function money(v) {
-  return Number(v || 0).toLocaleString(undefined, {
+function number(value) {
+  const parsed = Number(value || 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function money(value) {
+  return number(value).toLocaleString("en-US", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2
   });
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#020617" },
-  content: { padding: 20, paddingTop: 60, paddingBottom: 120 },
-  center: {
-    flex: 1,
-    backgroundColor: "#020617",
-    justifyContent: "center",
-    alignItems: "center"
-  },
-  headerRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 14,
-    alignItems: "flex-start"
-  },
-  title: {
-    color: "white",
-    fontSize: 34,
-    fontWeight: "900"
-  },
-  subtitle: {
-    color: "#94a3b8",
-    marginTop: 8,
-    lineHeight: 21
-  },
-  dashboardButton: {
-    backgroundColor: "#1e293b",
-    borderColor: "#334155",
-    borderWidth: 1,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 14
-  },
-  dashboardText: {
-    color: "#67e8f9",
-    fontWeight: "900"
-  },
-  summary: {
-    marginTop: 20,
-    backgroundColor: "#0f172a",
-    padding: 18,
-    borderRadius: 20,
-    borderColor: "#1e293b",
-    borderWidth: 1,
-    gap: 14
-  },
-  summaryItem: {
-    backgroundColor: "#020617",
-    padding: 14,
-    borderRadius: 14,
-    borderColor: "#1e293b",
-    borderWidth: 1
-  },
-  card: {
-    marginTop: 16,
-    backgroundColor: "#0f172a",
-    padding: 18,
-    borderRadius: 20,
-    borderColor: "#1e293b",
-    borderWidth: 1
-  },
-  cardTitle: {
-    color: "#67e8f9",
-    fontSize: 18,
-    fontWeight: "900"
-  },
-  body: {
-    color: "#cbd5e1",
-    marginTop: 10,
-    lineHeight: 21
-  },
-  row: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    gap: 12,
-    alignItems: "center"
-  },
-  sectorTitle: {
-    color: "white",
-    fontSize: 20,
-    fontWeight: "900"
-  },
-  symbol: {
-    color: "white",
-    fontWeight: "900",
-    fontSize: 18
-  },
-  small: {
-    color: "#94a3b8",
-    marginTop: 4
-  },
-  value: {
-    color: "white",
-    fontWeight: "900",
-    textAlign: "right"
-  },
-  cyan: {
-    color: "#67e8f9",
-    fontWeight: "900",
-    marginTop: 6
-  },
-  green: {
-    color: "#86efac",
-    fontWeight: "900",
-    marginTop: 6
-  },
-  red: {
-    color: "#fca5a5",
-    fontWeight: "900",
-    marginTop: 6
-  },
-  white: {
-    color: "white",
-    fontWeight: "900",
-    marginTop: 6
-  },
-  security: {
-    marginTop: 14,
-    backgroundColor: "#020617",
-    padding: 14,
-    borderRadius: 18,
-    borderColor: "#1e293b",
-    borderWidth: 1
-  },
-  grid: {
-    marginTop: 14,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10
-  },
-  info: {
-    width: "47%",
-    backgroundColor: "#0f172a",
-    padding: 12,
-    borderRadius: 12,
-    borderColor: "#1e293b",
-    borderWidth: 1
-  },
-  primary: {
-    marginTop: 18,
-    backgroundColor: "#9333ea",
-    padding: 16,
-    borderRadius: 16
-  },
-  primaryText: {
-    color: "white",
-    fontWeight: "900",
-    textAlign: "center"
-  },
-  backButton: {
-    marginTop: 20,
-    backgroundColor: "#1e293b",
-    padding: 16,
-    borderRadius: 18,
-    borderColor: "#334155",
-    borderWidth: 1
-  },
-  backText: {
-    color: "#67e8f9",
-    textAlign: "center",
-    fontWeight: "900"
-  }
+  safe: { flex: 1, backgroundColor: "#020617" },
+  screen: { flex: 1 },
+  content: { padding: 16, paddingBottom: 40, width: "100%", maxWidth: 760, alignSelf: "center" },
+  header: { minHeight: 60, flexDirection: "row", alignItems: "center", gap: 12 },
+  backIcon: { width: 44, height: 44, borderRadius: 14, backgroundColor: "#1e293b", alignItems: "center", justifyContent: "center" },
+  backIconText: { color: "#67e8f9", fontSize: 30, fontWeight: "900", marginTop: -3 },
+  headerCopy: { flex: 1 },
+  title: { color: "white", fontSize: 26, fontWeight: "900" },
+  subtitle: { color: "#94a3b8", fontSize: 11, marginTop: 3 },
+  count: { color: "#c084fc", fontWeight: "900", fontSize: 18 },
+  signIn: { minHeight: 48, marginTop: 10, borderRadius: 14, backgroundColor: "#7f1d1d", alignItems: "center", justifyContent: "center" },
+  signInText: { color: "white", fontWeight: "900" },
+  summary: { flexDirection: "row", gap: 8, marginTop: 12 },
+  summaryItem: { flex: 1, minWidth: 0, backgroundColor: "#1d0b38", borderColor: "#6b21a8", borderWidth: 1, borderRadius: 14, padding: 10 },
+  summaryLabel: { color: "#c4b5fd", fontSize: 9, fontWeight: "800" },
+  summaryValue: { color: "white", fontSize: 11, fontWeight: "900", marginTop: 5 },
+  loading: { minHeight: 220, alignItems: "center", justifyContent: "center", gap: 12 },
+  empty: { marginTop: 14, backgroundColor: "#0f172a", borderRadius: 19, padding: 18 },
+  emptyTitle: { color: "white", fontSize: 18, fontWeight: "900" },
+  muted: { color: "#94a3b8", lineHeight: 19, marginTop: 6 },
+  primary: { minHeight: 50, marginTop: 15, backgroundColor: "#9333ea", borderRadius: 14, alignItems: "center", justifyContent: "center" },
+  primaryText: { color: "white", fontWeight: "900" },
+  list: { marginTop: 14, backgroundColor: "#0f172a", borderColor: "#1e293b", borderWidth: 1, borderRadius: 20, padding: 14 },
+  listTitle: { color: "#67e8f9", fontSize: 19, fontWeight: "900" },
+  listHint: { color: "#94a3b8", fontSize: 11, marginTop: 4, marginBottom: 5 },
+  security: { minHeight: 76, borderTopColor: "#1e293b", borderTopWidth: 1, paddingVertical: 12, paddingHorizontal: 3 },
+  securityPressed: { backgroundColor: "#1e293b" },
+  securityHeader: { flexDirection: "row", alignItems: "center", gap: 12 },
+  securityCopy: { flex: 1, minWidth: 0 },
+  symbol: { color: "white", fontSize: 17, fontWeight: "900" },
+  name: { color: "#cbd5e1", fontSize: 11, marginTop: 3 },
+  sector: { color: "#67e8f9", fontSize: 10, marginTop: 3 },
+  securityValue: { alignItems: "flex-end" },
+  value: { color: "white", fontWeight: "900", fontSize: 12 },
+  positive: { color: "#86efac", fontWeight: "900", fontSize: 11, marginTop: 4 },
+  negative: { color: "#fca5a5", fontWeight: "900", fontSize: 11, marginTop: 4 },
+  chevron: { color: "#c084fc", fontWeight: "900", marginTop: 3 },
+  details: { marginTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  detail: { width: "48%", minHeight: 58, borderRadius: 12, backgroundColor: "#020617", padding: 10 },
+  detailLabel: { color: "#94a3b8", fontSize: 9 },
+  detailValue: { color: "white", fontWeight: "900", fontSize: 11, marginTop: 5 },
+  homeButton: { minHeight: 50, marginTop: 16, borderRadius: 15, backgroundColor: "#1e293b", alignItems: "center", justifyContent: "center" },
+  homeText: { color: "#67e8f9", fontWeight: "900" }
 });
