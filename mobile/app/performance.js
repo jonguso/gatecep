@@ -28,13 +28,26 @@ import {
   buildPerformanceBenchmarkGoalIntelligence
 } from "../src/features/performance/performanceBenchmarkGoalIntelligenceService";
 
+const PERFORMANCE_SECTIONS = [
+  { id: "timeline", title: "Portfolio Value Timeline", summary: "Inspect genuine net-worth, holdings, and cash observations." },
+  { id: "historical", title: "Historical Performance", summary: "Review available 7D, 30D, 90D, YTD, 1Y, and since-first returns." },
+  { id: "benchmark", title: "Benchmark Comparison", summary: "Compare the portfolio with genuine overlapping NSE benchmark history." },
+  { id: "goal", title: "Goal Progress Intelligence", summary: "Review progress, remaining value, target date, and track status." },
+  { id: "records", title: "Performance Records", summary: "Inspect genuine highs, lows, best moves, and health changes." },
+  { id: "milestones", title: "Portfolio Milestones", summary: "Review the first recorded date each real threshold was reached." },
+  { id: "drawdown", title: "Portfolio Drawdown", summary: "Measure current and maximum decline from genuine prior peaks." },
+  { id: "health", title: "Portfolio Health Trend", summary: "Track changes in the stored portfolio health score." },
+  { id: "snapshots", title: "Snapshot History", summary: "Inspect the canonical REAL observations behind Performance." }
+];
+
 export default function Performance() {
   const [loading, setLoading] = useState(true);
   const [snapshots, setSnapshots] = useState([]);
   const [canonicalMetrics, setCanonicalMetrics] = useState(null);
 const [currentHealth, setCurrentHealth] = useState(null);
 const [historicalSummary, setHistoricalSummary] = useState(null);
-const [benchmarkGoalIntel, setBenchmarkGoalIntel] = useState(null);
+  const [benchmarkGoalIntel, setBenchmarkGoalIntel] = useState(null);
+  const [activeSection, setActiveSection] = useState(null);
 
   /*
    * PC-030C2C3
@@ -254,15 +267,19 @@ const [benchmarkGoalIntel, setBenchmarkGoalIntel] = useState(null);
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Performance</Text>
           <Text style={styles.subtitle}>
-            Portfolio value, gains, cash, and health over time.
+            {activeSection
+              ? PERFORMANCE_SECTIONS.find((section) => section.id === activeSection)?.title
+              : "Portfolio value, gains, cash, and health over time."}
           </Text>
         </View>
 
         <Pressable
           style={styles.dashboardButton}
-          onPress={() => router.replace("/unified-portfolio-analytics")}
+          onPress={() => activeSection
+            ? setActiveSection(null)
+            : router.replace("/(tabs)/dashboard")}
         >
-          <Text style={styles.dashboardText}>Portfolio Analytics</Text>
+          <Text style={styles.dashboardText}>{activeSection ? "Back to Performance" : "Home"}</Text>
         </Pressable>
       </View>
 
@@ -276,7 +293,7 @@ const [benchmarkGoalIntel, setBenchmarkGoalIntel] = useState(null);
         </View>
       ) : (
         <>
-          <View style={styles.summary}>
+          <View style={[styles.summary, activeSection && styles.hidden]}>
             <SummaryItem
               label="Holdings Market Value"
               value={`KES ${money(metrics.latest.currentValue)}`}
@@ -319,7 +336,38 @@ const [benchmarkGoalIntel, setBenchmarkGoalIntel] = useState(null);
             />
           </View>
 
-          <View style={styles.card}>
+          <View style={[styles.performanceMenu, activeSection && styles.hidden]}>
+            <Text style={styles.performanceMenuTitle}>Performance Details</Text>
+            <Text style={styles.performanceMenuText}>Choose one area to inspect. Each detail opens as a focused mobile screen.</Text>
+            <View style={styles.performanceMenuList}>
+            {PERFORMANCE_SECTIONS.map((section) => (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${section.title}`}
+                key={section.id}
+                style={({ pressed }) => [styles.performanceMenuButton, windowWidth < 600 && styles.performanceMenuButtonCompact, pressed && styles.performanceMenuButtonPressed]}
+                onPress={() => setActiveSection(section.id)}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.performanceMenuButtonTitle}>{section.title}</Text>
+                  {windowWidth >= 600 ? <Text style={styles.performanceMenuButtonText}>{section.summary}</Text> : null}
+                </View>
+                <Text style={styles.performanceMenuArrow}>›</Text>
+              </Pressable>
+            ))}
+            </View>
+          </View>
+
+          {activeSection ? (
+            <View style={styles.detailNavigation}>
+              <Pressable style={styles.detailBackButton} onPress={() => setActiveSection(null)}>
+                <Text style={styles.detailBackText}>‹ Back to Performance</Text>
+              </Pressable>
+              <Text style={styles.detailPosition}>{PERFORMANCE_SECTIONS.findIndex((section) => section.id === activeSection) + 1} of {PERFORMANCE_SECTIONS.length}</Text>
+            </View>
+          ) : null}
+
+          <View style={[styles.card, activeSection !== "timeline" && styles.hidden]}>
             <View style={styles.sectionHeaderRow}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.cardTitle}>
@@ -562,7 +610,7 @@ const [benchmarkGoalIntel, setBenchmarkGoalIntel] = useState(null);
             )}
           </View>
 
-          <View style={styles.card}>
+          <View style={[styles.card, activeSection !== "historical" && styles.hidden]}>
             <View style={styles.sectionHeaderRow}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.cardTitle}>
@@ -633,7 +681,7 @@ const [benchmarkGoalIntel, setBenchmarkGoalIntel] = useState(null);
             ) : null}
           </View>
 
-          <View style={styles.card}>
+          <View style={[styles.card, activeSection !== "benchmark" && styles.hidden]}>
             <View style={styles.sectionHeaderRow}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.cardTitle}>
@@ -816,7 +864,7 @@ const [benchmarkGoalIntel, setBenchmarkGoalIntel] = useState(null);
             ) : null}
           </View>
 
-          <View style={styles.card}>
+          <View style={[styles.card, activeSection !== "goal" && styles.hidden]}>
             <View style={styles.sectionHeaderRow}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.cardTitle}>
@@ -1045,27 +1093,28 @@ const [benchmarkGoalIntel, setBenchmarkGoalIntel] = useState(null);
             ) : null}
           </View>
 
-          <View style={styles.card}>
+          <View style={[styles.card, !["records", "milestones"].includes(activeSection) && styles.hidden]}>
             <View style={styles.sectionHeaderRow}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.cardTitle}>
-                  Performance Records
+                  {activeSection === "milestones" ? "Portfolio Milestones" : "Performance Records"}
                 </Text>
 
-                <Text style={styles.body}>
-                  Record highs, lows, snapshot moves, health changes,
-                  and portfolio milestones from genuine stored observations.
-                </Text>
+                <Text style={styles.body}>{activeSection === "milestones"
+                  ? "First recorded dates that genuine Net Worth observations reached each threshold."
+                  : "Record highs, lows, snapshot moves, and health changes from genuine stored observations."}</Text>
               </View>
 
               <View style={styles.observationBadge}>
                 <Text style={styles.observationBadgeText}>
-                  {historicalSummary?.records?.observationCount || 0} records
+                  {activeSection === "milestones"
+                    ? `${historicalSummary?.records?.milestones?.filter((item) => item.achieved)?.length || 0} achieved`
+                    : `${historicalSummary?.records?.observationCount || 0} records`}
                 </Text>
               </View>
             </View>
 
-            <View style={styles.performanceRecordGrid}>
+            <View style={[styles.performanceRecordGrid, activeSection !== "records" && styles.hidden]}>
               <PerformanceRecordMetric
                 label="Record High Net Worth"
                 value={
@@ -1282,7 +1331,7 @@ const [benchmarkGoalIntel, setBenchmarkGoalIntel] = useState(null);
               />
             </View>
 
-            <View style={styles.milestoneSection}>
+            <View style={[styles.milestoneSection, activeSection !== "milestones" && styles.hidden]}>
               <Text style={styles.performanceRecordSectionTitle}>
                 Portfolio Milestones
               </Text>
@@ -1347,7 +1396,7 @@ const [benchmarkGoalIntel, setBenchmarkGoalIntel] = useState(null);
               )}
             </View>
 
-            {historicalSummary?.records?.observationCount < 2 ? (
+            {activeSection === "records" && historicalSummary?.records?.observationCount < 2 ? (
               <View style={styles.performanceRecordNotice}>
                 <Text style={styles.performanceRecordNoticeTitle}>
                   Building Performance Records
@@ -1362,7 +1411,7 @@ const [benchmarkGoalIntel, setBenchmarkGoalIntel] = useState(null);
             ) : null}
           </View>
 
-          <View style={styles.card}>
+          <View style={[styles.card, activeSection !== "drawdown" && styles.hidden]}>
             <Text style={styles.cardTitle}>
               Portfolio Drawdown
             </Text>
@@ -1438,7 +1487,7 @@ const [benchmarkGoalIntel, setBenchmarkGoalIntel] = useState(null);
             </View>
           </View>
 
-          <View style={styles.card}>
+          <View style={[styles.card, activeSection !== "health" && styles.hidden]}>
             <Text style={styles.cardTitle}>
               Portfolio Health Trend
             </Text>
@@ -1523,7 +1572,7 @@ const [benchmarkGoalIntel, setBenchmarkGoalIntel] = useState(null);
             </View>
           </View>
 
-          <View style={styles.card}>
+          <View style={[styles.card, activeSection !== "snapshots" && styles.hidden]}>
             <Text style={styles.cardTitle}>Snapshot History</Text>
 
             {snapshots.map((s) => (
@@ -1574,12 +1623,12 @@ const [benchmarkGoalIntel, setBenchmarkGoalIntel] = useState(null);
 
       <Pressable
         style={styles.backButton}
-        onPress={() =>
-          router.replace("/unified-portfolio-analytics")
-        }
+        onPress={() => activeSection
+          ? setActiveSection(null)
+          : router.replace("/(tabs)/dashboard")}
       >
         <Text style={styles.backText}>
-          Back to Portfolio Analytics
+          {activeSection ? "Back to Performance" : "Back to Home"}
         </Text>
       </Pressable>
     </ScrollView>
@@ -2761,6 +2810,7 @@ function money(v) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#020617" },
   content: { padding: 20, paddingTop: 60, paddingBottom: 120 },
+  hidden: { display: "none" },
   center: {
     flex: 1,
     backgroundColor: "#020617",
@@ -2791,15 +2841,40 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     borderColor: "#1e293b",
     borderWidth: 1,
-    gap: 12
+    gap: 10,
+    flexDirection: "row",
+    flexWrap: "wrap"
   },
   summaryItem: {
+    width: "48%",
+    minHeight: 76,
     backgroundColor: "#020617",
     padding: 14,
     borderRadius: 14,
     borderColor: "#1e293b",
     borderWidth: 1
   },
+  performanceMenu: {
+    marginTop: 16,
+    backgroundColor: "#0f172a",
+    borderColor: "#1e293b",
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 14
+  },
+  performanceMenuTitle: { color: "#67e8f9", fontSize: 20, fontWeight: "900" },
+  performanceMenuText: { color: "#94a3b8", fontSize: 12, lineHeight: 18, marginTop: 5, marginBottom: 5 },
+  performanceMenuList: { flexDirection: "row", flexWrap: "wrap", gap: 9 },
+  performanceMenuButton: { minHeight: 66, flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#020617", borderColor: "#1e293b", borderWidth: 1, borderRadius: 14, padding: 12, marginTop: 9 },
+  performanceMenuButtonCompact: { width: "48%", minHeight: 78, marginTop: 0 },
+  performanceMenuButtonPressed: { backgroundColor: "#1e293b", borderColor: "#67e8f9" },
+  performanceMenuButtonTitle: { color: "white", fontWeight: "900", fontSize: 14 },
+  performanceMenuButtonText: { color: "#94a3b8", fontSize: 10, lineHeight: 15, marginTop: 3 },
+  performanceMenuArrow: { color: "#c084fc", fontSize: 25, fontWeight: "900" },
+  detailNavigation: { marginTop: 16, minHeight: 48, flexDirection: "row", alignItems: "center", gap: 12 },
+  detailBackButton: { flex: 1, minHeight: 46, borderRadius: 14, backgroundColor: "#1e293b", justifyContent: "center", paddingHorizontal: 14 },
+  detailBackText: { color: "#67e8f9", fontWeight: "900" },
+  detailPosition: { color: "#c084fc", fontWeight: "900", fontSize: 11 },
   card: {
     marginTop: 16,
     backgroundColor: "#0f172a",

@@ -183,12 +183,18 @@ function buildSectorRows(holdings, totalValue) {
   const sectors = new Map();
   holdings.forEach((holding) => {
     const sector = holding.sector || "Other";
-    const current = sectors.get(sector) || { sector, totalValue: 0, securities: [] };
+    const current = sectors.get(sector) || { sector, totalValue: 0, investedValue: 0, profitLoss: 0, securities: [] };
     current.totalValue += number(holding.marketValue || holding.value);
+    current.investedValue += number(holding.investedValue || holding.costValue);
+    current.profitLoss += number(holding.profitLoss);
     current.securities.push(holding);
     sectors.set(sector, current);
   });
-  return [...sectors.values()].map((item) => ({ ...item, weight: number(totalValue) > 0 ? item.totalValue / number(totalValue) * 100 : 0 })).sort((a, b) => b.totalValue - a.totalValue);
+  return [...sectors.values()].map((item) => ({
+    ...item,
+    weight: number(totalValue) > 0 ? item.totalValue / number(totalValue) * 100 : 0,
+    profitLossPct: item.investedValue > 0 ? item.profitLoss / item.investedValue * 100 : null
+  })).sort((a, b) => b.totalValue - a.totalValue);
 }
 
 function QuickMetric({ label, value }) { return <View style={styles.quickMetric}><Text style={styles.quickLabel}>{label}</Text><Text numberOfLines={1} style={styles.quickValue}>{value}</Text></View>; }
@@ -211,7 +217,7 @@ function Destination({ label, route }) { return <Pressable style={styles.destina
 function MoreDestinations() {
   return <View>
     <CollapsibleSection title="Portfolio Details" summary="Holdings, activity, analytics, and synchronization" initiallyOpen>
-      <Tool label="Holdings Detail" route="/holding-details" /><Tool label="Portfolio Activity" route="/portfolio-activity" /><Tool label="Portfolio Analytics" route="/unified-portfolio-analytics" /><Tool label="Sync & Reconcile" route="/portfolio-sync-center" />
+      <Tool label="Portfolio Activity" route="/portfolio-activity" /><Tool label="Portfolio Analytics" route="/unified-portfolio-analytics" /><Tool label="Sync & Reconcile" route="/portfolio-sync-center" />
     </CollapsibleSection>
     <CollapsibleSection title="Journey & Guidance" summary="Goals, Coach G, profile, and investor timeline">
       <Tool label="Wealth Journey" route="/wealth-journey" /><Tool label="Coach G Insights" route="/coach-insights" /><Tool label="Investor Timeline" route="/investor-timeline" /><Tool label="My Profile" route="/my-profile" />
@@ -230,7 +236,16 @@ function HoldingRow({ holding }) {
   return <View style={styles.holdingRow}><View style={styles.flex}><Text style={styles.symbol}>{holding.symbol || "N/A"}</Text><Text style={styles.holdingMeta}>Qty {number(holding.quantity).toLocaleString()} • {holding.sector || "Other"}</Text></View><View style={styles.alignRight}><Text style={styles.holdingValue}>KES {money(holding.marketValue)}</Text><Text style={gain >= 0 ? styles.gainSmall : styles.lossSmall}>{gain >= 0 ? "+" : ""}KES {money(gain)}</Text></View></View>;
 }
 
-function SectorRow({ sector, color, onPress }) { return <Pressable accessibilityRole="button" accessibilityLabel={`Open ${sector.sector} sector holdings`} hitSlop={4} style={({ pressed }) => [styles.sectorRow, pressed && styles.sectorRowPressed]} onPress={onPress}><View style={[styles.dot, { backgroundColor: color }]} /><Text style={styles.sectorName}>{sector.sector}</Text><Text style={styles.sectorValue}>KES {compactMoney(sector.totalValue)}</Text><Text style={styles.sectorWeight}>{number(sector.weight).toFixed(1)}%</Text><Text style={styles.sectorArrow}>›</Text></Pressable>; }
+function SectorRow({ sector, color, onPress }) {
+  const direction = sector.profitLossPct === null || Math.abs(number(sector.profitLoss)) < 0.005
+    ? "flat"
+    : sector.profitLoss > 0 ? "up" : "down";
+  const indicator = direction === "up" ? "▲" : direction === "down" ? "▼" : "—";
+  const indicatorStyle = direction === "up" ? styles.sectorUp : direction === "down" ? styles.sectorDown : styles.sectorFlat;
+  const returnLabel = sector.profitLossPct === null ? "return unavailable" : `${indicator} ${Math.abs(number(sector.profitLossPct)).toFixed(1)}%`;
+
+  return <Pressable accessibilityRole="button" accessibilityLabel={`${sector.sector}, ${returnLabel}. Open sector securities`} hitSlop={4} style={({ pressed }) => [styles.sectorRow, pressed && styles.sectorRowPressed]} onPress={onPress}><View style={[styles.dot, { backgroundColor: color }]} /><Text style={[styles.sectorDirection, indicatorStyle]}>{indicator}</Text><Text style={styles.sectorName}>{sector.sector}</Text><View style={styles.sectorNumbers}><Text style={styles.sectorValue}>KES {compactMoney(sector.totalValue)}</Text><Text style={indicatorStyle}>{sector.profitLossPct === null ? "N/A" : `${number(sector.profitLossPct) >= 0 ? "+" : ""}${number(sector.profitLossPct).toFixed(1)}%`}</Text></View><Text style={styles.sectorWeight}>{number(sector.weight).toFixed(1)}%</Text><Text style={styles.sectorArrow}>›</Text></Pressable>;
+}
 
 function SectorDonut({ data, total, size, onSelect }) {
   const center = size / 2;
@@ -266,7 +281,7 @@ const styles = StyleSheet.create({
   hero: { marginTop: 12, backgroundColor: "#1d0b38", borderColor: "#6b21a8", borderWidth: 1, borderRadius: 21, padding: 16 }, heroLabel: { color: "#d8b4fe", fontSize: 10, fontWeight: "900" }, heroValue: { color: "white", fontSize: 30, fontWeight: "900", marginTop: 4 }, gain: { color: "#86efac", fontWeight: "900", fontSize: 12, marginTop: 4 }, loss: { color: "#fca5a5", fontWeight: "900", fontSize: 12, marginTop: 4 }, quickMetrics: { flexDirection: "row", gap: 8, marginTop: 13 }, quickMetric: { flex: 1, minWidth: 0, backgroundColor: "#09051d", borderRadius: 12, padding: 10 }, quickLabel: { color: "#94a3b8", fontSize: 9 }, quickValue: { color: "white", fontWeight: "900", fontSize: 12, marginTop: 4 },
   tabs: { flexDirection: "row", gap: 6, marginTop: 12 }, tab: { flex: 1, minWidth: 0, minHeight: 44, borderRadius: 13, backgroundColor: "#1e293b", alignItems: "center", justifyContent: "center", paddingHorizontal: 4 }, tabActive: { backgroundColor: "#9333ea" }, tabText: { color: "#94a3b8", fontWeight: "900", fontSize: 11 }, tabTextActive: { color: "white", fontWeight: "900", fontSize: 11 },
   primaryCard: { marginTop: 12, backgroundColor: "#0f172a", borderColor: "#1e293b", borderWidth: 1, borderRadius: 20, padding: 15 }, cardHeader: { flexDirection: "row", alignItems: "center", gap: 12 }, cardTitle: { color: "#67e8f9", fontSize: 18, fontWeight: "900" }, cardHint: { color: "#94a3b8", fontSize: 11, marginTop: 4 }, sectorCount: { color: "#c084fc", fontSize: 11, fontWeight: "900" }, flex: { flex: 1 }, allocationMetrics: { flexDirection: "row", gap: 7, marginTop: 12 }, allocationMetric: { flex: 1, minWidth: 0, minHeight: 62, borderRadius: 13, borderColor: "#334155", borderWidth: 1, backgroundColor: "#020617", padding: 9, justifyContent: "center" }, allocationMetricLabel: { color: "#94a3b8", fontSize: 9 }, allocationMetricValue: { color: "white", fontSize: 11, fontWeight: "900", marginTop: 5 }, chart: { alignItems: "center", justifyContent: "center", marginVertical: 5 }, chartHint: { color: "#94a3b8", fontSize: 10, marginTop: -4, marginBottom: 5 },
-  sectorRow: { minHeight: 52, flexDirection: "row", alignItems: "center", gap: 9, borderTopColor: "#1e293b", borderTopWidth: 1, paddingHorizontal: 4 }, sectorRowPressed: { backgroundColor: "#1e293b" }, dot: { width: 10, height: 10, borderRadius: 5 }, sectorName: { color: "#e2e8f0", fontWeight: "800", flex: 1 }, sectorValue: { color: "white", fontWeight: "900", fontSize: 11 }, sectorWeight: { color: "#86efac", fontWeight: "900", fontSize: 11, width: 48, textAlign: "right" }, sectorArrow: { color: "#67e8f9", fontWeight: "900", fontSize: 22 }, sectorToggle: { minHeight: 46, marginTop: 10, borderRadius: 13, backgroundColor: "#1e293b", alignItems: "center", justifyContent: "center" }, sectorToggleText: { color: "#67e8f9", fontWeight: "900" }, moreHint: { color: "#94a3b8", textAlign: "center", marginTop: 12, fontSize: 11 },
+  sectorRow: { minHeight: 58, flexDirection: "row", alignItems: "center", gap: 7, borderTopColor: "#1e293b", borderTopWidth: 1, paddingHorizontal: 4 }, sectorRowPressed: { backgroundColor: "#1e293b" }, dot: { width: 10, height: 10, borderRadius: 5 }, sectorDirection: { width: 13, fontWeight: "900", textAlign: "center" }, sectorUp: { color: "#86efac", fontWeight: "900", fontSize: 10 }, sectorDown: { color: "#fca5a5", fontWeight: "900", fontSize: 10 }, sectorFlat: { color: "#94a3b8", fontWeight: "900", fontSize: 10 }, sectorName: { color: "#e2e8f0", fontWeight: "800", flex: 1 }, sectorNumbers: { alignItems: "flex-end", minWidth: 64 }, sectorValue: { color: "white", fontWeight: "900", fontSize: 10 }, sectorWeight: { color: "#e2e8f0", fontWeight: "900", fontSize: 10, width: 43, textAlign: "right" }, sectorArrow: { color: "#67e8f9", fontWeight: "900", fontSize: 22 }, sectorToggle: { minHeight: 46, marginTop: 10, borderRadius: 13, backgroundColor: "#1e293b", alignItems: "center", justifyContent: "center" }, sectorToggleText: { color: "#67e8f9", fontWeight: "900" }, moreHint: { color: "#94a3b8", textAlign: "center", marginTop: 12, fontSize: 11 },
   coachCard: { marginTop: 12, backgroundColor: "#062031", borderColor: "#0e7490", borderWidth: 1, borderRadius: 18, padding: 14, flexDirection: "row", alignItems: "center" }, coachLabel: { color: "#67e8f9", fontSize: 10, fontWeight: "900" }, coachText: { color: "white", lineHeight: 19, fontWeight: "700", marginTop: 5 }, arrow: { color: "#c084fc", fontSize: 24, fontWeight: "900", marginLeft: 8 },
   destinationRow: { flexDirection: "row", gap: 8, marginTop: 12 }, destination: { flex: 1, backgroundColor: "#1e293b", minHeight: 48, borderRadius: 14, paddingHorizontal: 12, flexDirection: "row", alignItems: "center" }, destinationText: { color: "white", fontWeight: "900", fontSize: 12, flex: 1 }, destinationArrow: { color: "#67e8f9", fontSize: 19 },
   holdingRow: { minHeight: 64, flexDirection: "row", alignItems: "center", borderBottomColor: "#1e293b", borderBottomWidth: 1, paddingVertical: 9 }, symbol: { color: "white", fontWeight: "900", fontSize: 16 }, holdingMeta: { color: "#94a3b8", fontSize: 11, marginTop: 4 }, alignRight: { alignItems: "flex-end" }, holdingValue: { color: "white", fontWeight: "900", fontSize: 12 }, gainSmall: { color: "#86efac", fontWeight: "900", fontSize: 11, marginTop: 4 }, lossSmall: { color: "#fca5a5", fontWeight: "900", fontSize: 11, marginTop: 4 },

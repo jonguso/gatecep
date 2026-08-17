@@ -5,6 +5,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View
 } from "react-native";
 import { router } from "expo-router";
@@ -26,6 +27,16 @@ const ACTION_FILTERS = [
   "DIVIDENDS"
 ];
 
+const ANALYTICS_SECTIONS = [
+  { id: "health", title: "Executive Health", summary: "Review the weighted portfolio-health classification and component scores." },
+  { id: "scorecard", title: "Analytics Scorecard", summary: "Compare risk, performance, rebalancing, liquidity, and operations." },
+  { id: "actions", title: "Executive Actions", summary: "Inspect ranked advisory priorities and estimated financial impact." },
+  { id: "alerts", title: "Portfolio Alerts", summary: "Review unified risk, performance, and rebalancing alerts." },
+  { id: "holdings", title: "Holdings Analytics", summary: "Inspect security allocation, contribution, return, and risk status." },
+  { id: "operations", title: "Broker & Operations", summary: "Review broker, reconciliation, dividends, income, and rebalance status." },
+  { id: "specialists", title: "Specialist Analysis", summary: "Open Risk, Performance, Rebalancing, or the canonical Home." }
+];
+
 export default function UnifiedPortfolioAnalyticsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -35,6 +46,8 @@ export default function UnifiedPortfolioAnalyticsScreen() {
   const [error, setError] = useState("");
   const [alertFilter, setAlertFilter] = useState("ALL");
   const [actionFilter, setActionFilter] = useState("ALL");
+  const [activeSection, setActiveSection] = useState(null);
+  const { width: windowWidth } = useWindowDimensions();
 
   const loadData = useCallback(async ({ fullLoader = true } = {}) => {
     try {
@@ -106,7 +119,7 @@ export default function UnifiedPortfolioAnalyticsScreen() {
         </Pressable>
         <Pressable
           style={styles.secondaryButton}
-          onPress={() => router.replace("/portfolio-hub")}
+          onPress={() => router.replace("/(tabs)/dashboard")}
         >
           <Text style={styles.secondaryButtonText}>Back to REAL Portfolio</Text>
         </Pressable>
@@ -119,12 +132,21 @@ export default function UnifiedPortfolioAnalyticsScreen() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Text style={styles.eyebrow}>PC-022</Text>
-      <Text style={styles.title}>Unified Portfolio Analytics</Text>
-      <Text style={styles.subtitle}>
-        Executive portfolio health, risk, performance, rebalancing, broker
-        reconciliation, dividends, alerts, and action priorities.
-      </Text>
+      <View style={styles.headerRow}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.eyebrow}>PC-022</Text>
+          <Text style={styles.title}>Portfolio Analysis</Text>
+          <Text style={styles.subtitle}>{activeSection
+            ? ANALYTICS_SECTIONS.find((section) => section.id === activeSection)?.title
+            : "Executive health, risk, performance, operations, alerts, and priorities."}</Text>
+        </View>
+        <Pressable
+          style={styles.headerButton}
+          onPress={() => activeSection ? setActiveSection(null) : router.replace("/(tabs)/dashboard")}
+        >
+          <Text style={styles.headerButtonText}>{activeSection ? "Back to Analysis" : "Home"}</Text>
+        </Pressable>
+      </View>
 
       {error ? (
         <View style={styles.errorCard}>
@@ -132,7 +154,7 @@ export default function UnifiedPortfolioAnalyticsScreen() {
         </View>
       ) : null}
 
-      <View style={styles.hero}>
+      <View style={[styles.hero, activeSection && styles.hidden]}>
         <View style={styles.scoreCircle}>
           <Text style={styles.scoreValue}>{score}</Text>
           <Text style={styles.scoreMaximum}>/100</Text>
@@ -152,7 +174,7 @@ export default function UnifiedPortfolioAnalyticsScreen() {
         </View>
       </View>
 
-            <View style={styles.grid}>
+      <View style={[styles.grid, activeSection && styles.hidden]}>
         <Metric
           label="Net Worth"
           value={`KES ${money(
@@ -222,7 +244,39 @@ export default function UnifiedPortfolioAnalyticsScreen() {
         />
       </View>
 
+      <View style={[styles.analysisMenu, activeSection && styles.hidden]}>
+        <Text style={styles.analysisMenuTitle}>Analysis Details</Text>
+        <Text style={styles.analysisMenuText}>Choose one area to inspect. Each opens as a focused mobile screen.</Text>
+        <View style={styles.analysisMenuList}>
+          {ANALYTICS_SECTIONS.map((section) => (
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`Open ${section.title}`}
+              key={section.id}
+              style={({ pressed }) => [styles.analysisMenuButton, windowWidth < 600 && styles.analysisMenuButtonCompact, pressed && styles.analysisMenuButtonPressed]}
+              onPress={() => setActiveSection(section.id)}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={styles.analysisMenuButtonTitle}>{section.title}</Text>
+                {windowWidth >= 600 ? <Text style={styles.analysisMenuButtonText}>{section.summary}</Text> : null}
+              </View>
+              <Text style={styles.analysisMenuArrow}>›</Text>
+            </Pressable>
+          ))}
+        </View>
+      </View>
+
+      {activeSection ? (
+        <View style={styles.detailNavigation}>
+          <Pressable style={styles.detailBackButton} onPress={() => setActiveSection(null)}>
+            <Text style={styles.detailBackText}>‹ Back to Portfolio Analysis</Text>
+          </Pressable>
+          <Text style={styles.detailPosition}>{ANALYTICS_SECTIONS.findIndex((section) => section.id === activeSection) + 1} of {ANALYTICS_SECTIONS.length}</Text>
+        </View>
+      ) : null}
+
       <Section
+        style={activeSection !== "health" && styles.hidden}
         title="Executive Health Classification"
         description="Weighted across risk, performance, allocation alignment, liquidity, and operational integrity."
       >
@@ -254,6 +308,7 @@ export default function UnifiedPortfolioAnalyticsScreen() {
       </Section>
 
       <Section
+        style={activeSection !== "scorecard" && styles.hidden}
         title="Analytics Scorecard"
         description="Combined scores and statuses from risk, performance, and rebalancing."
       >
@@ -275,6 +330,7 @@ export default function UnifiedPortfolioAnalyticsScreen() {
       </Section>
 
       <Section
+        style={activeSection !== "actions" && styles.hidden}
         title="Executive Action Queue"
         description="Ranked advisory actions from portfolio health, risk, performance, rebalancing, operations, and data quality."
       >
@@ -305,6 +361,7 @@ export default function UnifiedPortfolioAnalyticsScreen() {
       </Section>
 
       <Section
+        style={activeSection !== "alerts" && styles.hidden}
         title="Portfolio Alerts"
         description="Unified alerts from risk, performance, and rebalancing analytics."
       >
@@ -326,6 +383,7 @@ export default function UnifiedPortfolioAnalyticsScreen() {
       </Section>
 
       <Section
+        style={activeSection !== "holdings" && styles.hidden}
         title="Holdings Overview"
         description="Current holding value, allocation, contribution, and risk-limit status."
       >
@@ -352,6 +410,7 @@ export default function UnifiedPortfolioAnalyticsScreen() {
       </Section>
 
       <Section
+        style={activeSection !== "operations" && styles.hidden}
         title="Broker, Dividends, and Operations"
         description="Operational portfolio status beyond market analytics."
       >
@@ -367,6 +426,7 @@ export default function UnifiedPortfolioAnalyticsScreen() {
       </Section>
 
       <Section
+        style={activeSection !== "specialists" && styles.hidden}
         title="Specialist Analysis"
         description="Open the detailed engines behind the executive portfolio view."
       >
@@ -407,17 +467,17 @@ export default function UnifiedPortfolioAnalyticsScreen() {
           <Pressable
             style={styles.specialistButton}
             onPress={() =>
-              router.push("/portfolio-hub")
+              router.push("/(tabs)/dashboard")
             }
           >
             <Text style={styles.specialistButtonText}>
-              Portfolio Hub
+              Home
             </Text>
           </Pressable>
         </View>
       </Section>
 
-      <View style={styles.protectionCard}>
+      <View style={[styles.protectionCard, activeSection && styles.hidden]}>
         <Text style={styles.protectionTitle}>Executive Analytics Only</Text>
         <Text style={styles.protectionText}>
           PC-022 consolidates analytics and advisory priorities. It does not
@@ -428,7 +488,7 @@ export default function UnifiedPortfolioAnalyticsScreen() {
 
       <Pressable
         disabled={refreshing}
-        style={[styles.primaryButton, refreshing && styles.disabled]}
+        style={[styles.primaryButton, activeSection && styles.hidden, refreshing && styles.disabled]}
         onPress={() => loadData({ fullLoader: false })}
       >
         {refreshing ? (
@@ -440,17 +500,17 @@ export default function UnifiedPortfolioAnalyticsScreen() {
 
       <Pressable
         style={styles.secondaryButton}
-        onPress={() => router.replace("/portfolio-hub")}
+        onPress={() => activeSection ? setActiveSection(null) : router.replace("/(tabs)/dashboard")}
       >
-        <Text style={styles.secondaryButtonText}>Back to Portfolio Hub</Text>
+        <Text style={styles.secondaryButtonText}>{activeSection ? "Back to Portfolio Analysis" : "Back to Home"}</Text>
       </Pressable>
     </ScrollView>
   );
 }
 
-function Section({ title, description, children }) {
+function Section({ title, description, children, style }) {
   return (
-    <View style={styles.section}>
+    <View style={[styles.section, style]}>
       <Text style={styles.sectionTitle}>{title}</Text>
       {description ? <Text style={styles.sectionDescription}>{description}</Text> : null}
       {children}
@@ -609,7 +669,8 @@ function severityTextStyle(severity) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#020617" },
-  content: { padding: 22, paddingTop: 70, paddingBottom: 110 },
+  content: { padding: 18, paddingTop: 54, paddingBottom: 110, width: "100%", maxWidth: 900, alignSelf: "center" },
+  hidden: { display: "none" },
   centerScreen: {
     flex: 1,
     backgroundColor: "#020617",
@@ -618,6 +679,9 @@ const styles = StyleSheet.create({
     padding: 24
   },
   loadingText: { color: "#94a3b8", marginTop: 14 },
+  headerRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  headerButton: { minHeight: 44, borderRadius: 14, backgroundColor: "#1e293b", borderColor: "#334155", borderWidth: 1, paddingHorizontal: 14, alignItems: "center", justifyContent: "center" },
+  headerButtonText: { color: "#67e8f9", fontWeight: "900", fontSize: 12 },
   eyebrow: { color: "#22d3ee", fontWeight: "900" },
   title: { color: "white", fontSize: 31, fontWeight: "900", marginTop: 8 },
   subtitle: { color: "#94a3b8", lineHeight: 22, marginTop: 10, marginBottom: 20 },
@@ -658,6 +722,20 @@ const styles = StyleSheet.create({
   },
   metricLabel: { color: "#94a3b8", fontSize: 11 },
   metricValue: { color: "white", fontWeight: "900", marginTop: 6 },
+  analysisMenu: { marginTop: 18, backgroundColor: "#0f172a", borderColor: "#1e293b", borderWidth: 1, borderRadius: 20, padding: 14 },
+  analysisMenuTitle: { color: "#67e8f9", fontSize: 20, fontWeight: "900" },
+  analysisMenuText: { color: "#94a3b8", fontSize: 12, lineHeight: 18, marginTop: 5, marginBottom: 5 },
+  analysisMenuList: { flexDirection: "row", flexWrap: "wrap", gap: 9 },
+  analysisMenuButton: { minHeight: 66, flexDirection: "row", alignItems: "center", gap: 10, backgroundColor: "#020617", borderColor: "#1e293b", borderWidth: 1, borderRadius: 14, padding: 12, marginTop: 9 },
+  analysisMenuButtonCompact: { width: "48%", minHeight: 78, marginTop: 0 },
+  analysisMenuButtonPressed: { backgroundColor: "#1e293b", borderColor: "#67e8f9" },
+  analysisMenuButtonTitle: { color: "white", fontWeight: "900", fontSize: 14 },
+  analysisMenuButtonText: { color: "#94a3b8", fontSize: 10, lineHeight: 15, marginTop: 3 },
+  analysisMenuArrow: { color: "#c084fc", fontSize: 25, fontWeight: "900" },
+  detailNavigation: { marginTop: 16, minHeight: 48, flexDirection: "row", alignItems: "center", gap: 12 },
+  detailBackButton: { flex: 1, minHeight: 46, borderRadius: 14, backgroundColor: "#1e293b", justifyContent: "center", paddingHorizontal: 14 },
+  detailBackText: { color: "#67e8f9", fontWeight: "900" },
+  detailPosition: { color: "#c084fc", fontWeight: "900", fontSize: 11 },
   section: {
     backgroundColor: "#0f172a",
     borderColor: "#1e293b",

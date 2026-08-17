@@ -11,7 +11,7 @@ echo "============================================================"
 echo "PC-030M5B — SECTOR TAP + SECURITY HOLDINGS VERIFICATION"
 echo "============================================================"
 
-grep -Fq 'accessibilityLabel={`Open ${sector.sector} sector holdings`}' "$HOME_SCREEN"
+grep -Fq 'accessibilityLabel={`${sector.sector}, ${returnLabel}. Open sector securities`}' "$HOME_SCREEN"
 grep -Fq 'setSelectedSector(sector)' "$HOME_SCREEN"
 grep -Fq 'presentationStyle="overFullScreen"' "$HOME_SCREEN"
 grep -Fq 'View All ${sectorRows.length} Sectors' "$HOME_SCREEN"

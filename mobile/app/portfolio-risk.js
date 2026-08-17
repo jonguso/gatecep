@@ -7,6 +7,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View
 } from "react-native";
 import { router } from "expo-router";
@@ -41,7 +42,46 @@ const SCENARIO_FILTERS = [
   "INTEREST_RATE_SHOCK"
 ];
 
+const RISK_SECTIONS = [
+  {
+    id: "assessment",
+    title: "Coach G Risk Assessment",
+    description: "Review the consolidated risk score, priority issue, insights, and actions."
+  },
+  {
+    id: "profile",
+    title: "Risk Profile & Limits",
+    description: "Inspect or change the active policy and its saved risk thresholds."
+  },
+  {
+    id: "concentration",
+    title: "Concentration Analysis",
+    description: "Inspect individual holding, top-position, and sector exposure."
+  },
+  {
+    id: "diversification",
+    title: "Diversification",
+    description: "Review diversification components and improvement actions."
+  },
+  {
+    id: "history",
+    title: "Historical Risk Metrics",
+    description: "Inspect genuine return history, volatility, drawdown, and risk ratios."
+  },
+  {
+    id: "stress",
+    title: "Stress Testing",
+    description: "Review modeled losses without changing holdings, cash, or orders."
+  },
+  {
+    id: "alerts",
+    title: "Risk Alerts",
+    description: "Review policy-based concentration and historical risk warnings."
+  }
+];
+
 export default function PortfolioRiskScreen() {
+  const { width: windowWidth } = useWindowDimensions();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [switchingProfile, setSwitchingProfile] = useState(null);
@@ -54,6 +94,7 @@ export default function PortfolioRiskScreen() {
   const [error, setError] = useState("");
   const [alertFilter, setAlertFilter] = useState("ALL");
   const [scenarioFilter, setScenarioFilter] = useState("ALL");
+  const [activeSection, setActiveSection] = useState(null);
 
   const profiles = useMemo(() => {
     const all = listRiskProfiles();
@@ -176,15 +217,34 @@ export default function PortfolioRiskScreen() {
   const largestHolding = concentration?.concentration?.largestHolding || null;
   const largestSector = concentration?.sectorConcentration?.largestSector || null;
   const worstScenario = stressTests?.summary?.worstScenario || null;
+  const activeSectionIndex = RISK_SECTIONS.findIndex(
+    (section) => section.id === activeSection
+  );
+  const isCompact = windowWidth < 600;
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Text style={styles.eyebrow}>PC-020</Text>
-      <Text style={styles.title}>Portfolio Risk Analytics</Text>
-      <Text style={styles.subtitle}>
-        Review concentration, diversification, historical metrics, configured
-        limits, stress tests, and Coach G risk guidance.
-      </Text>
+      <View style={styles.pageHeader}>
+        <View style={styles.pageHeaderText}>
+          <Text style={styles.eyebrow}>PC-020</Text>
+          <Text style={styles.title}>Portfolio Risk</Text>
+          <Text style={styles.subtitle}>
+            Review current REAL portfolio risk, then open one focused detail.
+          </Text>
+        </View>
+        <Pressable
+          style={styles.headerButton}
+          onPress={() =>
+            activeSection
+              ? setActiveSection(null)
+              : router.replace("/(tabs)/dashboard")
+          }
+        >
+          <Text style={styles.headerButtonText}>
+            {activeSection ? "Back to Risk" : "Home"}
+          </Text>
+        </Pressable>
+      </View>
 
       {error ? (
         <View style={styles.errorCard}>
@@ -192,7 +252,7 @@ export default function PortfolioRiskScreen() {
         </View>
       ) : null}
 
-      <View style={styles.hero}>
+      <View style={activeSection ? styles.hidden : styles.hero}>
         <ScoreCircle value={diversification?.score} color="#f97316" />
         <View style={styles.heroText}>
           <Text style={styles.heroLabel}>Diversification Score</Text>
@@ -206,7 +266,7 @@ export default function PortfolioRiskScreen() {
         </View>
       </View>
 
-      <View style={styles.grid}>
+      <View style={activeSection ? styles.hidden : styles.grid}>
         <Metric
   label="Holdings Market Value"
   value={`KES ${money(
@@ -248,7 +308,42 @@ export default function PortfolioRiskScreen() {
         />
       </View>
 
+      {!activeSection ? (
+        <Section
+          title="Risk Details"
+          description="Choose one area to inspect. Each detail opens as a focused mobile screen."
+        >
+          <View style={[styles.detailMenu, isCompact && styles.detailMenuCompact]}>
+            {RISK_SECTIONS.map((section) => (
+              <Pressable
+                key={section.id}
+                style={[styles.detailButton, isCompact && styles.detailButtonCompact]}
+                onPress={() => setActiveSection(section.id)}
+              >
+                <View style={styles.detailButtonText}>
+                  <Text style={styles.detailButtonTitle}>{section.title}</Text>
+                  <Text style={styles.detailButtonDescription}>
+                    {section.description}
+                  </Text>
+                </View>
+                <Text style={styles.detailChevron}>›</Text>
+              </Pressable>
+            ))}
+          </View>
+        </Section>
+      ) : (
+        <View style={styles.detailNavigation}>
+          <Pressable onPress={() => setActiveSection(null)}>
+            <Text style={styles.detailBack}>‹ Back to Portfolio Risk</Text>
+          </Pressable>
+          <Text style={styles.detailPosition}>
+            {activeSectionIndex + 1} of {RISK_SECTIONS.length}
+          </Text>
+        </View>
+      )}
+
       <Section
+        style={activeSection === "assessment" ? null : styles.hidden}
         title="Coach G Risk Assessment"
         description="A consolidated assessment of concentration, diversification, stress resilience, and available historical evidence."
       >
@@ -377,6 +472,7 @@ export default function PortfolioRiskScreen() {
       </Section>
 
       <Section
+        style={activeSection === "profile" ? null : styles.hidden}
         title="Risk Profile"
         description="The active policy controls concentration, volatility, drawdown, liquidity, and alert thresholds."
       >
@@ -449,6 +545,7 @@ export default function PortfolioRiskScreen() {
       </Section>
 
       <Section
+        style={activeSection === "profile" ? null : styles.hidden}
         title="Configured Risk Limits"
         description="Current portfolio analytics are evaluated against these thresholds."
       >
@@ -456,6 +553,7 @@ export default function PortfolioRiskScreen() {
       </Section>
 
       <Section
+        style={activeSection === "concentration" ? null : styles.hidden}
         title="Concentration Analysis"
         description="Measures exposure to individual holdings, groups of holdings, and sectors."
       >
@@ -559,6 +657,7 @@ export default function PortfolioRiskScreen() {
       </Section>
 
       <Section
+        style={activeSection === "diversification" ? null : styles.hidden}
         title="Diversification"
         description="Combines holding count, concentration, HHI, effective holdings, and sector distribution."
       >
@@ -617,6 +716,7 @@ export default function PortfolioRiskScreen() {
       </Section>
 
       <Section
+        style={activeSection === "history" ? null : styles.hidden}
         title="Historical Risk Metrics"
         description="Calculated only from genuine Portfolio Event Ledger valuation history."
       >
@@ -689,6 +789,7 @@ export default function PortfolioRiskScreen() {
       </Section>
 
       <Section
+        style={activeSection === "stress" ? null : styles.hidden}
         title="Stress Testing"
         description="Models portfolio losses without modifying holdings, cash, or orders."
       >
@@ -744,6 +845,7 @@ export default function PortfolioRiskScreen() {
       </Section>
 
       <Section
+        style={activeSection === "alerts" ? null : styles.hidden}
         title="Risk Alerts"
         description="Combined concentration and historical risk warnings generated against the active policy."
       >
@@ -765,7 +867,7 @@ export default function PortfolioRiskScreen() {
         )}
       </Section>
 
-      <View style={styles.protectionCard}>
+      <View style={activeSection ? styles.protectionCard : styles.hidden}>
         <Text style={styles.protectionTitle}>Analytics Only</Text>
         <Text style={styles.protectionText}>
           PC-020 does not place trades, change holdings, modify cash, or submit
@@ -775,31 +877,39 @@ export default function PortfolioRiskScreen() {
         </Text>
       </View>
 
-      <Pressable
-        disabled={refreshing}
-        style={[styles.primaryButton, refreshing && styles.disabled]}
-        onPress={() => loadData({ showFullLoader: false })}
-      >
-        {refreshing ? (
-          <ActivityIndicator color="white" />
-        ) : (
-          <Text style={styles.primaryButtonText}>Refresh Risk Analytics</Text>
-        )}
-      </Pressable>
+      {!activeSection ? (
+        <Pressable
+          disabled={refreshing}
+          style={[styles.primaryButton, refreshing && styles.disabled]}
+          onPress={() => loadData({ showFullLoader: false })}
+        >
+          {refreshing ? (
+            <ActivityIndicator color="white" />
+          ) : (
+            <Text style={styles.primaryButtonText}>Refresh Risk Analytics</Text>
+          )}
+        </Pressable>
+      ) : null}
 
       <Pressable
         style={styles.secondaryButton}
-        onPress={() => router.replace("/unified-portfolio-analytics")}
+        onPress={() =>
+          activeSection
+            ? setActiveSection(null)
+            : router.replace("/(tabs)/dashboard")
+        }
       >
-        <Text style={styles.secondaryButtonText}>Back to Portfolio Analytics</Text>
+        <Text style={styles.secondaryButtonText}>
+          {activeSection ? "Back to Portfolio Risk" : "Back to Home"}
+        </Text>
       </Pressable>
     </ScrollView>
   );
 }
 
-function Section({ title, description, children }) {
+function Section({ title, description, children, style }) {
   return (
-    <View style={styles.section}>
+    <View style={[styles.section, style]}>
       <Text style={styles.sectionTitle}>{title}</Text>
       {description ? (
         <Text style={styles.sectionDescription}>{description}</Text>
@@ -1221,7 +1331,96 @@ const styles = StyleSheet.create({
   content: {
     padding: 22,
     paddingTop: 70,
-    paddingBottom: 110
+    paddingBottom: 110,
+    width: "100%",
+    maxWidth: 900,
+    alignSelf: "center"
+  },
+  hidden: {
+    display: "none"
+  },
+  pageHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    justifyContent: "space-between",
+    gap: 14
+  },
+  pageHeaderText: {
+    flex: 1
+  },
+  headerButton: {
+    minHeight: 44,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#334155",
+    backgroundColor: "#1e293b",
+    paddingHorizontal: 16,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  headerButtonText: {
+    color: "#67e8f9",
+    fontWeight: "900"
+  },
+  detailMenu: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10
+  },
+  detailMenuCompact: {
+    flexDirection: "column"
+  },
+  detailButton: {
+    width: "48%",
+    minHeight: 84,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: "#334155",
+    backgroundColor: "#020617",
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10
+  },
+  detailButtonCompact: {
+    width: "100%"
+  },
+  detailButtonText: {
+    flex: 1
+  },
+  detailButtonTitle: {
+    color: "white",
+    fontSize: 15,
+    fontWeight: "900"
+  },
+  detailButtonDescription: {
+    color: "#94a3b8",
+    fontSize: 12,
+    lineHeight: 17,
+    marginTop: 5
+  },
+  detailChevron: {
+    color: "#c084fc",
+    fontSize: 26,
+    fontWeight: "900"
+  },
+  detailNavigation: {
+    marginTop: 18,
+    marginBottom: 4,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 12
+  },
+  detailBack: {
+    color: "#67e8f9",
+    fontWeight: "900"
+  },
+  detailPosition: {
+    color: "#94a3b8",
+    fontSize: 12,
+    fontWeight: "800"
   },
   centerScreen: {
     flex: 1,
