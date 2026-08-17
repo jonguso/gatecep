@@ -354,6 +354,10 @@ export function reconcileWealthJourneyGoalsSummary(
                 ?.targetAmount
             ),
 
+          targetDate:
+            goal?.targetDate ??
+            null,
+
           projectedValue:
             n(
               trajectory
@@ -373,6 +377,10 @@ export function reconcileWealthJourneyGoalsSummary(
 
           nextAction:
             item?.nextAction ??
+            null,
+
+          recovery:
+            item?.recovery ??
             null,
 
           narrative:
@@ -547,7 +555,12 @@ export function reconcileWealthJourneyRuntimeResult(
             `Coach G, help me complete ${topPriorityGoal?.goal?.name || "this goal"}.`,
 
           route:
-            "/wealth-journey",
+            topPriorityGoal
+              ?.nextAction
+              ?.action ===
+            "REVIEW_RECOVERY_OPTIONS"
+              ? "/goal-recovery-options"
+              : "/wealth-journey",
 
           goalId:
             topPriorityGoal

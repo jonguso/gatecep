@@ -580,6 +580,17 @@ function ReadinessBanner({
           {missing.join(", ")}
         </Text>
       ) : null}
+
+      {missing.includes("TRACKABLE_GOAL_DETAILS") ? (
+        <Pressable
+          style={styles.goalDetailsButton}
+          onPress={() => router.push("/goal-details-edit")}
+        >
+          <Text style={styles.goalDetailsButtonText}>
+            Add Required Goal Details
+          </Text>
+        </Pressable>
+      ) : null}
     </View>
   );
 }
@@ -643,6 +654,24 @@ function CoachPriority({
             }
           </Text>
         </View>
+      ) : null}
+
+      {prompt?.route === "/goal-recovery-options" ? (
+        <Pressable
+          style={styles.recoveryRouteButton}
+          onPress={() =>
+            router.push({
+              pathname: "/goal-recovery-options",
+              params: {
+                goalId: prompt?.goalId || ""
+              }
+            })
+          }
+        >
+          <Text style={styles.recoveryRouteButtonText}>
+            Review Recovery Options
+          </Text>
+        </Pressable>
       ) : null}
     </View>
   );
@@ -1012,6 +1041,21 @@ const styles =
       fontSize: 12
     },
 
+    goalDetailsButton: {
+      minHeight: 44,
+      borderRadius: 12,
+      backgroundColor: "#9333ea",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 14,
+      marginTop: 12
+    },
+
+    goalDetailsButtonText: {
+      color: "white",
+      fontWeight: "900"
+    },
+
     summary: {
       flexDirection: "row",
       flexWrap: "wrap",
@@ -1083,6 +1127,21 @@ const styles =
       color: "#e9d5ff",
       lineHeight: 20,
       marginTop: 5
+    },
+
+    recoveryRouteButton: {
+      minHeight: 46,
+      borderRadius: 12,
+      backgroundColor: "#0891b2",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 14,
+      marginTop: 12
+    },
+
+    recoveryRouteButtonText: {
+      color: "white",
+      fontWeight: "900"
     },
 
     section: {

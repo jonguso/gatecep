@@ -18,14 +18,14 @@ export const nseEodPrices = {
 
     { symbol: "KEGN", price: 9.35, prevClose: 9.12, volume: 3000000 },
     { symbol: "KPLC", price: 16.40, prevClose: 16.10, volume: 1600000 },
-    { symbol: "KPC", price: 9.50, prevClose: 9.20, volume: 600000 },
+    { symbol: "KUKZ", price: 400.00, prevClose: 427.00, volume: 600000 },
 
-    { symbol: "KQ", price: 6.00, prevClose: 5.88, volume: 1200000 },
+    { symbol: "WTK", price: 156.00, prevClose: 156.50, volume: 1200000 },
 
     { symbol: "KNRE", price: 3.40, prevClose: 3.34, volume: 950000 },
     { symbol: "KAPC", price: 350.00, prevClose: 350.00, volume: 950000 },
 
-    { symbol: "GLD", price: 5680.00, prevClose: 5650.00, volume: 10000 },
+    { symbol: "GLD", price: 5010.00, prevClose: 5050.00, volume: 10000 },
     { symbol: "SMWF", price: 945.00, prevClose: 940.00, volume: 15000 }
   ]
 };

@@ -1,10 +1,15 @@
 import React from "react";
 
 import {
+  Pressable,
   StyleSheet,
   Text,
   View
 } from "react-native";
+
+import {
+  router
+} from "expo-router";
 
 function formatMoney(
   currency,
@@ -89,6 +94,23 @@ export default function WealthJourneyGoalCard({
         </View>
       ) : null}
 
+      <Pressable
+        style={styles.editButton}
+        onPress={() =>
+          router.push({
+            pathname: "/goal-details-edit",
+            params: {
+              goalId: goal?.id || "",
+              goalName: goal?.name || "Financial Goal"
+            }
+          })
+        }
+      >
+        <Text style={styles.editButtonText}>
+          {incomplete ? "Add Required Goal Details" : "Update Goal Details"}
+        </Text>
+      </Pressable>
+
       <View
         style={
           styles.metrics
@@ -122,6 +144,11 @@ export default function WealthJourneyGoalCard({
               goal.projectedValue
             )
           }
+        />
+
+        <Metric
+          label="Target Date"
+          value={goal?.targetDate || "Not set"}
         />
       </View>
 
@@ -165,6 +192,27 @@ export default function WealthJourneyGoalCard({
             {goal.nextAction.reason}
           </Text>
         </View>
+      ) : null}
+
+      {goal?.nextAction?.action === "REVIEW_RECOVERY_OPTIONS" &&
+      Array.isArray(goal?.recovery?.scenarios) &&
+      goal.recovery.scenarios.length ? (
+        <Pressable
+          style={styles.recoveryButton}
+          onPress={() =>
+            router.push({
+              pathname: "/goal-recovery-options",
+              params: {
+                goalId: goal?.id || "",
+                goalName: goal?.name || "Financial Goal"
+              }
+            })
+          }
+        >
+          <Text style={styles.recoveryButtonText}>
+            Review {goal.recovery.scenarios.length} Recovery Options
+          </Text>
+        </Pressable>
       ) : null}
     </View>
   );
@@ -219,6 +267,36 @@ const styles =
 
       marginTop:
         12
+    },
+
+    editButton: {
+      minHeight: 46,
+      borderRadius: 12,
+      backgroundColor: "#9333ea",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 14,
+      marginTop: 12
+    },
+
+    editButtonText: {
+      color: "white",
+      fontWeight: "900"
+    },
+
+    recoveryButton: {
+      minHeight: 46,
+      borderRadius: 12,
+      backgroundColor: "#0891b2",
+      alignItems: "center",
+      justifyContent: "center",
+      paddingHorizontal: 14,
+      marginTop: 12
+    },
+
+    recoveryButtonText: {
+      color: "white",
+      fontWeight: "900"
     },
 
     header: {

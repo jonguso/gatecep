@@ -8,9 +8,14 @@ export async function loadActivatedWealthJourneyContext(options = {}) {
   const activation = canonical?.wealthActivation;
   const all = canonical?.portfolioSources?.allAccounts || null;
   const goalIntent = canonical?.investor?.goalIntent || null;
+  const trackableGoals = Array.isArray(canonical?.investor?.goals)
+    ? canonical.investor.goals
+    : [];
 
-  const goals = goalIntent
-    ? [{
+  const goals = trackableGoals.length
+    ? trackableGoals
+    : goalIntent
+      ? [{
         name: goalIntent,
         targetAmount: null,
         targetDate: null,
@@ -19,7 +24,7 @@ export async function loadActivatedWealthJourneyContext(options = {}) {
         completeness: "INTENT_ONLY",
         source: "INITIAL_INVESTOR_DNA"
       }]
-    : [];
+      : [];
 
   if (!activation?.active) {
     return {

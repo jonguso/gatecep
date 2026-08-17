@@ -275,21 +275,28 @@ export function extractGoalsFromInvestorContext(
 
   normalized.forEach(
     (goal) => {
-      const key =
-        goal?.id ||
-        `${goal?.name || ""}|${goal?.targetAmount || ""}|${goal?.targetDate || ""}`;
+      const key = String(goal?.name || goal?.id || "")
+        .trim()
+        .toUpperCase()
+        .replace(/[^A-Z0-9]+/g, "_");
 
-      if (
-        !deduped.some(
-          (item) =>
-            item.key ===
-            key
-        )
-      ) {
+      const existingIndex = deduped.findIndex(
+        (item) => item.key === key
+      );
+
+      const score =
+        (goal?.targetAmount !== null ? 1 : 0) +
+        (goal?.targetDate ? 1 : 0) +
+        (goal?.id ? 1 : 0);
+
+      if (existingIndex === -1) {
         deduped.push({
           key,
-          goal
+          goal,
+          score
         });
+      } else if (score > deduped[existingIndex].score) {
+        deduped[existingIndex] = { key, goal, score };
       }
     }
   );

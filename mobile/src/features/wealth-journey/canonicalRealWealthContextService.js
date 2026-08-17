@@ -129,6 +129,69 @@ export function buildInitialInvestorIdentity(investorContext = {}) {
   };
 }
 
+function normalizeTrackableGoal(goal) {
+  if (!goal || typeof goal !== "object") return null;
+
+  const name = clean(goal?.name ?? goal?.title ?? goal?.goal);
+  if (!name) return null;
+
+  const targetAmount = n(
+    goal?.targetAmount ?? goal?.targetValue ?? goal?.amount
+  );
+  const targetDate = clean(goal?.targetDate ?? goal?.date);
+
+  return {
+    ...goal,
+    id: clean(goal?.id ?? goal?.goalId),
+    name,
+    targetAmount,
+    targetDate,
+    currency: clean(goal?.currency) || "KES",
+    priority: clean(goal?.priority) || "MEDIUM",
+    completeness:
+      targetAmount !== null && targetAmount > 0 && targetDate
+        ? "PLANNABLE"
+        : "PARTIAL",
+    source: "INVESTOR_PROFILE"
+  };
+}
+
+export function extractCanonicalTrackableGoals(investorContext = {}) {
+  const profile = safeObject(investorContext?.profile);
+  const stored = safeObject(investorContext?.storedProfile);
+  const dna = safeObject(investorContext?.investorDNA);
+
+  const candidates = [
+    ...safeArray(profile?.goals),
+    ...safeArray(stored?.goals),
+    ...safeArray(dna?.goals)
+  ]
+    .map(normalizeTrackableGoal)
+    .filter(Boolean);
+
+  const goals = [];
+
+  candidates.forEach((goal) => {
+    const key = String(goal?.name || goal?.id || "")
+      .trim()
+      .toUpperCase()
+      .replace(/[^A-Z0-9]+/g, "_");
+    const existingIndex = goals.findIndex((item) => item.key === key);
+    const score =
+      (goal?.targetAmount !== null ? 1 : 0) +
+      (goal?.targetDate ? 1 : 0) +
+      (goal?.id ? 1 : 0);
+
+    if (existingIndex === -1) {
+      goals.push({ key, goal, score });
+    } else if (score > goals[existingIndex].score) {
+      goals[existingIndex] = { key, goal, score };
+    }
+  });
+
+  return goals.map((item) => item.goal);
+}
+
 export function buildPracticeSandbox(investorContext = {}) {
   const practice = safeObject(investorContext?.practicePortfolio);
 
@@ -162,6 +225,7 @@ export async function buildCanonicalRealWealthContext({
     ]);
 
   const identity = buildInitialInvestorIdentity(investorContext);
+  const trackableGoals = extractCanonicalTrackableGoals(investorContext);
   const practice = buildPracticeSandbox(investorContext);
   const realSources = adaptUnifiedPortfolioToSources(unifiedPortfolio);
 
@@ -205,6 +269,7 @@ export async function buildCanonicalRealWealthContext({
       lastName: investorContext?.identity?.lastName || null,
       investorDNA: identity?.investorDNA || {},
       goalIntent: identity?.goalIntent || null,
+      goals: trackableGoals,
       investorType: identity?.investorType || null,
       riskProfile: identity?.riskProfile || null
     },
