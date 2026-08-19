@@ -2,6 +2,7 @@ import React, {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState
 } from "react";
 
@@ -17,7 +18,8 @@ import {
 } from "react-native";
 
 import {
-  router
+  router,
+  useLocalSearchParams
 } from "expo-router";
 
 import {
@@ -45,7 +47,17 @@ const PROFILE_ORDER = [
   REBALANCE_PROFILE_TYPES.AGGRESSIVE
 ];
 
+const REBALANCE_SECTIONS = [
+  { id: "health", title: "Portfolio Health", description: "Review alignment, diversification, liquidity, funding, and Coach G guidance." },
+  { id: "target", title: "Target Profile", description: "Inspect or change the saved asset-class target and tolerance." },
+  { id: "allocation", title: "Allocation & Drift", description: "Compare current and target allocation and inspect material drift." },
+  { id: "funding", title: "Funding Readiness", description: "Review the cash available to support the recommendation set." },
+  { id: "recommendations", title: "Recommendations", description: "Inspect advisory-only rebalance actions and exclusions." }
+];
+
 export default function PortfolioRebalancingScreen() {
+  const params = useLocalSearchParams();
+  const scrollRef = useRef(null);
   const [
     loading,
     setLoading
@@ -75,6 +87,8 @@ export default function PortfolioRebalancingScreen() {
     recommendationFilter,
     setRecommendationFilter
   ] = useState("ACTIONABLE");
+
+  const [activeSection, setActiveSection] = useState(null);
 
   const templates =
     useMemo(
@@ -218,6 +232,25 @@ export default function PortfolioRebalancingScreen() {
       ]
     );
 
+  const activeSectionIndex = REBALANCE_SECTIONS.findIndex(
+    (section) => section.id === activeSection
+  );
+  const previousSection = activeSectionIndex > 0
+    ? REBALANCE_SECTIONS[activeSectionIndex - 1]
+    : null;
+  const nextSection = activeSectionIndex >= 0 && activeSectionIndex < REBALANCE_SECTIONS.length - 1
+    ? REBALANCE_SECTIONS[activeSectionIndex + 1]
+    : null;
+
+  const moveToSection = (sectionId) => {
+    setActiveSection(sectionId);
+    requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: 0, animated: false }));
+  };
+
+  const exitRebalancing = () => params?.returnTo === "analysis"
+    ? router.replace({ pathname: "/unified-portfolio-analytics", params: { section: "specialists" } })
+    : router.replace("/(tabs)/dashboard");
+
   async function handleApplyProfile(
     template
   ) {
@@ -314,6 +347,7 @@ export default function PortfolioRebalancingScreen() {
 
   return (
     <ScrollView
+      ref={scrollRef}
       style={
         styles.screen
       }
@@ -337,13 +371,23 @@ export default function PortfolioRebalancingScreen() {
         Portfolio Rebalancing
       </Text>
 
+      <Pressable
+        style={styles.parentButton}
+        onPress={() => activeSection ? moveToSection(null) : exitRebalancing()}
+      >
+        <Text style={styles.parentButtonText}>
+          {activeSection ? "Rebalancing Overview" : params?.returnTo === "analysis" ? "Portfolio Analysis" : "Home"}
+        </Text>
+      </Pressable>
+
       <Text
         style={
           styles.subtitle
         }
       >
-        Compare the current portfolio against a saved target
-        allocation and review non-executing rebalancing guidance.
+        {activeSection
+          ? REBALANCE_SECTIONS.find((section) => section.id === activeSection)?.title
+          : "Compare the current portfolio against a saved target allocation and review non-executing rebalancing guidance."}
       </Text>
 
       {error ? (
@@ -362,6 +406,7 @@ export default function PortfolioRebalancingScreen() {
         </View>
       ) : null}
 
+      <View style={activeSection ? styles.hidden : null}>
       <View
         style={
           styles.coachCard
@@ -494,8 +539,39 @@ export default function PortfolioRebalancingScreen() {
           ).toFixed(2)}%`}
         />
       </View>
+      </View>
+
+      {!activeSection ? (
+        <View style={styles.detailMenu}>
+          <Text style={styles.sectionTitle}>Rebalancing Details</Text>
+          <Text style={styles.sectionDescription}>Choose one area. Each opens as a focused mobile step.</Text>
+          {REBALANCE_SECTIONS.map((section) => (
+            <Pressable
+              key={section.id}
+              style={styles.detailButton}
+              onPress={() => moveToSection(section.id)}
+            >
+              <View style={styles.detailButtonCopy}>
+                <Text style={styles.detailButtonTitle}>{section.title}</Text>
+                <Text style={styles.detailButtonDescription}>{section.description}</Text>
+              </View>
+              <Text style={styles.detailChevron}>›</Text>
+            </Pressable>
+          ))}
+        </View>
+      ) : (
+        <View style={styles.detailNavigation}>
+          <Pressable onPress={() => moveToSection(previousSection?.id || null)}>
+            <Text style={styles.detailNavigationText}>
+              {previousSection ? `‹ Previous: ${previousSection.title}` : "‹ Rebalancing Overview"}
+            </Text>
+          </Pressable>
+          <Text style={styles.detailPosition}>{activeSectionIndex + 1} of {REBALANCE_SECTIONS.length}</Text>
+        </View>
+      )}
 
       <Section
+        style={activeSection !== "health" && styles.hidden}
         title="Coach G Portfolio Health"
         description="A structured assessment of target alignment, diversification, liquidity, and funding readiness."
       >
@@ -852,6 +928,7 @@ export default function PortfolioRebalancingScreen() {
       </Section>
 
       <Section
+        style={activeSection !== "target" && styles.hidden}
         title="Target Profile"
         description="Choose a predefined asset-class allocation target."
       >
@@ -1056,6 +1133,7 @@ export default function PortfolioRebalancingScreen() {
       </Section>
 
       <Section
+        style={activeSection !== "allocation" && styles.hidden}
         title="Current Allocation"
         description="The current distribution of portfolio holdings and cash."
       >
@@ -1069,6 +1147,7 @@ export default function PortfolioRebalancingScreen() {
       </Section>
 
       <Section
+        style={activeSection !== "allocation" && styles.hidden}
         title="Target Allocation"
         description="The saved allocation percentages used for drift analysis."
       >
@@ -1080,6 +1159,7 @@ export default function PortfolioRebalancingScreen() {
       </Section>
 
       <Section
+        style={activeSection !== "allocation" && styles.hidden}
         title="Drift Analysis"
         description="Positive drift is overweight. Negative drift is underweight."
       >
@@ -1141,6 +1221,7 @@ export default function PortfolioRebalancingScreen() {
       </Section>
 
       <Section
+        style={activeSection !== "funding" && styles.hidden}
         title="Funding Analysis"
         description="Estimated liquidity available for the recommendation set."
       >
@@ -1254,6 +1335,7 @@ export default function PortfolioRebalancingScreen() {
       </Section>
 
       <Section
+        style={activeSection !== "recommendations" && styles.hidden}
         title="Rebalancing Recommendations"
         description="Recommendations are analytical only and do not modify the portfolio."
       >
@@ -1330,9 +1412,7 @@ export default function PortfolioRebalancingScreen() {
       </Section>
 
       <View
-        style={
-          styles.protectionCard
-        }
+        style={activeSection ? styles.protectionCard : styles.hidden}
       >
         <Text
           style={
@@ -1355,9 +1435,7 @@ export default function PortfolioRebalancingScreen() {
       </View>
 
       <Pressable
-        style={
-          styles.secondaryButton
-        }
+        style={activeSection ? styles.hidden : styles.secondaryButton}
         onPress={
           loadData
         }
@@ -1375,18 +1453,18 @@ export default function PortfolioRebalancingScreen() {
         style={
           styles.secondaryButton
         }
-        onPress={() =>
-          router.replace(
-            "/unified-portfolio-analytics"
-          )
-        }
+        onPress={() => activeSection
+          ? moveToSection(nextSection?.id || null)
+          : exitRebalancing()}
       >
         <Text
           style={
             styles.secondaryButtonText
           }
         >
-          Back to Portfolio Analytics
+          {activeSection
+            ? nextSection ? `Next: ${nextSection.title} ›` : "Finish: Rebalancing Overview"
+            : params?.returnTo === "analysis" ? "Back to Portfolio Analysis" : "Back to Home"}
         </Text>
       </Pressable>
     </ScrollView>
@@ -1394,15 +1472,14 @@ export default function PortfolioRebalancingScreen() {
 }
 
 function Section({
+  style,
   title,
   description,
   children
 }) {
   return (
     <View
-      style={
-        styles.section
-      }
+      style={[styles.section, style]}
     >
       <Text
         style={
@@ -3813,6 +3890,95 @@ const styles =
 
       fontWeight:
         "900"
+    },
+
+    parentButton: {
+      alignSelf: "flex-end",
+      backgroundColor: "#1e293b",
+      borderColor: "#334155",
+      borderWidth: 1,
+      borderRadius: 14,
+      paddingHorizontal: 16,
+      paddingVertical: 12,
+      marginTop: -48,
+      marginBottom: 18
+    },
+
+    parentButtonText: {
+      color: "#67e8f9",
+      fontWeight: "900"
+    },
+
+    hidden: {
+      display: "none"
+    },
+
+    detailMenu: {
+      backgroundColor: "#111827",
+      borderColor: "#263247",
+      borderWidth: 1,
+      borderRadius: 18,
+      padding: 16,
+      marginTop: 18
+    },
+
+    detailButton: {
+      minHeight: 72,
+      flexDirection: "row",
+      alignItems: "center",
+      backgroundColor: "#020617",
+      borderColor: "#263247",
+      borderWidth: 1,
+      borderRadius: 14,
+      padding: 14,
+      marginTop: 10
+    },
+
+    detailButtonCopy: {
+      flex: 1
+    },
+
+    detailButtonTitle: {
+      color: "white",
+      fontWeight: "900",
+      fontSize: 15
+    },
+
+    detailButtonDescription: {
+      color: "#94a3b8",
+      fontSize: 12,
+      lineHeight: 17,
+      marginTop: 4
+    },
+
+    detailChevron: {
+      color: "#e879f9",
+      fontSize: 25,
+      fontWeight: "900",
+      marginLeft: 10
+    },
+
+    detailNavigation: {
+      flexDirection: "row",
+      alignItems: "center",
+      justifyContent: "space-between",
+      backgroundColor: "#1e293b",
+      borderRadius: 14,
+      paddingHorizontal: 14,
+      paddingVertical: 13,
+      marginTop: 18
+    },
+
+    detailNavigationText: {
+      color: "#67e8f9",
+      fontWeight: "900"
+    },
+
+    detailPosition: {
+      color: "#e879f9",
+      fontSize: 12,
+      fontWeight: "900",
+      marginLeft: 12
     },
 
     errorCard: {

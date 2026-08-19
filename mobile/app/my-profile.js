@@ -146,7 +146,16 @@ const displayName =
         <Info label="Time Horizon" value={profile?.timeHorizon || profile?.time_horizon || "Not set"} />
         <Info label="Contribution" value={profile?.contribution || "Not set"} />
         <Info label="Market Drop Response" value={profile?.marketDrop || constraints.marketDrop || "Not set"} />
-        <Info label="Starting Amount" value={`KES ${money(profile?.amount ?? constraints.amount ?? 0)}`} />
+        <Info
+          label={
+            profile?.contribution === "Monthly"
+              ? "Monthly Contribution Amount"
+              : profile?.contribution === "Quarterly"
+                ? "Quarterly Contribution Amount"
+                : "Contribution Amount"
+          }
+          value={`KES ${money(profile?.amount ?? constraints.amount ?? 0)}`}
+        />
       </View>
 
       <View style={styles.card}>

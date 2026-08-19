@@ -4,6 +4,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 
 import { AuthProvider } from "../src/features/auth/context/AuthContext";
+import AppMenuButton from "../src/components/navigation/AppMenuButton";
 
 export default function Layout() {
   return (
@@ -20,6 +21,7 @@ export default function Layout() {
               animation: "slide_from_right"
             }}
           />
+          <AppMenuButton />
         </AuthProvider>
       </SafeAreaProvider>
     </GestureHandlerRootView>

@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -8,7 +8,7 @@ import {
   useWindowDimensions,
   View
 } from "react-native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 
 import { buildUnifiedPortfolioAnalytics } from "../src/features/analytics/unifiedPortfolioAnalyticsService";
 import { buildPortfolioHealthScore } from "../src/features/analytics/portfolioHealthScoreService";
@@ -44,9 +44,14 @@ export default function UnifiedPortfolioAnalyticsScreen() {
   const [health, setHealth] = useState(null);
   const [queue, setQueue] = useState(null);
   const [error, setError] = useState("");
-  const [alertFilter, setAlertFilter] = useState("ALL");
-  const [actionFilter, setActionFilter] = useState("ALL");
-  const [activeSection, setActiveSection] = useState(null);
+  const params = useLocalSearchParams();
+  const initialSection = ANALYTICS_SECTIONS.some((item) => item.id === params?.section)
+    ? params.section
+    : null;
+  const [alertFilter, setAlertFilter] = useState("CRITICAL");
+  const [actionFilter, setActionFilter] = useState("RISK");
+  const [activeSection, setActiveSection] = useState(initialSection);
+  const scrollRef = useRef(null);
   const { width: windowWidth } = useWindowDimensions();
 
   const loadData = useCallback(async ({ fullLoader = true } = {}) => {
@@ -129,9 +134,32 @@ export default function UnifiedPortfolioAnalyticsScreen() {
 
   const score = health?.score ?? analytics?.scores?.overall ?? 0;
   const grade = health?.grade?.label || analytics?.scores?.grade?.label || "Not Available";
+  const activeSectionIndex = ANALYTICS_SECTIONS.findIndex(
+    (section) => section.id === activeSection
+  );
+  const previousSection = activeSectionIndex > 0
+    ? ANALYTICS_SECTIONS[activeSectionIndex - 1]
+    : null;
+  const nextSection = activeSectionIndex >= 0 && activeSectionIndex < ANALYTICS_SECTIONS.length - 1
+    ? ANALYTICS_SECTIONS[activeSectionIndex + 1]
+    : null;
+
+  function moveToSection(sectionId) {
+    setActiveSection(sectionId);
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+    });
+  }
+
+  function returnToAnalysis() {
+    setActiveSection(null);
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ y: 0, animated: true });
+    });
+  }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <ScrollView ref={scrollRef} style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.headerRow}>
         <View style={{ flex: 1 }}>
           <Text style={styles.eyebrow}>PC-022</Text>
@@ -142,9 +170,9 @@ export default function UnifiedPortfolioAnalyticsScreen() {
         </View>
         <Pressable
           style={styles.headerButton}
-          onPress={() => activeSection ? setActiveSection(null) : router.replace("/(tabs)/dashboard")}
+          onPress={() => activeSection ? returnToAnalysis() : router.replace("/(tabs)/dashboard")}
         >
-          <Text style={styles.headerButtonText}>{activeSection ? "Back to Analysis" : "Home"}</Text>
+          <Text style={styles.headerButtonText}>{activeSection ? "Analysis Overview" : "Home"}</Text>
         </Pressable>
       </View>
 
@@ -254,7 +282,7 @@ export default function UnifiedPortfolioAnalyticsScreen() {
               accessibilityLabel={`Open ${section.title}`}
               key={section.id}
               style={({ pressed }) => [styles.analysisMenuButton, windowWidth < 600 && styles.analysisMenuButtonCompact, pressed && styles.analysisMenuButtonPressed]}
-              onPress={() => setActiveSection(section.id)}
+              onPress={() => moveToSection(section.id)}
             >
               <View style={{ flex: 1 }}>
                 <Text style={styles.analysisMenuButtonTitle}>{section.title}</Text>
@@ -268,10 +296,16 @@ export default function UnifiedPortfolioAnalyticsScreen() {
 
       {activeSection ? (
         <View style={styles.detailNavigation}>
-          <Pressable style={styles.detailBackButton} onPress={() => setActiveSection(null)}>
-            <Text style={styles.detailBackText}>‹ Back to Portfolio Analysis</Text>
+          <Pressable
+            disabled={!previousSection}
+            style={[styles.detailBackButton, !previousSection && styles.disabled]}
+            onPress={() => previousSection && moveToSection(previousSection.id)}
+          >
+            <Text style={styles.detailBackText} numberOfLines={1}>
+              {previousSection ? `‹ Previous: ${previousSection.title}` : "‹ Previous"}
+            </Text>
           </Pressable>
-          <Text style={styles.detailPosition}>{ANALYTICS_SECTIONS.findIndex((section) => section.id === activeSection) + 1} of {ANALYTICS_SECTIONS.length}</Text>
+          <Text style={styles.detailPosition}>{activeSectionIndex + 1} of {ANALYTICS_SECTIONS.length}</Text>
         </View>
       ) : null}
 
@@ -434,7 +468,7 @@ export default function UnifiedPortfolioAnalyticsScreen() {
           <Pressable
             style={styles.specialistButton}
             onPress={() =>
-              router.push("/portfolio-risk")
+              router.push({ pathname: "/portfolio-risk", params: { returnTo: "analysis" } })
             }
           >
             <Text style={styles.specialistButtonText}>
@@ -445,7 +479,7 @@ export default function UnifiedPortfolioAnalyticsScreen() {
           <Pressable
             style={styles.specialistButton}
             onPress={() =>
-              router.push("/performance")
+              router.push({ pathname: "/performance", params: { returnTo: "analysis" } })
             }
           >
             <Text style={styles.specialistButtonText}>
@@ -456,7 +490,7 @@ export default function UnifiedPortfolioAnalyticsScreen() {
           <Pressable
             style={styles.specialistButton}
             onPress={() =>
-              router.push("/portfolio-rebalancing")
+              router.push({ pathname: "/portfolio-rebalancing", params: { returnTo: "analysis" } })
             }
           >
             <Text style={styles.specialistButtonText}>
@@ -464,16 +498,6 @@ export default function UnifiedPortfolioAnalyticsScreen() {
             </Text>
           </Pressable>
 
-          <Pressable
-            style={styles.specialistButton}
-            onPress={() =>
-              router.push("/(tabs)/dashboard")
-            }
-          >
-            <Text style={styles.specialistButtonText}>
-              Home
-            </Text>
-          </Pressable>
         </View>
       </Section>
 
@@ -498,12 +522,23 @@ export default function UnifiedPortfolioAnalyticsScreen() {
         )}
       </Pressable>
 
-      <Pressable
-        style={styles.secondaryButton}
-        onPress={() => activeSection ? setActiveSection(null) : router.replace("/(tabs)/dashboard")}
-      >
-        <Text style={styles.secondaryButtonText}>{activeSection ? "Back to Portfolio Analysis" : "Back to Home"}</Text>
-      </Pressable>
+      {activeSection ? (
+        <Pressable
+          style={styles.journeyNextButton}
+          onPress={() => nextSection ? moveToSection(nextSection.id) : returnToAnalysis()}
+        >
+          <Text style={styles.journeyNextText}>
+            {nextSection ? `Next: ${nextSection.title} ›` : "Finish: Analysis Overview ›"}
+          </Text>
+        </Pressable>
+      ) : (
+        <Pressable
+          style={styles.secondaryButton}
+          onPress={() => router.replace("/(tabs)/dashboard")}
+        >
+          <Text style={styles.secondaryButtonText}>Back to Home</Text>
+        </Pressable>
+      )}
     </ScrollView>
   );
 }
@@ -818,6 +853,20 @@ const styles = StyleSheet.create({
   primaryButtonText: { color: "white", textAlign: "center", fontWeight: "900" },
   secondaryButton: { backgroundColor: "#1e293b", padding: 16, borderRadius: 17, marginTop: 12 },
   secondaryButtonText: { color: "#67e8f9", textAlign: "center", fontWeight: "900" },
+  journeyNextButton: {
+    minHeight: 52,
+    backgroundColor: "#9333ea",
+    borderRadius: 17,
+    marginTop: 12,
+    paddingHorizontal: 16,
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  journeyNextText: {
+    color: "white",
+    textAlign: "center",
+    fontWeight: "900"
+  },
   errorCard: {
     backgroundColor: "rgba(239,68,68,.10)",
     borderColor: "rgba(239,68,68,.35)",

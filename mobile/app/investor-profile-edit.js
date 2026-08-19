@@ -195,7 +195,13 @@ export default function InvestorProfileEdit() {
         <PickerGroup title="Contribution" items={CONTRIBUTIONS} value={contribution} onChange={setContribution} />
         <PickerGroup title="If Market Drops" items={MARKET_DROP} value={marketDrop} onChange={setMarketDrop} />
 
-        <Text style={styles.label}>Starting Amount</Text>
+        <Text style={styles.label}>
+          {contribution === "Monthly"
+            ? "Monthly Contribution Amount"
+            : contribution === "Quarterly"
+              ? "Quarterly Contribution Amount"
+              : "Contribution Amount"}
+        </Text>
         <TextInput
           value={amount}
           onChangeText={setAmount}

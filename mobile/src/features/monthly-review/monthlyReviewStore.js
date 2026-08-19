@@ -192,6 +192,13 @@ export async function saveMonthlyReview(
             0
         ),
 
+      totalRealValue:
+        Number(
+          review?.portfolio
+            ?.totalRealValue ||
+            0
+        ),
+
       totalPracticeValue:
         Number(
           review?.portfolio

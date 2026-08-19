@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   Platform,
@@ -6,6 +6,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  TextInput,
   View
 } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
@@ -16,12 +17,30 @@ import * as XLSX from "xlsx";
 import { applySecurityMaster } from "../src/utils/nseSecurityMaster";
 import { userSetItem } from "../src/auth/userStorage";
 import { buildSyncStatus } from "../src/portfolio/syncStatus";
+import {
+  loadVerifiedUserCds,
+  requireValidBrokerEvidenceIdentity
+} from "../src/features/broker-sync/brokerEvidenceIdentityService";
+import { saveCdsProfile } from "../src/services/brokers/brokerAccountStore";
 
 export default function ImportPortfolio() {
   const params = useLocalSearchParams();
   const reconciliationMode =
     String(params?.mode || "").toUpperCase() === "RECONCILE";
   const [status, setStatus] = useState("");
+  const [brokerId, setBrokerId] = useState("AIB");
+  const [tradingAccount, setTradingAccount] = useState("");
+  const [cdsNumber, setCdsNumber] = useState("");
+  const [storedCdsNumber, setStoredCdsNumber] = useState(null);
+
+  useEffect(() => {
+    loadVerifiedUserCds().then((value) => {
+      if (value) {
+        setCdsNumber(value);
+        setStoredCdsNumber(value);
+      }
+    }).catch(() => {});
+  }, []);
 
   async function pickFile() {
     try {
@@ -51,6 +70,28 @@ export default function ImportPortfolio() {
 
       setStatus(`Reading ${file.name}...`);
 
+      let accountIdentity = null;
+      if (reconciliationMode) {
+        const enteredCds = String(cdsNumber || "").trim();
+        const savedCds = storedCdsNumber || await loadVerifiedUserCds();
+        if (savedCds && enteredCds && savedCds !== enteredCds) {
+          throw new Error("The entered CDS does not match this GateCEP user's verified CDS.");
+        }
+        accountIdentity = requireValidBrokerEvidenceIdentity({
+          fileName: file.name,
+          userCds: savedCds || enteredCds,
+          brokerId,
+          clientAccount: tradingAccount
+        });
+        if (!savedCds) {
+          await saveCdsProfile({
+            cdsNumber: accountIdentity.cdsNumber,
+            source: "VERIFIED_BROKER_FILENAME"
+          });
+          setStoredCdsNumber(accountIdentity.cdsNumber);
+        }
+      }
+
       await userSetItem(
         "pendingPortfolioImport",
         JSON.stringify({
@@ -59,7 +100,8 @@ export default function ImportPortfolio() {
           uploadedAt: new Date().toISOString(),
           importMode: reconciliationMode
             ? "BROKER_RECONCILIATION_EVIDENCE"
-            : "INITIAL_REAL_PORTFOLIO"
+            : "INITIAL_REAL_PORTFOLIO",
+          accountIdentity
         })
       );
 
@@ -411,6 +453,47 @@ export default function ImportPortfolio() {
         <Text style={styles.body}>• Profit / Loss</Text>
       </View>
 
+      {reconciliationMode ? (
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Broker account identity</Text>
+          <Text style={styles.body}>
+            The filename must end with this user's CDS number. Broker and trading account keep multiple accounts separate.
+          </Text>
+          <Text style={styles.label}>User CDS Number</Text>
+          <TextInput
+            value={cdsNumber}
+            onChangeText={setCdsNumber}
+            editable={!storedCdsNumber}
+            keyboardType="number-pad"
+            style={[styles.input, storedCdsNumber && styles.inputLocked]}
+            placeholder="Enter the CDS shown at the end of the filename"
+            placeholderTextColor="#64748b"
+          />
+          <Text style={styles.identityNote}>
+            {storedCdsNumber
+              ? "Verified user CDS — locked for this investor."
+              : "First upload: this must match the number at the end of the selected filename."}
+          </Text>
+          <Text style={styles.label}>Broker ID</Text>
+          <TextInput
+            value={brokerId}
+            onChangeText={setBrokerId}
+            autoCapitalize="characters"
+            style={styles.input}
+            placeholder="AIB"
+            placeholderTextColor="#64748b"
+          />
+          <Text style={styles.label}>Broker Client Account</Text>
+          <TextInput
+            value={tradingAccount}
+            onChangeText={setTradingAccount}
+            style={styles.input}
+            placeholder="Enter the broker account number"
+            placeholderTextColor="#64748b"
+          />
+        </View>
+      ) : null}
+
       <Pressable style={styles.primary} onPress={pickFile}>
         <Text style={styles.primaryText}>
           {reconciliationMode
@@ -524,6 +607,18 @@ const styles = StyleSheet.create({
     marginTop: 8,
     lineHeight: 20
   },
+  label: { color: "#94a3b8", marginTop: 16, marginBottom: 7 },
+  input: {
+    color: "white",
+    backgroundColor: "#020617",
+    borderColor: "#334155",
+    borderWidth: 1,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 13
+  },
+  inputLocked: { color: "#86efac", backgroundColor: "#0f1f1a" },
+  identityNote: { color: "#94a3b8", fontSize: 12, marginTop: 6 },
   primary: {
     marginTop: 24,
     backgroundColor: "#9333ea",

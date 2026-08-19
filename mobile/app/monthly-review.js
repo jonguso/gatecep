@@ -12,7 +12,7 @@ import {
   View
 } from "react-native";
 
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 
 import {
   buildMonthlyReview
@@ -25,6 +25,8 @@ import {
 } from "../src/features/monthly-review/monthlyReviewStore";
 
 export default function MonthlyReview() {
+  const params = useLocalSearchParams();
+  const returnsToTimeline = String(params?.returnTo || "").toLowerCase() === "timeline";
   const [
     loading,
     setLoading
@@ -260,10 +262,10 @@ export default function MonthlyReview() {
             }
           >
             <Metric
-              label="Practice Value"
+              label="REAL Portfolio Value"
               value={`KES ${money(
                 review?.portfolio
-                  ?.totalPracticeValue
+                  ?.totalRealValue
               )}`}
             />
 
@@ -589,9 +591,7 @@ export default function MonthlyReview() {
           styles.secondaryButton
         }
         onPress={() =>
-          router.replace(
-            "/(tabs)/dashboard"
-          )
+          router.replace(returnsToTimeline ? "/investor-timeline" : "/(tabs)/dashboard")
         }
       >
         <Text
@@ -599,7 +599,7 @@ export default function MonthlyReview() {
             styles.secondaryButtonText
           }
         >
-          Back to Dashboard
+          {returnsToTimeline ? "Back to Investor Timeline" : "Back to Home"}
         </Text>
       </Pressable>
     </ScrollView>

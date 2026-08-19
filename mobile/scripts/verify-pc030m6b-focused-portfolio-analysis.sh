@@ -18,9 +18,9 @@ done
 echo "PASS — all seven Analysis destinations are defined and focus-controlled."
 
 grep -Fq 'const [activeSection, setActiveSection] = useState(null)' "$ANALYSIS"
-grep -Fq 'onPress={() => setActiveSection(section.id)}' "$ANALYSIS"
-grep -Fq 'Back to Portfolio Analysis' "$ANALYSIS"
-grep -Fq 'setActiveSection(null)' "$ANALYSIS"
+grep -Fq 'onPress={() => moveToSection(section.id)}' "$ANALYSIS"
+grep -Fq 'Analysis Overview' "$ANALYSIS"
+grep -Fq 'returnToAnalysis()' "$ANALYSIS"
 echo "PASS — Analysis owns focused detail navigation and return behavior."
 
 grep -Fq 'analysisMenuButtonCompact' "$ANALYSIS"

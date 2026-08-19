@@ -1,216 +1,155 @@
-import React, { useEffect, useState } from "react";
-import {
-  ScrollView,
-  Text,
-  View,
-  Pressable,
-  StyleSheet
-} from "react-native";
+import React from "react";
+import { Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
-import { useAuth } from "../src/features/auth/hooks/useAuth";
-
-import { getCurrentSession, logout } from "../src/auth/authStore";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { BUILD_INFO } from "../src/config/buildInfo";
 
+import { useAuth } from "../src/features/auth/hooks/useAuth";
+import { logout } from "../src/auth/authStore";
+import {
+  CollapsibleSection,
+  MobileHeader,
+  MobileScreen
+} from "../src/components/mobile/MobileUI";
 
-const items = [
+export const MENU_SECTIONS = [
   {
-  title: "My Journey",
-  detail: "Learning progress, Coach G guidance, goals, and portfolio summary",
-  route: "/(tabs)/dashboard"
-},
-
-   {
-  title: "My Profile",
-  detail: "View account, investor profile, broker, and cash details",
-  route: "/my-profile"
-},
-
-{
-  title: "Portfolio Sync Center",
-  detail: "Sync holdings, cash, statements, and transaction history",
-  route: "/portfolio-sync-center"
-},
-
-  {
-    title: "Upload Center",
-    detail: "Upload valuation, statement, holdings, and order history",
-    route: "/broker-upload"
+    title: "Primary",
+    summary: "Home, markets, trading, and Coach G",
+    initiallyOpen: true,
+    items: [
+      { title: "Home", detail: "Portfolio value, allocation, and holdings", route: "/(tabs)/dashboard" },
+      { title: "Markets", detail: "NSE prices and market movement", route: "/(tabs)/markets" },
+      { title: "Trading", detail: "Review and place investor-directed orders", route: "/(tabs)/trading" },
+      { title: "Coach G", detail: "Personalized portfolio and wealth guidance", route: "/(tabs)/coach" }
+    ]
   },
   {
-    title: "Broker Profile",
-    detail: "Update Broker profile",
-    route: "/broker-profile"
+    title: "Portfolio",
+    summary: "Performance, analysis, risk, and activity",
+    items: [
+      { title: "Performance", detail: "Returns, benchmarks, goals, and snapshot history", route: "/performance" },
+      { title: "Portfolio Analysis", detail: "Health, priorities, liquidity, and data quality", route: "/unified-portfolio-analytics" },
+      { title: "Portfolio Risk", detail: "Concentration, downside, and risk alignment", route: "/portfolio-risk" },
+      { title: "Portfolio Activity", detail: "Buys, sells, deposits, withdrawals, dividends, and fees", route: "/portfolio-activity" }
+    ]
   },
-{
-  title: "Activity",
-  detail: "View buys, sells, deposits, withdrawals, dividends, and fees",
-  route: "/portfolio-activity"
-},
-{
-  title: "Coach G",
-  detail: "Personalized portfolio, cash, risk, and wealth recommendations",
-  route: "/(tabs)/coach"
-},
-{
-  title: "Wealth Journey",
-  detail: "Goals, progress, reconciliation, and Coach G guidance over time",
-  route: "/wealth-journey"
-},
-
   {
-    title: "Manual Portfolio Entry",
-    detail: "Enter holdings manually",
-    route: "/manual-portfolio-entry"
+    title: "Connect & Reconcile",
+    summary: "Broker evidence, uploads, corrections, and entry",
+    items: [
+      { title: "Sync & Reconcile", detail: "Upload broker evidence, compare REAL holdings and cash, and review corrections", route: "/portfolio-sync-center" },
+      { title: "Broker Profile", detail: "Review the connected broker account profile", route: "/broker-profile" },
+      { title: "Manual Portfolio Entry", detail: "Create or correct investor-entered REAL holdings", route: "/manual-portfolio-entry" }
+    ]
+  },
+  {
+    title: "Journey & Account",
+    summary: "Goals, guidance, profile, and investor timeline",
+    items: [
+      { title: "Wealth Journey", detail: "Goals, progress, recovery options, and Coach G guidance", route: "/wealth-journey" },
+      { title: "My Profile", detail: "Account, investor profile, broker, and portfolio summary", route: "/my-profile" },
+      { title: "Investor Timeline", detail: "Review important investor and portfolio events", route: "/investor-timeline" }
+    ]
   }
 ];
 
 export default function Menu() {
+  const { user } = useAuth();
 
-const { user } = useAuth();
-const [session, setSession] = useState(null);
-
-useEffect(() => {
-  loadSession();
-}, []);
-
-async function loadSession() {
-  const current = await getCurrentSession();
-  setSession(current);
-}
-
-async function handleLogout() {
-  await logout();
-
-  await AsyncStorage.removeItem("gatecepSession");
-  await AsyncStorage.removeItem("gatecepCurrentUserId");
-  await AsyncStorage.setItem("gatecepIsLoggedIn", "false");
-
-  router.replace("/login");
-}
+  async function handleLogout() {
+    await logout();
+    await AsyncStorage.removeItem("gatecepSession");
+    await AsyncStorage.removeItem("gatecepCurrentUserId");
+    await AsyncStorage.setItem("gatecepIsLoggedIn", "false");
+    router.replace("/login");
+  }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Menu</Text>
+    <MobileScreen testID="gatecep-menu">
+      <MobileHeader
+        title="Menu"
+        subtitle="One place for portfolio, guidance, account, and data tools."
+        onBack={() => router.back()}
+        actionLabel="Home"
+        onAction={() => router.replace("/(tabs)/dashboard")}
+      />
 
-      <Text style={styles.subtitle}>
-        Setup, maintenance, uploads, profile, and support actions.
-      </Text>
-     
-       <View style={styles.userCard}>
-  <Text style={styles.userLabel}>Logged in as</Text>
-  <Text style={styles.userName}>
-    {user?.username || user?.email || "User"}
-  </Text>
-</View>
+      <View style={styles.userCard}>
+        <Text style={styles.userLabel}>Signed in as</Text>
+        <Text style={styles.userName}>{user?.username || user?.email || "Investor"}</Text>
+      </View>
 
-      {items.map((item) => (
-        <Pressable
-          key={item.title}
-          style={styles.item}
-          onPress={() => router.push(item.route)}
+      {MENU_SECTIONS.map((section) => (
+        <CollapsibleSection
+          key={section.title}
+          title={section.title}
+          summary={section.summary}
+          initiallyOpen={section.initiallyOpen}
         >
-          <View>
-            <Text style={styles.itemTitle}>{item.title}</Text>
-            <Text style={styles.itemDetail}>{item.detail}</Text>
+          <View style={styles.group}>
+            {section.items.map((item) => (
+              <Pressable
+                accessibilityRole="button"
+                key={item.title}
+                onPress={() => router.push(item.route)}
+                style={({ pressed }) => [styles.item, pressed && styles.itemPressed]}
+              >
+                <View style={styles.itemCopy}>
+                  <Text style={styles.itemTitle}>{item.title}</Text>
+                  <Text style={styles.itemDetail}>{item.detail}</Text>
+                </View>
+                <Text style={styles.arrow}>›</Text>
+              </Pressable>
+            ))}
           </View>
-
-          <Text style={styles.arrow}>›</Text>
-        </Pressable>
+        </CollapsibleSection>
       ))}
 
-      <Pressable
-  style={styles.logout}
-  onPress={handleLogout}
->
-  <Text style={styles.logoutText}>Logout</Text>
-</Pressable>
-
-    </ScrollView>
+      <Pressable accessibilityRole="button" style={styles.logout} onPress={handleLogout}>
+        <Text style={styles.logoutText}>Log Out</Text>
+      </Pressable>
+    </MobileScreen>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: "#020617"
+  userCard: {
+    backgroundColor: "rgba(6,182,212,.10)",
+    borderColor: "rgba(6,182,212,.35)",
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
+    marginBottom: 2
   },
-  content: {
-    padding: 22,
-    paddingTop: 70,
-    paddingBottom: 40
-  },
-  title: {
-    color: "white",
-    fontSize: 34,
-    fontWeight: "900"
-  },
-  subtitle: {
-    color: "#94a3b8",
-    marginTop: 10,
-    marginBottom: 20,
-    lineHeight: 22
-  },
+  userLabel: { color: "#94a3b8", fontSize: 11 },
+  userName: { color: "#67e8f9", fontSize: 17, fontWeight: "900", marginTop: 3 },
+  group: { gap: 9 },
   item: {
-    backgroundColor: "#0f172a",
+    minHeight: 66,
+    padding: 13,
+    borderRadius: 14,
+    backgroundColor: "#020617",
     borderColor: "#1e293b",
     borderWidth: 1,
-    borderRadius: 18,
-    padding: 18,
-    marginTop: 12,
     flexDirection: "row",
+    alignItems: "center",
     justifyContent: "space-between",
-    alignItems: "center"
+    gap: 10
   },
-  itemTitle: {
-    color: "#67e8f9",
-    fontWeight: "900",
-    fontSize: 16
-  },
-
-userCard: {
-  marginTop: 16,
-  backgroundColor: "#0f172a",
-  borderColor: "#1e293b",
-  borderWidth: 1,
-  borderRadius: 18,
-  padding: 16
-},
-
-userLabel: {
-  color: "#94a3b8",
-  fontSize: 12
-},
-
-userName: {
-  color: "#67e8f9",
-  fontSize: 18,
-  fontWeight: "900",
-  marginTop: 4
-},
-
-  itemDetail: {
-    color: "#94a3b8",
-    marginTop: 6,
-    maxWidth: 290
-  },
-  arrow: {
-    color: "#c084fc",
-    fontSize: 26,
-    fontWeight: "900"
-  },
+  itemPressed: { backgroundColor: "#1e293b", borderColor: "#67e8f9" },
+  itemCopy: { flex: 1 },
+  itemTitle: { color: "white", fontWeight: "900", fontSize: 15 },
+  itemDetail: { color: "#94a3b8", fontSize: 11, lineHeight: 16, marginTop: 4 },
+  arrow: { color: "#c084fc", fontSize: 24, fontWeight: "900" },
   logout: {
-    marginTop: 24,
+    minHeight: 50,
+    marginTop: 18,
     backgroundColor: "rgba(239,68,68,.12)",
     borderColor: "rgba(239,68,68,.35)",
     borderWidth: 1,
-    padding: 16,
-    borderRadius: 18
+    borderRadius: 15,
+    alignItems: "center",
+    justifyContent: "center"
   },
-  logoutText: {
-    color: "#fca5a5",
-    textAlign: "center",
-    fontWeight: "900"
-  }
+  logoutText: { color: "#fca5a5", fontWeight: "900" }
 });

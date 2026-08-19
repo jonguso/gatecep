@@ -41,7 +41,7 @@ export default function InvestorTimeline() {
     filter,
     setFilter
   ] = useState(
-    "ALL"
+    "FOUNDATION"
   );
 
   useEffect(() => {
@@ -378,9 +378,10 @@ export default function InvestorTimeline() {
           styles.secondaryButton
         }
         onPress={() =>
-          router.push(
-            "/monthly-review"
-          )
+          router.push({
+            pathname: "/monthly-review",
+            params: { returnTo: "timeline" }
+          })
         }
       >
         <Text

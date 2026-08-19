@@ -230,9 +230,10 @@ export default function ReviewPortfolioImport() {
     if (reconciliationMode) {
       await saveVerifiedUploadedBrokerMirror({
         holdings: cleanPortfolio,
-        broker: "Uploaded Broker Valuation",
+        broker: fileInfo?.accountIdentity?.brokerId || "Uploaded Broker Valuation",
         accountName: fileInfo?.fileName || "Verified Statement Upload",
-        fileName: fileInfo?.fileName || null
+        fileName: fileInfo?.fileName || null,
+        accountIdentity: fileInfo?.accountIdentity || null
       });
 
       await userSetItem("brokerEvidenceUploaded", "true");

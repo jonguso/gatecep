@@ -11,6 +11,7 @@ export async function loadActivatedWealthJourneyContext(options = {}) {
   const trackableGoals = Array.isArray(canonical?.investor?.goals)
     ? canonical.investor.goals
     : [];
+  const contributionBehavior = canonical?.contributionBehavior || {};
 
   const goals = trackableGoals.length
     ? trackableGoals
@@ -34,6 +35,7 @@ export async function loadActivatedWealthJourneyContext(options = {}) {
         investor: canonical?.investor || {},
         investorDNA: canonical?.investor?.investorDNA || {},
         goals,
+        contributionBehavior,
         portfolio: {},
         cash: {},
         holdings: [],
@@ -53,6 +55,7 @@ export async function loadActivatedWealthJourneyContext(options = {}) {
       investor: canonical?.investor || {},
       investorDNA: canonical?.investor?.investorDNA || {},
       goals,
+      contributionBehavior,
       portfolio: {
         currentValue: all?.totalValue ?? null,
         totalMarketValue: all?.holdingsValue ?? null,

@@ -129,6 +129,63 @@ export function buildInitialInvestorIdentity(investorContext = {}) {
   };
 }
 
+export function extractCanonicalContributionBehavior(investorContext = {}) {
+  const profile = safeObject(investorContext?.profile);
+  const stored = safeObject(investorContext?.storedProfile);
+  const constraints = {
+    ...safeObject(stored?.constraints),
+    ...safeObject(profile?.constraints)
+  };
+  const frequency = clean(
+    profile?.contribution ??
+    stored?.contribution ??
+    constraints?.contribution
+  );
+  const explicitMonthly = n(
+    profile?.monthlyContribution ??
+    profile?.contributionAmount ??
+    stored?.monthlyContribution ??
+    stored?.contributionAmount
+  );
+  const configuredAmount = n(
+    profile?.amount ??
+    stored?.amount ??
+    constraints?.amount
+  );
+  const token = String(frequency || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "_");
+
+  let monthlyContribution = explicitMonthly;
+  let derivation = explicitMonthly !== null
+    ? "EXPLICIT_MONTHLY_CONTRIBUTION"
+    : "UNAVAILABLE";
+
+  if (monthlyContribution === null && configuredAmount !== null) {
+    if (token === "MONTHLY") {
+      monthlyContribution = configuredAmount;
+      derivation = "PROFILE_MONTHLY_AMOUNT";
+    } else if (token === "QUARTERLY") {
+      monthlyContribution = configuredAmount / 3;
+      derivation = "PROFILE_QUARTERLY_AMOUNT_NORMALIZED";
+    } else if (token === "ONE_TIME") {
+      monthlyContribution = 0;
+      derivation = "PROFILE_ONE_TIME_NOT_RECURRING";
+    }
+  }
+
+  return {
+    frequency: frequency || null,
+    configuredAmount,
+    monthlyContribution,
+    averageMonthlyContribution: monthlyContribution,
+    derivation,
+    source: "INVESTOR_PROFILE",
+    practiceUsed: false
+  };
+}
+
 function normalizeTrackableGoal(goal) {
   if (!goal || typeof goal !== "object") return null;
 
@@ -225,6 +282,8 @@ export async function buildCanonicalRealWealthContext({
     ]);
 
   const identity = buildInitialInvestorIdentity(investorContext);
+  const contributionBehavior =
+    extractCanonicalContributionBehavior(investorContext);
   const trackableGoals = extractCanonicalTrackableGoals(investorContext);
   const practice = buildPracticeSandbox(investorContext);
   const realSources = adaptUnifiedPortfolioToSources(unifiedPortfolio);
@@ -273,6 +332,8 @@ export async function buildCanonicalRealWealthContext({
       investorType: identity?.investorType || null,
       riskProfile: identity?.riskProfile || null
     },
+
+    contributionBehavior,
 
     portfolioSources: catalog,
     defaultPortfolioSourceId: defaultSourceId,

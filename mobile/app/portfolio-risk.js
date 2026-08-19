@@ -1,7 +1,8 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Alert,
+  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -10,7 +11,7 @@ import {
   useWindowDimensions,
   View
 } from "react-native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 
 import {
   applyRiskProfile,
@@ -81,6 +82,8 @@ const RISK_SECTIONS = [
 ];
 
 export default function PortfolioRiskScreen() {
+  const params = useLocalSearchParams();
+  const scrollRef = useRef(null);
   const { width: windowWidth } = useWindowDimensions();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -93,8 +96,9 @@ export default function PortfolioRiskScreen() {
   const [stressTests, setStressTests] = useState(null);
   const [error, setError] = useState("");
   const [alertFilter, setAlertFilter] = useState("ALL");
-  const [scenarioFilter, setScenarioFilter] = useState("ALL");
+  const [scenarioFilter, setScenarioFilter] = useState("MARKET_SHOCK");
   const [activeSection, setActiveSection] = useState(null);
+  const [selectedSector, setSelectedSector] = useState(null);
 
   const profiles = useMemo(() => {
     const all = listRiskProfiles();
@@ -170,6 +174,20 @@ export default function PortfolioRiskScreen() {
     return values.filter((item) => item?.scenarioType === scenarioFilter);
   }, [stressTests, scenarioFilter]);
 
+  const selectedSectorHoldings = useMemo(() => {
+    if (!selectedSector) return [];
+    if (Array.isArray(selectedSector?.holdings)) return selectedSector.holdings;
+
+    const selectedName = String(selectedSector?.sector || "").trim().toUpperCase();
+    return Array.isArray(concentration?.holdings)
+      ? concentration.holdings.filter((holding) =>
+          String(holding?.sector || holding?.industry || "Unknown")
+            .trim()
+            .toUpperCase() === selectedName
+        )
+      : [];
+  }, [concentration?.holdings, selectedSector]);
+
   async function handleApplyProfile(profile) {
     if (!profile?.code) return;
 
@@ -214,16 +232,26 @@ export default function PortfolioRiskScreen() {
   const portfolio =
     concentration?.portfolio || metrics?.portfolio || stressTests?.portfolio || {};
   const limits = configuration?.limits || {};
-  const largestHolding = concentration?.concentration?.largestHolding || null;
   const largestSector = concentration?.sectorConcentration?.largestSector || null;
   const worstScenario = stressTests?.summary?.worstScenario || null;
   const activeSectionIndex = RISK_SECTIONS.findIndex(
     (section) => section.id === activeSection
   );
+  const previousSection = activeSectionIndex > 0 ? RISK_SECTIONS[activeSectionIndex - 1] : null;
+  const nextSection = activeSectionIndex >= 0 && activeSectionIndex < RISK_SECTIONS.length - 1
+    ? RISK_SECTIONS[activeSectionIndex + 1]
+    : null;
+  const moveToSection = (sectionId) => {
+    setActiveSection(sectionId);
+    requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: 0, animated: false }));
+  };
+  const exitRisk = () => params?.returnTo === "analysis"
+    ? router.replace({ pathname: "/unified-portfolio-analytics", params: { section: "specialists" } })
+    : router.replace("/(tabs)/dashboard");
   const isCompact = windowWidth < 600;
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <ScrollView ref={scrollRef} style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.pageHeader}>
         <View style={styles.pageHeaderText}>
           <Text style={styles.eyebrow}>PC-020</Text>
@@ -236,12 +264,12 @@ export default function PortfolioRiskScreen() {
           style={styles.headerButton}
           onPress={() =>
             activeSection
-              ? setActiveSection(null)
-              : router.replace("/(tabs)/dashboard")
+              ? moveToSection(null)
+              : exitRisk()
           }
         >
           <Text style={styles.headerButtonText}>
-            {activeSection ? "Back to Risk" : "Home"}
+            {activeSection ? "Risk Overview" : params?.returnTo === "analysis" ? "Analysis" : "Home"}
           </Text>
         </Pressable>
       </View>
@@ -318,7 +346,7 @@ export default function PortfolioRiskScreen() {
               <Pressable
                 key={section.id}
                 style={[styles.detailButton, isCompact && styles.detailButtonCompact]}
-                onPress={() => setActiveSection(section.id)}
+                onPress={() => moveToSection(section.id)}
               >
                 <View style={styles.detailButtonText}>
                   <Text style={styles.detailButtonTitle}>{section.title}</Text>
@@ -333,8 +361,8 @@ export default function PortfolioRiskScreen() {
         </Section>
       ) : (
         <View style={styles.detailNavigation}>
-          <Pressable onPress={() => setActiveSection(null)}>
-            <Text style={styles.detailBack}>‹ Back to Portfolio Risk</Text>
+          <Pressable onPress={() => moveToSection(previousSection?.id || null)}>
+            <Text style={styles.detailBack}>{previousSection ? `‹ Previous: ${previousSection.title}` : "‹ Risk Overview"}</Text>
           </Pressable>
           <Text style={styles.detailPosition}>
             {activeSectionIndex + 1} of {RISK_SECTIONS.length}
@@ -555,46 +583,9 @@ export default function PortfolioRiskScreen() {
       <Section
         style={activeSection === "concentration" ? null : styles.hidden}
         title="Concentration Analysis"
-        description="Measures exposure to individual holdings, groups of holdings, and sectors."
+        description="Review sector exposure first, then tap a sector to inspect its securities."
       >
         <View style={styles.darkCard}>
-          <Row label="Largest Holding" value={largestHolding?.symbol || "Not available"} />
-          <Row
-            label="Largest Holding %"
-            value={`${Number(
-              concentration?.concentration?.largestHoldingPercentage || 0
-            ).toFixed(2)}%`}
-            danger={
-              Number(concentration?.concentration?.largestHoldingPercentage || 0) >
-              Number(limits?.maximumSingleHoldingPercentage || 0)
-            }
-          />
-          <Row
-            label="Top Three"
-            value={`${Number(
-              concentration?.concentration?.topThreePercentage || 0
-            ).toFixed(2)}%`}
-            danger={
-              Number(concentration?.concentration?.topThreePercentage || 0) >
-              Number(limits?.maximumTopThreePercentage || 0)
-            }
-          />
-          <Row
-            label="Top Five"
-            value={`${Number(
-              concentration?.concentration?.topFivePercentage || 0
-            ).toFixed(2)}%`}
-          />
-          <Row
-            label="Holding HHI"
-            value={Number(concentration?.concentration?.hhi || 0).toFixed(4)}
-          />
-          <Row
-            label="Effective Holdings"
-            value={Number(
-              concentration?.concentration?.effectiveHoldings || 0
-            ).toFixed(2)}
-          />
           <Row label="Largest Sector" value={largestSector?.sector || "Not available"} />
           <Row
             label="Largest Sector %"
@@ -613,27 +604,11 @@ export default function PortfolioRiskScreen() {
               concentration?.sectorConcentration?.effectiveSectors || 0
             ).toFixed(2)}
           />
-        </View>
-
-        <Text style={styles.subheading}>Largest Holdings</Text>
-        {Array.isArray(concentration?.holdings) && concentration.holdings.length ? (
-          concentration.holdings.slice(0, 10).map((holding) => (
-            <ExposureCard
-              key={holding.symbol}
-              title={holding.symbol}
-              subtitle={holding.name}
-              percentage={holding.allocationPercentage}
-              value={holding.marketValue}
-              status={holding?.limit?.status}
-              limit={holding?.limit?.limitValue}
-            />
-          ))
-        ) : (
-          <EmptyState
-            title="No Holding Exposure"
-            message="No holding-level concentration data is available."
+          <Row
+            label="Sector Limit"
+            value={`${Number(limits?.maximumSectorPercentage || 0).toFixed(2)}%`}
           />
-        )}
+        </View>
 
         <Text style={styles.subheading}>Sector Exposure</Text>
         {Array.isArray(concentration?.sectors) && concentration.sectors.length ? (
@@ -646,6 +621,8 @@ export default function PortfolioRiskScreen() {
               value={sector.value}
               status={sector?.limit?.status}
               limit={sector?.limit?.limitValue}
+              onPress={() => setSelectedSector(sector)}
+              actionLabel="View securities"
             />
           ))
         ) : (
@@ -655,6 +632,49 @@ export default function PortfolioRiskScreen() {
           />
         )}
       </Section>
+
+      <Modal
+        visible={Boolean(selectedSector)}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setSelectedSector(null)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalSheet}>
+            <View style={styles.modalHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.modalEyebrow}>SECTOR SECURITIES</Text>
+                <Text style={styles.modalTitle}>{selectedSector?.sector || "Sector"}</Text>
+                <Text style={styles.modalSubtitle}>
+                  {selectedSectorHoldings.length} security{selectedSectorHoldings.length === 1 ? "" : "ies"} • KES {money(selectedSector?.value)}
+                </Text>
+              </View>
+              <Pressable style={styles.modalClose} onPress={() => setSelectedSector(null)}>
+                <Text style={styles.modalCloseText}>Close</Text>
+              </Pressable>
+            </View>
+
+            <ScrollView contentContainerStyle={styles.modalContent}>
+              {selectedSectorHoldings.length ? selectedSectorHoldings.map((holding) => (
+                <ExposureCard
+                  key={holding?.symbol || holding?.name}
+                  title={holding?.symbol || "Security"}
+                  subtitle={holding?.name || holding?.symbol || "Security"}
+                  percentage={holding?.allocationPercentage ?? holding?.percentage}
+                  value={holding?.marketValue ?? holding?.value}
+                  status={holding?.limit?.status}
+                  limit={holding?.limit?.limitValue ?? limits?.maximumSingleHoldingPercentage}
+                />
+              )) : (
+                <EmptyState
+                  title="No Securities Available"
+                  message="The selected sector has no security-level concentration evidence."
+                />
+              )}
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       <Section
         style={activeSection === "diversification" ? null : styles.hidden}
@@ -895,12 +915,14 @@ export default function PortfolioRiskScreen() {
         style={styles.secondaryButton}
         onPress={() =>
           activeSection
-            ? setActiveSection(null)
-            : router.replace("/(tabs)/dashboard")
+            ? moveToSection(nextSection?.id || null)
+            : exitRisk()
         }
       >
         <Text style={styles.secondaryButtonText}>
-          {activeSection ? "Back to Portfolio Risk" : "Back to Home"}
+          {activeSection
+            ? nextSection ? `Next: ${nextSection.title} ›` : "Finish: Risk Overview"
+            : params?.returnTo === "analysis" ? "Back to Portfolio Analysis" : "Back to Home"}
         </Text>
       </Pressable>
     </ScrollView>
@@ -1014,12 +1036,18 @@ function ExposureCard({
   percentage,
   value,
   status,
-  limit
+  limit,
+  onPress,
+  actionLabel
 }) {
   const progress = Math.min(Math.max(Number(percentage || 0), 0), 100);
 
+  const Card = onPress ? Pressable : View;
+
   return (
-    <View
+    <Card
+      onPress={onPress}
+      accessibilityRole={onPress ? "button" : undefined}
       style={[
         styles.exposureCard,
         status === "BREACHED" && styles.borderHigh,
@@ -1056,7 +1084,13 @@ function ExposureCard({
       <View style={styles.progressTrack}>
         <View style={[styles.progressOrange, { width: `${progress}%` }]} />
       </View>
-    </View>
+      {onPress ? (
+        <View style={styles.exposureAction}>
+          <Text style={styles.exposureActionText}>{actionLabel || "Open details"}</Text>
+          <Text style={styles.exposureActionChevron}>›</Text>
+        </View>
+      ) : null}
+    </Card>
   );
 }
 
@@ -1737,6 +1771,89 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 15,
     marginTop: 12
+  },
+
+  exposureAction: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderTopColor: "#1e293b",
+    borderTopWidth: 1,
+    marginTop: 13,
+    paddingTop: 12
+  },
+
+  exposureActionText: {
+    color: "#67e8f9",
+    fontWeight: "900"
+  },
+
+  exposureActionChevron: {
+    color: "#e879f9",
+    fontSize: 24,
+    fontWeight: "900"
+  },
+
+  modalBackdrop: {
+    flex: 1,
+    justifyContent: "flex-end",
+    backgroundColor: "rgba(2,6,23,.78)"
+  },
+
+  modalSheet: {
+    maxHeight: "88%",
+    backgroundColor: "#0f172a",
+    borderColor: "#334155",
+    borderWidth: 1,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingTop: 18
+  },
+
+  modalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 18,
+    paddingBottom: 14,
+    borderBottomColor: "#263247",
+    borderBottomWidth: 1
+  },
+
+  modalEyebrow: {
+    color: "#67e8f9",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 1
+  },
+
+  modalTitle: {
+    color: "white",
+    fontSize: 23,
+    fontWeight: "900",
+    marginTop: 3
+  },
+
+  modalSubtitle: {
+    color: "#94a3b8",
+    marginTop: 4
+  },
+
+  modalClose: {
+    backgroundColor: "#1e293b",
+    borderRadius: 12,
+    paddingHorizontal: 13,
+    paddingVertical: 10,
+    marginLeft: 12
+  },
+
+  modalCloseText: {
+    color: "#67e8f9",
+    fontWeight: "900"
+  },
+
+  modalContent: {
+    padding: 16,
+    paddingBottom: 30
   },
   messageCard: {
     backgroundColor: "#020617",

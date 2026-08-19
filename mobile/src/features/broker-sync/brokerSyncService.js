@@ -276,6 +276,14 @@ export async function saveBrokerMirror(
       brokerAccount?.cashEvidenceFileName ||
       null,
 
+    brokerId: brokerAccount?.brokerId || null,
+    clientAccount: brokerAccount?.clientAccount || brokerAccount?.tradingAccount || null,
+    tradingAccount: brokerAccount?.clientAccount || brokerAccount?.tradingAccount || null,
+    cdsNumber: brokerAccount?.cdsNumber || null,
+    brokerAccountKey: brokerAccount?.brokerAccountKey || null,
+    brokerFileIdentifier: brokerAccount?.brokerFileIdentifier || null,
+    identityStatus: brokerAccount?.identityStatus || null,
+
     ...normalized,
 
     createdAt:
@@ -382,14 +390,27 @@ export async function saveVerifiedUploadedBrokerMirror({
   cashBalance = null,
   broker = "Uploaded Broker Valuation",
   accountName = "Verified Valuation Upload",
-  fileName = null
+  fileName = null,
+  accountIdentity = null
 } = {}) {
   if (!Array.isArray(holdings) || !holdings.length) {
     throw new Error("A verified broker upload must contain holdings.");
   }
 
+  if (!accountIdentity || accountIdentity.identityStatus !== "VERIFIED" ||
+      !accountIdentity.cdsNumber || !accountIdentity.brokerAccountKey) {
+    throw new Error("Verified CDS, broker, and trading-account identity are required.");
+  }
+
   return saveBrokerMirror({
-    brokerAccountId: fileName ? `UPLOAD:${fileName}` : `UPLOAD:${Date.now()}`,
+    brokerAccountId: accountIdentity.brokerAccountKey,
+    brokerId: accountIdentity.brokerId,
+    clientAccount: accountIdentity.clientAccount || accountIdentity.tradingAccount,
+    tradingAccount: accountIdentity.clientAccount || accountIdentity.tradingAccount,
+    cdsNumber: accountIdentity.cdsNumber,
+    brokerAccountKey: accountIdentity.brokerAccountKey,
+    brokerFileIdentifier: accountIdentity.brokerFileIdentifier,
+    identityStatus: accountIdentity.identityStatus,
     broker,
     accountName,
     currency: "KES",
@@ -406,7 +427,8 @@ export async function saveVerifiedUploadedBrokerMirror({
 export async function attachVerifiedBrokerCashEvidence({
   cashBalance,
   fileName = null,
-  broker = null
+  broker = null,
+  accountIdentity = null
 } = {}) {
   const amount = Number(cashBalance);
 
@@ -420,6 +442,12 @@ export async function attachVerifiedBrokerCashEvidence({
     throw new Error(
       "Upload the current broker portfolio valuation before adding cash evidence."
     );
+  }
+
+  if (!accountIdentity || accountIdentity.identityStatus !== "VERIFIED" ||
+      accountIdentity.cdsNumber !== mirror.cdsNumber ||
+      accountIdentity.brokerAccountKey !== mirror.brokerAccountKey) {
+    throw new Error("Cash evidence must match the valuation CDS, broker, and trading account.");
   }
 
   return saveBrokerMirror({

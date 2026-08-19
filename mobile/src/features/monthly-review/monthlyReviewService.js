@@ -2,9 +2,10 @@ import {
   loadInvestorContext
 } from "../investor/investorContextStore";
 
-import {
-  loadDecisionJournal
-} from "../decision-journal/decisionJournalStore";
+import { loadUnifiedPortfolio } from "../../portfolio/unifiedPortfolioApi";
+import { loadCanonicalRealAvailableCash } from "../portfolio-cash/canonicalPortfolioCashService";
+import { loadCanonicalRealBehaviorHistory } from "../wealth-journey/canonicalRealBehaviorHistoryService";
+import { calculatePortfolioSummary } from "../../shared/portfolio/engine";
 
 function money(value) {
   return Number(value || 0).toLocaleString("en-US", {
@@ -56,10 +57,14 @@ function average(values = []) {
 export async function buildMonthlyReview() {
   const [
     context,
-    journal
+    realPortfolio,
+    realCash,
+    realBehavior
   ] = await Promise.all([
     loadInvestorContext(),
-    loadDecisionJournal()
+    loadUnifiedPortfolio({ broker: "ALL" }),
+    loadCanonicalRealAvailableCash(),
+    loadCanonicalRealBehaviorHistory()
   ]);
 
   const profile =
@@ -71,13 +76,11 @@ export async function buildMonthlyReview() {
   const blueprint =
     context?.wealthBlueprint || null;
 
-  const portfolio =
-    context?.practicePortfolio || null;
-
-  const decisions =
-    Array.isArray(journal)
-      ? journal
-      : [];
+  const portfolio = realPortfolio || null;
+  const decisions = [
+    ...(Array.isArray(realBehavior?.orderHistory) ? realBehavior.orderHistory : []),
+    ...(Array.isArray(realBehavior?.tradeHistory) ? realBehavior.tradeHistory : [])
+  ];
 
   const monthlyDecisions =
     decisions.filter(
@@ -94,51 +97,38 @@ export async function buildMonthlyReview() {
       ? portfolio.holdings
       : [];
 
+  const canonicalSummary = calculatePortfolioSummary({
+    holdings,
+    cash: Number(realCash || 0)
+  });
+
   const startingAmount =
     Number(
-      portfolio?.startingAmount ||
-      investorDNA?.amount ||
-      profile?.amount ||
+      canonicalSummary?.summary?.investedValue ||
       0
     );
 
   const investedAmount =
     Number(
-      portfolio?.investedAmount ||
+      canonicalSummary?.summary?.investedValue ||
       0
     );
 
   const availableCash =
     Number(
-      portfolio?.availableCash ||
+      realCash ||
       0
     );
 
   const currentPortfolioValue =
-    holdings.reduce(
-      (sum, holding) =>
-        sum +
-        Number(
-          holding.marketValue ||
-          0
-        ),
-      0
-    );
+    Number(canonicalSummary?.summary?.totalValue || 0);
 
-  const totalPracticeValue =
+  const totalRealValue =
     currentPortfolioValue +
     availableCash;
 
   const totalProfitLoss =
-    holdings.reduce(
-      (sum, holding) =>
-        sum +
-        Number(
-          holding.profitLoss ||
-          0
-        ),
-      0
-    );
+    Number(canonicalSummary?.summary?.totalGain || 0);
 
   const confidenceAverage =
     average(
@@ -210,7 +200,7 @@ export async function buildMonthlyReview() {
       investedAmount,
       availableCash,
       currentPortfolioValue,
-      totalPracticeValue,
+      totalRealValue,
       totalProfitLoss,
       holdingsCount:
         holdings.length
@@ -244,7 +234,7 @@ export async function buildMonthlyReview() {
       portfolioMessage:
         buildPortfolioMessage({
           startingAmount,
-          totalPracticeValue,
+          totalRealValue,
           availableCash,
           holdingsCount:
             holdings.length
@@ -294,19 +284,19 @@ function buildHeadline({
 
 function buildPortfolioMessage({
   startingAmount,
-  totalPracticeValue,
+  totalRealValue,
   availableCash,
   holdingsCount
 }) {
-  if (!startingAmount) {
+  if (!holdingsCount) {
     return (
-      "Your Practice Portfolio is not ready for a monthly review yet."
+      "Your REAL portfolio is not ready for a monthly review yet."
     );
   }
 
   return (
-    `Your Practice Portfolio currently accounts for KES ${money(
-      totalPracticeValue
+    `Your REAL portfolio currently accounts for KES ${money(
+      totalRealValue
     )}, including KES ${money(
       availableCash
     )} in available cash across ${holdingsCount} holdings.`
@@ -319,7 +309,7 @@ function buildBehaviorMessage({
 }) {
   if (!monthlyDecisions.length) {
     return (
-      "You have not recorded a practice decision this month. " +
+      "You have not recorded a REAL investment decision this month. " +
       "Before your next investment idea, record why it interests you and what you expect from it."
     );
   }
@@ -345,7 +335,7 @@ function buildNextFocus({
 
   if (holdingsCount === 0) {
     return (
-      "Complete your Practice Portfolio so Coach G can compare your decisions with your actual allocation."
+      "Connect or upload your REAL portfolio so Coach G can compare decisions with the current allocation."
     );
   }
 

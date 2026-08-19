@@ -23,7 +23,15 @@ import { getStoredAccessToken } from "../../src/features/auth/storage/authStorag
 import {
   refreshCanonicalRealPortfolioSnapshot
 } from "../../src/services/portfolio/portfolioSnapshotTrigger";
-import { attachVerifiedBrokerCashEvidence } from "../../src/features/broker-sync/brokerSyncService";
+import {
+  attachVerifiedBrokerCashEvidence,
+  loadBrokerMirror
+} from "../../src/features/broker-sync/brokerSyncService";
+import {
+  extractStatementIdentity,
+  loadVerifiedUserCds,
+  requireValidBrokerEvidenceIdentity
+} from "../../src/features/broker-sync/brokerEvidenceIdentityService";
 
 export default function Funds() {
   const params = useLocalSearchParams();
@@ -33,6 +41,7 @@ export default function Funds() {
   const [broker, setBroker] = useState("AIB");
   const [status, setStatus] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
+  const [statementIdentity, setStatementIdentity] = useState(null);
 
   async function pickStatementFile() {
     try {
@@ -68,6 +77,8 @@ export default function Funds() {
       if (!rows.length) {
         throw new Error("No rows found in statement file.");
       }
+
+      setStatementIdentity(extractStatementIdentity(rows));
 
       const extractedCash = extractAvailableCash(rows);
 
@@ -238,10 +249,24 @@ export default function Funds() {
           return;
         }
 
+        const mirror = await loadBrokerMirror();
+        if (!mirror?.brokerAccountKey) {
+          throw new Error("Upload and verify the broker valuation before cash evidence.");
+        }
+        const accountIdentity = requireValidBrokerEvidenceIdentity({
+          fileName: selectedFile.name,
+          userCds: await loadVerifiedUserCds(),
+          brokerId: mirror.brokerId,
+          clientAccount: mirror.clientAccount || mirror.tradingAccount,
+          internalIdentity: statementIdentity,
+          expectedAccountKey: mirror.brokerAccountKey
+        });
+
         await attachVerifiedBrokerCashEvidence({
           cashBalance: amount,
           fileName: selectedFile.name,
-          broker
+          broker,
+          accountIdentity
         });
 
         await userSetItem("brokerCashEvidenceUploaded", "true");

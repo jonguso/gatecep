@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   Pressable,
@@ -8,7 +8,7 @@ import {
   useWindowDimensions,
   View
 } from "react-native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import Svg, {
   Circle,
   Line,
@@ -41,6 +41,8 @@ const PERFORMANCE_SECTIONS = [
 ];
 
 export default function Performance() {
+  const params = useLocalSearchParams();
+  const scrollRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [snapshots, setSnapshots] = useState([]);
   const [canonicalMetrics, setCanonicalMetrics] = useState(null);
@@ -62,6 +64,18 @@ const [historicalSummary, setHistoricalSummary] = useState(null);
   const [selectedTimelinePoint, setSelectedTimelinePoint] = useState(null);
 
   const { width: windowWidth } = useWindowDimensions();
+  const activeSectionIndex = PERFORMANCE_SECTIONS.findIndex((section) => section.id === activeSection);
+  const previousSection = activeSectionIndex > 0 ? PERFORMANCE_SECTIONS[activeSectionIndex - 1] : null;
+  const nextSection = activeSectionIndex >= 0 && activeSectionIndex < PERFORMANCE_SECTIONS.length - 1
+    ? PERFORMANCE_SECTIONS[activeSectionIndex + 1]
+    : null;
+  const moveToSection = (sectionId) => {
+    setActiveSection(sectionId);
+    requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: 0, animated: false }));
+  };
+  const exitPerformance = () => params?.returnTo === "analysis"
+    ? router.replace({ pathname: "/unified-portfolio-analytics", params: { section: "specialists" } })
+    : router.replace("/(tabs)/dashboard");
 
   useEffect(() => {
     load();
@@ -262,7 +276,7 @@ const [historicalSummary, setHistoricalSummary] = useState(null);
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <ScrollView ref={scrollRef} style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.headerRow}>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Performance</Text>
@@ -276,10 +290,10 @@ const [historicalSummary, setHistoricalSummary] = useState(null);
         <Pressable
           style={styles.dashboardButton}
           onPress={() => activeSection
-            ? setActiveSection(null)
-            : router.replace("/(tabs)/dashboard")}
+            ? moveToSection(null)
+            : exitPerformance()}
         >
-          <Text style={styles.dashboardText}>{activeSection ? "Back to Performance" : "Home"}</Text>
+          <Text style={styles.dashboardText}>{activeSection ? "Performance Overview" : params?.returnTo === "analysis" ? "Analysis" : "Home"}</Text>
         </Pressable>
       </View>
 
@@ -346,7 +360,7 @@ const [historicalSummary, setHistoricalSummary] = useState(null);
                 accessibilityLabel={`Open ${section.title}`}
                 key={section.id}
                 style={({ pressed }) => [styles.performanceMenuButton, windowWidth < 600 && styles.performanceMenuButtonCompact, pressed && styles.performanceMenuButtonPressed]}
-                onPress={() => setActiveSection(section.id)}
+                onPress={() => moveToSection(section.id)}
               >
                 <View style={{ flex: 1 }}>
                   <Text style={styles.performanceMenuButtonTitle}>{section.title}</Text>
@@ -360,10 +374,10 @@ const [historicalSummary, setHistoricalSummary] = useState(null);
 
           {activeSection ? (
             <View style={styles.detailNavigation}>
-              <Pressable style={styles.detailBackButton} onPress={() => setActiveSection(null)}>
-                <Text style={styles.detailBackText}>‹ Back to Performance</Text>
+              <Pressable style={styles.detailBackButton} onPress={() => moveToSection(previousSection?.id || null)}>
+                <Text style={styles.detailBackText}>{previousSection ? `‹ Previous: ${previousSection.title}` : "‹ Performance Overview"}</Text>
               </Pressable>
-              <Text style={styles.detailPosition}>{PERFORMANCE_SECTIONS.findIndex((section) => section.id === activeSection) + 1} of {PERFORMANCE_SECTIONS.length}</Text>
+              <Text style={styles.detailPosition}>{activeSectionIndex + 1} of {PERFORMANCE_SECTIONS.length}</Text>
             </View>
           ) : null}
 
@@ -1624,11 +1638,13 @@ const [historicalSummary, setHistoricalSummary] = useState(null);
       <Pressable
         style={styles.backButton}
         onPress={() => activeSection
-          ? setActiveSection(null)
-          : router.replace("/(tabs)/dashboard")}
+          ? moveToSection(nextSection?.id || null)
+          : exitPerformance()}
       >
         <Text style={styles.backText}>
-          {activeSection ? "Back to Performance" : "Back to Home"}
+          {activeSection
+            ? nextSection ? `Next: ${nextSection.title} ›` : "Finish: Performance Overview"
+            : params?.returnTo === "analysis" ? "Back to Portfolio Analysis" : "Back to Home"}
         </Text>
       </Pressable>
     </ScrollView>
