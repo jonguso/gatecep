@@ -4,11 +4,23 @@ import { authRequired } from "../../middleware/authRequired.js";
 
 import {
   createHolding,
+  replaceAuthoritativePortfolioSnapshot,
   getUserPortfolio,
   getUserPortfolioAccounts
 } from "./portfolio.service.js";
 
 const router = express.Router();
+
+router.put("/authoritative-snapshot", authRequired, async (req, res) => {
+  try {
+    const accountKey = String(req.body?.brokerAccountKey || "").trim().toUpperCase();
+    const holdings = Array.isArray(req.body?.holdings) ? req.body.holdings : [];
+    const result = await replaceAuthoritativePortfolioSnapshot(req.user.id, accountKey, holdings, req.body?.cashBalance);
+    res.json(result);
+  } catch (error) {
+    res.status(400).json({ ok: false, error: error.message });
+  }
+});
 
 router.get("/accounts", authRequired, async (req, res) => {
   try {

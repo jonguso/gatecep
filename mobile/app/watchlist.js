@@ -11,17 +11,19 @@ import {
 import { router, useFocusEffect } from "expo-router";
 
 import { userGetItem, userSetItem } from "../src/auth/userStorage";
-import { MARKET_ROWS } from "../src/markets/marketHubData";
+import useMarketData from "../src/services/markets/useMarketData";
 
 const WATCHLIST_KEY = "marketWatchlist";
 
 export default function WatchlistManager() {
   const [selected, setSelected] = useState([]);
   const [query, setQuery] = useState("");
+  const market = useMarketData();
 
   useFocusEffect(
     useCallback(() => {
       load();
+      market.reload();
     }, [])
   );
 
@@ -34,14 +36,14 @@ export default function WatchlistManager() {
   const rows = useMemo(() => {
     const search = query.trim().toLowerCase();
 
-    if (!search) return MARKET_ROWS;
+    if (!search) return market.rows;
 
-    return MARKET_ROWS.filter(
+    return market.rows.filter(
       (row) =>
         row.symbol.toLowerCase().includes(search) ||
         row.name.toLowerCase().includes(search)
     );
-  }, [query]);
+  }, [query, market.rows]);
 
   function toggle(symbol) {
     setSelected((current) =>
@@ -80,6 +82,16 @@ export default function WatchlistManager() {
       />
 
       <Text style={styles.section}>Active Counters</Text>
+
+      {market.loading ? (
+        <Text style={styles.message}>Loading verified NSE securities…</Text>
+      ) : null}
+
+      {!market.loading && !market.connected ? (
+        <Text style={styles.message}>
+          {market.error || "Verified market securities are unavailable."}
+        </Text>
+      ) : null}
 
       {rows.map((row) => {
         const checked = selected.includes(row.symbol);
@@ -146,6 +158,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     textTransform: "uppercase"
   },
+  message: { color: "#94a3b8", paddingVertical: 14 },
   row: {
     flexDirection: "row",
     alignItems: "center",

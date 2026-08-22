@@ -1,11 +1,12 @@
 import React, { useCallback, useState } from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 
 import { userGetItem } from "../src/auth/userStorage";
 import { loadUnifiedPortfolio } from "../src/portfolio/unifiedPortfolioApi";
 import { loadBrokerMirror } from "../src/features/broker-sync/brokerSyncService";
 import { buildBrokerReconciliation } from "../src/features/broker-sync/brokerReconciliationService";
+import { adoptVerifiedBrokerSnapshot, loadAuthoritativeBrokerSnapshotPreview } from "../src/features/broker-sync/brokerAuthoritativeSnapshotService";
 import ActiveUserBanner from "../src/components/ActiveUserBanner";
 import {
   CollapsibleSection,
@@ -18,20 +19,22 @@ import {
   StickyActionBar
 } from "../src/components/mobile/MobileUI";
 
-const STEPS = ["Evidence", "Compare", "Review", "Resolve", "Complete"];
+const STEPS = ["Verify", "Confirm", "Complete"];
 
 export default function PortfolioSyncCenter() {
-  const [state, setState] = useState({ loading: true, error: "", holdingsCount: 0, portfolioValue: 0, cash: 0, source: "", mirror: null, reconciliation: null });
+  const [state, setState] = useState({ loading: true, saving: false, error: "", holdingsCount: 0, portfolioValue: 0, cash: 0, source: "", mirror: null, reconciliation: null, preview: null });
+  const [confirmVisible, setConfirmVisible] = useState(false);
 
   useFocusEffect(useCallback(() => { load(); }, []));
 
   async function load() {
     try {
-      const [portfolio, cashRaw, mirror, reconciliation] = await Promise.all([
+      const [portfolio, cashRaw, mirror, reconciliation, preview] = await Promise.all([
         loadUnifiedPortfolio(),
         userGetItem("availableCash"),
         loadBrokerMirror(),
-        buildBrokerReconciliation()
+        buildBrokerReconciliation(),
+        loadAuthoritativeBrokerSnapshotPreview()
       ]);
       const holdings = portfolio?.holdings || [];
       setState({
@@ -42,7 +45,8 @@ export default function PortfolioSyncCenter() {
         cash: Number(cashRaw || 0),
         source: portfolio?.priceSource || portfolio?.source || "",
         mirror,
-        reconciliation
+        reconciliation,
+        preview
       });
     } catch (error) {
       setState((current) => ({ ...current, loading: false, error: error?.message || "Unable to load the REAL synchronization state." }));
@@ -56,14 +60,31 @@ export default function PortfolioSyncCenter() {
   function continueJourney() {
     if (!valuationReady) return router.push("/import-portfolio?mode=RECONCILE");
     if (!cashEvidenceReady) return router.push("/(tabs)/funds?mode=RECONCILE");
-    router.push("/broker-reconciliation");
+    confirmReplacement();
+  }
+
+  function confirmReplacement() {
+    const next = state.preview?.next;
+    if (!next || state.saving) return;
+    setConfirmVisible(true);
+  }
+
+  async function applyReplacement() {
+    try {
+      setConfirmVisible(false);
+      setState((current) => ({ ...current, saving: true, error: "" }));
+      await adoptVerifiedBrokerSnapshot();
+      router.replace("/portfolio-hub?brokerSnapshot=ADOPTED");
+    } catch (error) {
+      setState((current) => ({ ...current, saving: false, error: error?.message || "Unable to adopt broker snapshot." }));
+    }
   }
 
   const primaryLabel = !valuationReady
     ? "Upload Portfolio Valuation"
     : !cashEvidenceReady
     ? "Upload Cash / Ledger Evidence"
-    : "Continue to Comparison";
+    : state.saving ? "Applying Broker Snapshot…" : "Confirm Broker Snapshot";
 
   return (
     <MobileScreen
@@ -80,12 +101,12 @@ export default function PortfolioSyncCenter() {
       <DeveloperIdentifier>PC-030M3A</DeveloperIdentifier>
       <MobileHeader
         title="Sync & Reconcile"
-        subtitle="Step 1: collect independent broker evidence without changing the canonical REAL portfolio."
+        subtitle="Verify the broker account, preview its current records, then confirm one authoritative replacement."
         onBack={() => router.replace("/portfolio-hub")}
         actionLabel="History"
         onAction={() => router.push("/broker-sync-history")}
       />
-      <JourneyStepper steps={STEPS} activeIndex={0} />
+      <JourneyStepper steps={STEPS} activeIndex={evidenceReady ? 1 : 0} />
       <ActiveUserBanner />
 
       {state.error ? <StatusBanner tone="danger" title="REAL data unavailable" message={state.error} /> : null}
@@ -100,7 +121,7 @@ export default function PortfolioSyncCenter() {
         tone={evidenceReady ? "success" : "warning"}
         title={evidenceReady ? "Broker evidence complete" : "Broker evidence required"}
         message={evidenceReady
-          ? "Portfolio valuation and cash/ledger evidence are ready for comparison."
+          ? "Identity, portfolio valuation, and cash statement are verified. Confirm once to replace the REAL record."
           : "Both the current portfolio valuation and cash/ledger statement are required."}
       />
 
@@ -135,13 +156,56 @@ export default function PortfolioSyncCenter() {
         <ActionButton label="Manual Portfolio Entry" onPress={() => router.push("/manual-portfolio-entry")} />
       </CollapsibleSection>
 
+      {state.preview ? (
+        <View style={styles.card}>
+          <Text style={styles.previewTitle}>Replacement preview</Text>
+          <Text style={styles.body}>Current: {state.preview.current.holdingsCount} holdings • KES {money(state.preview.current.holdingsValue)} • cash KES {money(state.preview.current.cash)}</Text>
+          <Text style={styles.body}>Broker: {state.preview.next.holdingsCount} holdings • KES {money(state.preview.next.holdingsValue)} • cash KES {money(state.preview.next.cash)}</Text>
+          <Text style={styles.protection}>Daily prices change current value only. They never change broker quantity, cost basis, or cash.</Text>
+        </View>
+      ) : null}
+
       {state.reconciliation?.status && evidenceReady ? (
         <StatusBanner
           tone={state.reconciliation.status === "MATCHED" ? "success" : "info"}
-          title={`Latest comparison: ${friendlyStatus(state.reconciliation.status)}`}
-          message="Continue to review the current comparison."
+          title="Comparison retained for audit"
+          message={`Existing differences (${friendlyStatus(state.reconciliation.status)}) are informational; no issue-by-issue resolution is required.`}
         />
       ) : null}
+
+      <Modal
+        visible={confirmVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !state.saving && setConfirmVisible(false)}
+      >
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard} testID="broker-snapshot-confirmation">
+            <Text style={styles.modalTitle}>Use broker snapshot as REAL portfolio?</Text>
+            <Text style={styles.modalBody}>
+              {state.preview?.next?.holdingsCount || 0} holdings (KES {money(state.preview?.next?.holdingsValue)}) and KES {money(state.preview?.next?.cash)} cash will replace GateCEP's current REAL record.
+            </Text>
+            <Text style={styles.protection}>Broker quantities, cost basis, and cash become authoritative. Daily market prices may change valuation only.</Text>
+            <View style={styles.modalActions}>
+              <Pressable
+                style={[styles.modalButton, styles.cancelButton]}
+                disabled={state.saving}
+                onPress={() => setConfirmVisible(false)}
+              >
+                <Text style={styles.cancelText}>Cancel</Text>
+              </Pressable>
+              <Pressable
+                testID="confirm-broker-snapshot-replacement"
+                style={[styles.modalButton, styles.confirmButton, state.saving && styles.disabled]}
+                disabled={state.saving}
+                onPress={applyReplacement}
+              >
+                <Text style={styles.confirmText}>{state.saving ? "Applying…" : "Confirm Replacement"}</Text>
+              </Pressable>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </MobileScreen>
   );
 }
@@ -151,7 +215,6 @@ function EvidenceRow({ label, ready, value, actionLabel, onPress, disabled = fal
     <View style={styles.evidenceRow}>
       <View style={styles.evidenceText}>
         <Text style={styles.evidenceLabel}>{label}</Text>
-        <Text style={styles.evidenceValue}>{value}</Text>
         <Text style={ready ? styles.ready : styles.required}>{ready ? "READY" : "REQUIRED"}</Text>
       </View>
       <Pressable style={[styles.smallButton, disabled && styles.disabled]} disabled={disabled} onPress={onPress}>
@@ -188,4 +251,16 @@ const styles = StyleSheet.create({
   actionButton: { marginTop: 10, backgroundColor: "#020617", borderRadius: 14, padding: 14, flexDirection: "row", alignItems: "center" },
   actionButtonText: { color: "white", fontWeight: "900", flex: 1 },
   arrow: { color: "#c084fc", fontSize: 24, fontWeight: "900" }
+  ,previewTitle: { color: "#67e8f9", fontSize: 17, fontWeight: "900", padding: 15, paddingBottom: 8 },
+  protection: { color: "#fbbf24", lineHeight: 19, padding: 15, paddingTop: 8 }
+  ,modalBackdrop: { flex: 1, backgroundColor: "rgba(2, 6, 23, 0.86)", alignItems: "center", justifyContent: "center", padding: 20 },
+  modalCard: { width: "100%", maxWidth: 520, backgroundColor: "#0f172a", borderColor: "#7e22ce", borderWidth: 1, borderRadius: 20, padding: 20 },
+  modalTitle: { color: "white", fontSize: 20, fontWeight: "900" },
+  modalBody: { color: "#cbd5e1", lineHeight: 21, marginTop: 10 },
+  modalActions: { flexDirection: "row", gap: 10, marginTop: 18 },
+  modalButton: { flex: 1, minHeight: 48, borderRadius: 13, alignItems: "center", justifyContent: "center", paddingHorizontal: 12 },
+  cancelButton: { backgroundColor: "#1e293b" },
+  confirmButton: { backgroundColor: "#9333ea" },
+  cancelText: { color: "#67e8f9", fontWeight: "900" },
+  confirmText: { color: "white", fontWeight: "900", textAlign: "center" }
 });

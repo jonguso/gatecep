@@ -38,6 +38,7 @@ export const MENU_SECTIONS = [
     summary: "Broker evidence, uploads, corrections, and entry",
     items: [
       { title: "Sync & Reconcile", detail: "Upload broker evidence, compare REAL holdings and cash, and review corrections", route: "/portfolio-sync-center" },
+      { title: "Market Price Import", detail: "Restricted temporary import of licensed myStocks CSV prices", route: "/market-price-import" },
       { title: "Broker Profile", detail: "Review the connected broker account profile", route: "/broker-profile" },
       { title: "Manual Portfolio Entry", detail: "Create or correct investor-entered REAL holdings", route: "/manual-portfolio-entry" }
     ]

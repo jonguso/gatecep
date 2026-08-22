@@ -255,9 +255,9 @@ export default function ReviewPortfolioImport() {
 
       Alert.alert(
         "Broker Evidence Ready",
-        "The uploaded statement is ready to compare with your existing REAL portfolio. No REAL holdings were changed."
+        "The verified valuation is ready. Add the matching cash statement, then confirm the broker snapshot. No REAL holdings were changed yet."
       );
-      router.replace("/broker-reconciliation");
+      router.replace("/portfolio-sync-center");
       return;
     }
 

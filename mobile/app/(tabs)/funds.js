@@ -281,9 +281,9 @@ export default function Funds() {
 
         Alert.alert(
           "Broker Cash Evidence Ready",
-          "The broker cash balance is ready for comparison. GateCEP's REAL available cash was not changed."
+          "The matching broker statement is ready. Review and confirm the complete broker snapshot before GateCEP replaces its REAL record."
         );
-        router.replace("/broker-reconciliation");
+        router.replace("/portfolio-sync-center");
         return;
       }
 

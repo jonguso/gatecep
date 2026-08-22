@@ -52,3 +52,19 @@ const token =
 
   return data;
 }
+
+export async function replaceAuthoritativeBrokerPortfolio({ holdings = [], cashBalance, brokerAccountKey, tokenOverride = null } = {}) {
+  const session = await getCurrentSession();
+  const token = tokenOverride || session?.token || session?.accessToken || session?.user?.token || session?.user?.accessToken;
+  if (!token) throw new Error("Authentication token missing");
+  if (!brokerAccountKey) throw new Error("Verified broker account identity is required");
+
+  const response = await fetch(`${API_URL}/user-portfolio/authoritative-snapshot`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+    body: JSON.stringify({ brokerAccountKey, holdings, cashBalance })
+  });
+  const data = await response.json();
+  if (!response.ok || data?.ok === false) throw new Error(data?.error || "Unable to replace the authoritative broker portfolio");
+  return data;
+}

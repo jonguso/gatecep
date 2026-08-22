@@ -1,31 +1,24 @@
-import { loadBasketExecution } from "./basketExecutionStore";
 import { loadUnifiedPortfolio } from "../portfolio/unifiedPortfolioApi";
 import { userGetItem } from "../auth/userStorage";
+import { loadCanonicalRealAvailableCash } from "../../features/portfolio-cash/canonicalPortfolioCashService";
 
 export async function loadTradingHubData() {
-  const execution = await loadBasketExecution();
   const portfolioData = await loadUnifiedPortfolio();
   const portfolio = portfolioData?.holdings || [];
 
   const brokerRaw = await userGetItem("defaultBrokerProfile");
-  const cashRaw = await userGetItem("availableCash");
-
+  const cashEvidence = await userGetItem("availableCash");
   const broker = brokerRaw ? JSON.parse(brokerRaw) : null;
-
-  const orders =
-    execution?.orders?.filter(
-      (order) =>
-        !["FILLED", "CANCELLED", "FAILED", "REJECTED"].includes(
-          String(order.status || "").toUpperCase()
-        )
-    ) || [];
+  const cash = await loadCanonicalRealAvailableCash();
 
   return {
     broker,
-    cash: Number(cashRaw || 0),
+    cash,
+    cashAvailable: cashEvidence !== null && cashEvidence !== undefined && Number.isFinite(Number(cash)),
     portfolio,
-    orders,
-    execution,
+    orders: [],
+    execution: null,
+    brokerControlled: true,
     loadedAt: new Date().toISOString()
   };
 }

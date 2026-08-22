@@ -2,6 +2,7 @@ import {
   listUserPortfolio,
   listUserPortfolioAccounts,
   addUserHolding,
+  replaceUserPortfolioSnapshot,
   updateUserPositionSettlement
 } from "./portfolio.repository.js";
 
@@ -58,4 +59,9 @@ export async function upsertUserPosition(userId, payload) {
 
 export async function settleUserPosition(userId, payload = {}) {
   return await updateUserPositionSettlement(userId, payload);
+}
+
+export async function replaceAuthoritativePortfolioSnapshot(userId, accountKey, holdings, cashBalance) {
+  const saved = await replaceUserPortfolioSnapshot(userId, accountKey, holdings, cashBalance);
+  return { ok: true, replacementMode: "AUTHORITATIVE_BROKER_SNAPSHOT", count: saved.holdings.length, holdings: saved.holdings, cashBalance: saved.cashBalance };
 }

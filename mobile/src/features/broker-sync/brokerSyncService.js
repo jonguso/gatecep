@@ -385,6 +385,15 @@ export async function loadBrokerSyncStatus() {
     : null;
 }
 
+export async function clearVerifiedUploadedBrokerEvidence() {
+  await Promise.all([
+    userRemoveItem(BROKER_MIRROR_KEY),
+    userRemoveItem(BROKER_SYNC_STATUS_KEY),
+    userRemoveItem("brokerEvidenceUploaded"),
+    userRemoveItem("brokerCashEvidenceUploaded")
+  ]);
+}
+
 export async function saveVerifiedUploadedBrokerMirror({
   holdings = [],
   cashBalance = null,

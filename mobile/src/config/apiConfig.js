@@ -1,8 +1,16 @@
 import Constants from "expo-constants";
+import { Platform } from "react-native";
 
 const PROD_API_URL = "https://gatecep-trader-production.up.railway.app";
 
 function getExpoHostApiUrl() {
+  if (Platform.OS === "web" && typeof window !== "undefined") {
+    const webHost = window.location?.hostname;
+    if (webHost === "localhost" || webHost === "127.0.0.1") {
+      return `http://${webHost}:4000`;
+    }
+  }
+
   const hostUri =
     Constants.expoConfig?.hostUri ||
     Constants.manifest2?.extra?.expoClient?.hostUri ||

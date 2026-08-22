@@ -1,11 +1,40 @@
 import { refreshMarketCache } from "./marketCache.service.js";
 import { emitMarketCacheUpdated } from "./marketCache.socket.js";
 import { broadcastPortfolioUpdatesForActiveUsers } from "../live-portfolio/livePortfolio.service.js";
+import { collectVerifiedEodIfDue } from "./marketEodCollector.service.js";
 
 let refreshTimer = null;
 
 function getRefreshIntervalMs() {
-  return Number(process.env.MARKET_CACHE_REFRESH_MS || 30000);
+  return Math.max(300000, Number(process.env.MARKET_EOD_SCHEDULER_CHECK_MS || 900000));
+}
+
+async function runEodCycle(label) {
+  let collectionError = null;
+  try {
+    const collection = await collectVerifiedEodIfDue();
+    if (collection.updated) {
+      console.log(`Verified EOD collected: ${collection.count} NSE quotes for ${collection.marketDate}.`);
+    }
+  } catch (error) {
+    collectionError = error;
+    console.log("Verified EOD collection failed; retaining the last local snapshot:", error.message);
+  }
+
+  const result = await refreshMarketCache();
+  console.log(`${label}: ${result.count} quotes from ${result.provider}`);
+  if (collectionError) result.collectionError = collectionError.message;
+
+  emitMarketCacheUpdated({
+    provider: result.provider,
+    marketDate: result.marketDate,
+    generatedAt: result.generatedAt,
+    count: result.count
+  });
+  broadcastPortfolioUpdatesForActiveUsers().catch((error) => {
+    console.log("Live portfolio broadcast failed:", error.message);
+  });
+  return result;
 }
 
 export function startMarketCacheScheduler() {
@@ -20,44 +49,14 @@ export function startMarketCacheScheduler() {
 
   const intervalMs = getRefreshIntervalMs();
 
-  refreshMarketCache()
-    .then((result) => {
-      console.log(
-        `Market cache initial refresh: ${result.count} quotes from ${result.provider}`
-      );
-
-      emitMarketCacheUpdated({
-        provider: result.provider,
-        marketDate: result.marketDate,
-        generatedAt: result.generatedAt,
-        count: result.count
-      });
-broadcastPortfolioUpdatesForActiveUsers().catch((error) => {
-  console.log("Live portfolio broadcast failed:", error.message);
-});
-
-    })
+  runEodCycle("Market cache initial load")
     .catch((error) => {
-      console.log("Market cache initial refresh failed:", error.message);
+      console.log("Market cache initial load failed:", error.message);
     });
 
   refreshTimer = setInterval(async () => {
     try {
-      const result = await refreshMarketCache();
-
-      console.log(
-        `Market cache refreshed: ${result.count} quotes from ${result.provider}`
-      );
-
-      emitMarketCacheUpdated({
-        provider: result.provider,
-        marketDate: result.marketDate,
-        generatedAt: result.generatedAt,
-        count: result.count
-      });
-broadcastPortfolioUpdatesForActiveUsers().catch((error) => {
-  console.log("Live portfolio broadcast failed:", error.message);
-});
+      await runEodCycle("Market cache checked");
     } catch (error) {
       console.log("Market cache refresh failed:", error.message);
     }

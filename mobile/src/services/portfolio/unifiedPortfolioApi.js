@@ -1,6 +1,8 @@
 import { API_URL } from "../../config/apiConfig";
 import { getStoredAccessToken } from "../../features/auth/storage/authStorage";
 import { userGetItem, userSetItem } from "../auth/userStorage";
+import { loadCanonicalNseQuotes, overlayCanonicalNseQuotes } from "../markets/canonicalNseQuoteService";
+import { calculatePortfolioSummary } from "../../shared/portfolio/engine";
 
 const REAL_PORTFOLIO_CACHE_KEY = "lastVerifiedRealPortfolio";
 
@@ -76,20 +78,33 @@ export async function loadUnifiedPortfolio(options = {}) {
     throw new Error(data.error || "Unable to load user portfolio");
   }
 
+  const quoteSnapshot = await loadCanonicalNseQuotes().catch(() => ({ status: "UNAVAILABLE", quotes: [] }));
+  const quoteOverlay = overlayCanonicalNseQuotes(data.holdings || [], quoteSnapshot);
+  const recalculated = calculatePortfolioSummary({ holdings: quoteOverlay.holdings, cash: 0 });
+  const refreshedSummary = {
+    ...(data.summary || {}),
+    totalHoldings: quoteOverlay.totalCount,
+    holdingsCount: quoteOverlay.totalCount,
+    totalValue: recalculated.summary.totalValue,
+    investedValue: recalculated.summary.investedValue,
+    totalProfitLoss: recalculated.summary.totalGain,
+    totalGain: recalculated.summary.totalGain,
+    totalGainPct: recalculated.summary.totalGainPct
+  };
   const result = {
     ok: true,
     source: broker,
     priceSource: "USER_PORTFOLIO",
-    holdings: data.holdings || [],
-    totalValue: data.summary?.totalValue || 0,
-    totalMarketValue: data.summary?.totalValue || 0,
-    totalProfitLoss: data.summary?.totalProfitLoss || 0,
-    summary: data.summary || {
-      totalHoldings: 0,
-      totalValue: 0,
-      totalProfitLoss: 0
-    },
+    holdings: quoteOverlay.holdings,
+    totalValue: quoteOverlay.holdings.reduce((sum, holding) => sum + Number(holding?.marketValue || 0), 0),
+    totalMarketValue: quoteOverlay.holdings.reduce((sum, holding) => sum + Number(holding?.marketValue || 0), 0),
+    totalProfitLoss: recalculated.summary.totalGain,
+    summary: refreshedSummary,
     runtimeStatus: "LIVE",
+    marketDataStatus: quoteSnapshot.status,
+    marketDataSource: quoteSnapshot.source,
+    marketDataUpdatedAt: quoteSnapshot.generatedAt,
+    marketPriceCoverage: { updated: quoteOverlay.updatedCount, total: quoteOverlay.totalCount },
     verifiedAt: new Date().toISOString()
   };
 

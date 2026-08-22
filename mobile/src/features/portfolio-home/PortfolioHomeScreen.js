@@ -21,6 +21,7 @@ import { calculatePortfolioSummary } from "../../shared/portfolio/engine";
 import { loadCanonicalRealAvailableCash } from "../portfolio-cash/canonicalPortfolioCashService";
 import { loadRealAvailableCashForSource } from "../portfolio-cash/accountScopedPortfolioCashService";
 import { CollapsibleSection, StatusBanner } from "../../components/mobile/MobileUI";
+import { isNseMarketSessionOpen } from "../../services/markets/canonicalNseQuoteService";
 
 const COLORS = ["#22d3ee", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444", "#3b82f6", "#ec4899"];
 const TABS = ["Allocation", "Holdings", "Performance", "More"];
@@ -40,8 +41,14 @@ export default function PortfolioHomeScreen() {
   const [selectedSector, setSelectedSector] = useState(null);
   const [showAllSectors, setShowAllSectors] = useState(false);
   const [notice, setNotice] = useState(null);
+  const [marketData, setMarketData] = useState(null);
 
-  useFocusEffect(useCallback(() => { loadHome(selectedAccount); }, [selectedAccount]));
+  useFocusEffect(useCallback(() => {
+    loadHome(selectedAccount);
+    if (!isNseMarketSessionOpen()) return undefined;
+    const refreshTimer = setInterval(() => loadHome(selectedAccount), 60 * 1000);
+    return () => clearInterval(refreshTimer);
+  }, [selectedAccount]));
 
   async function loadHome(account = ALL_ACCOUNTS) {
     try {
@@ -65,6 +72,12 @@ export default function PortfolioHomeScreen() {
 
       setHoldings(realHoldings);
       setCash(resolvedCash);
+      setMarketData({
+        status: result?.marketDataStatus || "UNAVAILABLE",
+        source: result?.marketDataSource || null,
+        updatedAt: result?.marketDataUpdatedAt || null,
+        coverage: result?.marketPriceCoverage || null
+      });
       setHasVerifiedData(true);
       setNotice(result?.runtimeStatus && result.runtimeStatus !== "LIVE"
         ? { status: result.runtimeStatus, message: result.runtimeMessage || "REAL portfolio data is temporarily unavailable." }
@@ -73,6 +86,7 @@ export default function PortfolioHomeScreen() {
       setHoldings([]);
       setCash(0);
       setHasVerifiedData(false);
+      setMarketData(null);
       setNotice({ status: error?.code || "REAL_DATA_UNAVAILABLE", message: error?.message || "REAL portfolio data is unavailable." });
     } finally {
       setLoading(false);
@@ -116,6 +130,16 @@ export default function PortfolioHomeScreen() {
           <StatusBanner tone="danger" title="REAL portfolio unavailable" message={`${notice.message} GateCEP did not switch to Practice.`} />
         ) : null}
         {authenticatedAgain ? <Pressable style={styles.signInButton} onPress={() => router.push("/login")}><Text style={styles.signInText}>Sign In Again</Text></Pressable> : null}
+
+        {marketData ? (
+          <StatusBanner
+            tone={marketData.status === "LIVE" ? "success" : "warning"}
+            title={marketData.status === "LIVE" ? "Market prices current" : "Using last verified prices"}
+            message={marketData.status === "LIVE"
+              ? `${marketData.coverage?.updated || 0} of ${marketData.coverage?.total || 0} holdings updated from ${marketData.source || "the NSE feed"}.`
+              : "GateCEP retained broker valuation prices where a genuine current quote was unavailable."}
+          />
+        ) : null}
 
         <View style={styles.hero}>
           <Text style={styles.heroLabel}>{selectedAccount.type === "ALL" ? "REAL NET WORTH" : "ACCOUNT NET WORTH"}</Text>

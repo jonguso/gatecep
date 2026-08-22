@@ -20,6 +20,7 @@ import brokerSyncRoutes from "./modules/broker-adapters/brokerSync.routes.js";
 import transactionRoutes from "./modules/transactions/transaction.routes.js";
 import marketIntelligenceRoutes from "./modules/market-intelligence/marketIntelligence.routes.js";
 import marketCacheRoutes from "./modules/market-cache/marketCache.routes.js";
+import { getMarketCache } from "./modules/market-cache/marketCache.service.js";
 import { startMarketCacheScheduler } from "./modules/market-cache/marketCache.scheduler.js";
 import { registerMarketCacheSocket } from "./modules/market-cache/marketCache.socket.js";
 import { registerLivePortfolioSocket } from "./modules/live-portfolio/livePortfolio.socket.js";
@@ -75,6 +76,12 @@ app.get("/", (req, res) => {
 
 app.get("/health", (req, res) => {
   res.json({ ok: true, service: "gatecep-backend" });
+});
+
+// Canonical mobile compatibility route. The same cache is also available at
+// /market-cache/prices; this alias prevents the two clients from drifting.
+app.get("/prices", (req, res) => {
+  res.json({ ok: true, ...getMarketCache() });
 });
 
 
@@ -168,7 +175,7 @@ if (userId) {
   });
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, async () => {
   console.log(`Gatecep backend running on ${PORT}`);
   startRedis();
 

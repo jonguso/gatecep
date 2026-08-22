@@ -27,7 +27,10 @@ if (!allPrices?.count) {
 }
 
   const holdings = portfolio?.holdings || [];
-  const priceRows = allPrices?.data || [];
+  // Markets may display local EOD/demo rows, but a REAL portfolio may only be
+  // revalued by a provider that explicitly passed the valuation contract.
+  const valuationEligible = allPrices?.valuationEligible === true;
+  const priceRows = valuationEligible ? (allPrices?.data || []) : [];
 
   const prices = {};
   for (const row of priceRows) {
@@ -118,6 +121,7 @@ if (!allPrices?.count) {
     },
     marketFeed: {
       provider: allPrices?.provider || "UNKNOWN",
+      valuationEligible,
       marketDate: allPrices?.marketDate || null,
       count: priceRows.length,
       matchedSymbols: revaluedHoldings.filter((h) => h.quoteMatched).length,

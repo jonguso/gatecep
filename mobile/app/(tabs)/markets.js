@@ -18,6 +18,7 @@ import {
   getMarketSummary,
   getRowsForTab
 } from "../../src/markets/marketHubData";
+import useMarketData from "../../src/services/markets/useMarketData";
 
 export default function Markets() {
   const [tab, setTab] = useState("Summary");
@@ -25,11 +26,12 @@ export default function Markets() {
   const [showIndices, setShowIndices] = useState(false);
   const [showWatchlist, setShowWatchlist] = useState(false);
   const [watchlist, setWatchlist] = useState([]);
+  const market = useMarketData();
 
-  const summary = useMemo(() => getMarketSummary(), []);
+  const summary = useMemo(() => getMarketSummary(market.rows), [market.rows]);
 
   const rows = useMemo(() => {
-    const data = getRowsForTab(tab);
+    const data = getRowsForTab(tab, market.rows);
 
     if (!search.trim()) {
       return data;
@@ -40,11 +42,12 @@ export default function Markets() {
         row.symbol.toLowerCase().includes(search.toLowerCase()) ||
         row.name.toLowerCase().includes(search.toLowerCase())
     );
-  }, [tab, search]);
+  }, [tab, search, market.rows]);
 
   useFocusEffect(
   useCallback(() => {
     loadWatchlist();
+    market.reload();
   }, [])
 );
 
@@ -70,6 +73,26 @@ async function loadWatchlist() {
       </Text>
 
       <ActiveUserBanner />
+
+      <View style={styles.marketStatus}>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.marketStatusTitle}>
+            {market.loading
+              ? "Loading verified NSE securities…"
+              : market.connected
+              ? `${market.rows.length} verified securities`
+              : "Verified market data unavailable"}
+          </Text>
+          <Text style={styles.marketStatusBody}>
+            {market.connected
+              ? `${market.provider || "LOCAL_VERIFIED_EOD"}${market.lastUpdated ? ` • ${new Date(market.lastUpdated).toLocaleString()}` : ""}`
+              : market.error || "No hard-coded market prices are displayed."}
+          </Text>
+        </View>
+        <Pressable style={styles.refreshButton} onPress={market.reload}>
+          <Text style={styles.refreshText}>Refresh</Text>
+        </Pressable>
+      </View>
 
       <View style={styles.tabRow}>
         {MARKET_TABS.map((item) => (
@@ -103,10 +126,10 @@ async function loadWatchlist() {
           <View style={styles.summaryStrip}>
   <SummaryBox label="Turnover" value={`KES ${money(summary.turnover)}`} />
   <SummaryBox label="Volume" value={summary.volume.toLocaleString()} />
-  <SummaryBox label="Deals" value={summary.deals.toLocaleString()} />
+  <SummaryBox label="Securities" value={summary.securities.toLocaleString()} />
   <SummaryBox label="Gainers" value={summary.gainers} positive />
   <SummaryBox label="Decliners" value={summary.decliners} negative />
-  <SummaryBox label="Foreign" value={summary.foreignActivity} />
+  <SummaryBox label="Breadth" value={summary.breadth} />
 </View>
         </View>
       )}
@@ -123,8 +146,16 @@ async function loadWatchlist() {
 
           <View style={styles.card}>
             <Text style={styles.cardTitle}>
-              {tab}
+              {tab} ({rows.length})
             </Text>
+
+            {!market.loading && rows.length === 0 ? (
+              <Text style={styles.emptyText}>
+                {search.trim()
+                  ? "No verified security matches this search."
+                  : "No verified securities are available for this view."}
+              </Text>
+            ) : null}
 
             {rows.map((row) => (
               <View
@@ -257,7 +288,7 @@ async function loadWatchlist() {
     ) : (
      watchlist.map((symbol) => {
   const stock =
-    getRowsForTab("Equities").find(
+    getRowsForTab("Equities", market.rows).find(
       (item) => item.symbol === symbol
     ) || {};
 
@@ -428,6 +459,46 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     fontSize: 18,
     marginBottom: 12
+  },
+
+  marketStatus: {
+    marginTop: 16,
+    backgroundColor: "#082f49",
+    borderColor: "#0e7490",
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12
+  },
+
+  marketStatusTitle: {
+    color: "#67e8f9",
+    fontWeight: "900"
+  },
+
+  marketStatusBody: {
+    color: "#94a3b8",
+    fontSize: 11,
+    marginTop: 4
+  },
+
+  refreshButton: {
+    backgroundColor: "#164e63",
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    borderRadius: 10
+  },
+
+  refreshText: {
+    color: "#67e8f9",
+    fontWeight: "900"
+  },
+
+  emptyText: {
+    color: "#94a3b8",
+    paddingVertical: 16
   },
 
   metricGrid: {

@@ -56,6 +56,7 @@ function buildLocalEodPrices() {
 
   return {
     provider: "LOCAL_EOD",
+    valuationEligible: false,
     generatedAt: new Date().toISOString(),
     marketDate: nseEodPrices.marketDate,
     count: data.length,
@@ -64,6 +65,18 @@ function buildLocalEodPrices() {
 }
 
 async function loadAdapter(provider) {
+  if (provider === "LOCAL_EOD" || provider === "LOCAL_VERIFIED_EOD") {
+    const module = await import("./LocalVerifiedEodAdapter.js");
+    return module.default;
+  }
+  if (provider === "APIFY_NSE") {
+    const module = await import("./ApifyNseMarketDataAdapter.js");
+    return module.default;
+  }
+  if (provider === "VERIFIED_HTTP") {
+    const module = await import("./VerifiedHttpMarketDataAdapter.js");
+    return module.default;
+  }
   if (provider === "SIMULATED") {
     const module = await import("./SimulatedDataAdapter.js");
     return module.default;
@@ -86,15 +99,13 @@ class MarketDataGateway {
   async getPrices() {
     const provider = getProviderName();
 
-    if (provider === "LOCAL_EOD") {
+    if (provider === "BUNDLED_EOD_REFERENCE") {
       return buildLocalEodPrices();
     }
 
     const adapter = await loadAdapter(provider);
 
-    if (!adapter?.getPrices) {
-      return buildLocalEodPrices();
-    }
+    if (!adapter?.getPrices) throw new Error(`Unsupported MARKET_DATA_PROVIDER: ${provider}`);
 
     return await adapter.getPrices();
   }
@@ -117,16 +128,12 @@ class MarketDataGateway {
 
   async getMarketSummary() {
     const provider = getProviderName();
-
-    if (provider !== "LOCAL_EOD") {
-      const adapter = await loadAdapter(provider);
-
-      if (adapter?.getMarketSummary) {
-        return await adapter.getMarketSummary();
-      }
-    }
-
-    const prices = buildLocalEodPrices();
+    const adapter = await loadAdapter(provider);
+    const prices = provider === "BUNDLED_EOD_REFERENCE"
+      ? buildLocalEodPrices()
+      : adapter?.getMarketSummary
+        ? await adapter.getMarketSummary()
+        : await this.getPrices();
 
     const rows = prices.data.map((row) => ({
       ...row,
