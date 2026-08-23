@@ -39,6 +39,12 @@ function n(value) {
 
 function adaptUnifiedPortfolioToSources(portfolio = {}) {
   const holdings = safeArray(portfolio?.holdings);
+  const cashByAccount = new Map(
+    safeArray(portfolio?.cashBalances).map((balance) => [
+      String(balance?.broker || "").trim().toUpperCase(),
+      n(balance?.cashBalance ?? balance?.availableCash) ?? 0
+    ])
+  );
   const groups = new Map();
 
   holdings.forEach((holding) => {
@@ -58,7 +64,7 @@ function adaptUnifiedPortfolioToSources(portfolio = {}) {
     let name;
 
     if (brokerId || brokerAccountId) {
-      key = `BROKER|${brokerId || "UNKNOWN"}|${brokerAccountId || "DEFAULT"}`;
+      key = brokerAccountId || brokerId || "UNKNOWN";
       type = PORTFOLIO_SOURCE_TYPES.BROKER;
       name =
         clean(holding?.brokerName ?? holding?.broker) ||
@@ -84,7 +90,8 @@ function adaptUnifiedPortfolioToSources(portfolio = {}) {
         name,
         brokerId,
         brokerAccountId,
-        holdings: []
+        holdings: [],
+        availableCash: cashByAccount.get(String(key).toUpperCase()) ?? 0
       });
     }
 
@@ -92,6 +99,24 @@ function adaptUnifiedPortfolioToSources(portfolio = {}) {
   });
 
   const sources = Array.from(groups.values());
+
+  /* Cash-only verified broker accounts must remain visible and contribute to
+   * All Accounts even when they currently hold no securities. */
+  safeArray(portfolio?.cashBalances).forEach((balance) => {
+    const key = String(balance?.broker || "").trim().toUpperCase();
+    if (!key || groups.has(key)) return;
+    groups.set(key, {
+      id: key,
+      type: PORTFOLIO_SOURCE_TYPES.BROKER,
+      name: key,
+      brokerId: key,
+      brokerAccountId: key,
+      holdings: [],
+      availableCash: n(balance?.cashBalance ?? balance?.availableCash) ?? 0
+    });
+  });
+
+  const completedSources = Array.from(groups.values());
 
   if (!sources.length && holdings.length) {
     sources.push({
@@ -107,7 +132,7 @@ function adaptUnifiedPortfolioToSources(portfolio = {}) {
     sources[0].availableCash = n(portfolio?.availableCash) ?? 0;
   }
 
-  return sources;
+  return completedSources;
 }
 
 export function buildInitialInvestorIdentity(investorContext = {}) {
@@ -299,8 +324,8 @@ export async function buildCanonicalRealWealthContext({
    * Individual account cash is view-scoped and must not replace aggregate
    * real wealth cash.
    */
-  const syncedAvailableCash =
-    n(canonicalRealCash);
+  const backendAvailableCash = n(unifiedPortfolio?.availableCash);
+  const syncedAvailableCash = backendAvailableCash ?? n(canonicalRealCash);
 
   if (
     catalog?.allAccounts &&

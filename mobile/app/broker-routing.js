@@ -17,6 +17,8 @@ import {
   updateExecutionOrder
 } from "../src/trade/basketExecutionStore";
 import { ORDER_STATUS } from "../src/trade/orderLifecycle";
+import { loadBrokerAccounts } from "../src/services/brokers/brokerAccountStore";
+import { compareVerifiedBrokerCharges } from "../src/services/brokers/brokerFeeAdviceService";
 
 const BROKERS = [
   {
@@ -190,10 +192,22 @@ export default function BrokerRouting() {
       return;
     }
 
+    const connectedAccounts = await loadBrokerAccounts();
     let latest = execution;
 
     for (const order of openOrders) {
-      const broker = recommendBroker(order);
+      const costAdvice = compareVerifiedBrokerCharges({
+        accounts: connectedAccounts,
+        order
+      });
+      const broker = costAdvice.available
+        ? {
+            id: costAdvice.recommended.brokerId,
+            name: costAdvice.recommended.brokerName,
+            reliabilityScore: null,
+            bestFor: "Lowest verified estimated charges"
+          }
+        : recommendBroker(order);
 
       latest = await updateExecutionOrder(order.id, {
         brokerId: broker.id,
@@ -204,7 +218,9 @@ export default function BrokerRouting() {
           brokerName: broker.name,
           bestFor: broker.bestFor,
           confidence: broker.reliabilityScore,
-          reason: `Coach G selected ${broker.name} for ${broker.bestFor}.`
+          reason: costAdvice.available
+            ? `${costAdvice.reason} Estimated charges: ${costAdvice.recommended.currency} ${costAdvice.recommended.estimatedCharges.toFixed(2)}.`
+            : `Coach G selected ${broker.name} without a fee comparison because verified broker fee schedules are unavailable.`
         },
         status: ORDER_STATUS.BROKER_SELECTED,
         message: `Coach G selected ${broker.name}`,

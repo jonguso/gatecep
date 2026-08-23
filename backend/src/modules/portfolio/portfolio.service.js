@@ -5,9 +5,13 @@ import {
   replaceUserPortfolioSnapshot,
   updateUserPositionSettlement
 } from "./portfolio.repository.js";
+import { getUserCashBalances } from "../cash/cash.repository.js";
 
 export async function getUserPortfolio(userId, options = {}) {
-  const holdings = await listUserPortfolio(userId, options);
+  const [holdings, cashBalances] = await Promise.all([
+    listUserPortfolio(userId, options),
+    getUserCashBalances(userId, options)
+  ]);
 
   const totalValue = holdings.reduce(
     (sum, item) => sum + Number(item.marketValue || 0),
@@ -18,13 +22,21 @@ export async function getUserPortfolio(userId, options = {}) {
     (sum, item) => sum + Number(item.profitLoss || 0),
     0
   );
+  const availableCash = cashBalances.reduce(
+    (sum, item) => sum + Number(item.cashBalance || 0),
+    0
+  );
 
   return {
     holdings,
+    cashBalances,
+    availableCash,
     summary: {
       totalHoldings: holdings.length,
       totalValue,
-      totalProfitLoss
+      totalProfitLoss,
+      availableCash,
+      netWorth: totalValue + availableCash
     }
   };
 }

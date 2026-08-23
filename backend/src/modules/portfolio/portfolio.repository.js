@@ -21,7 +21,9 @@ export async function listUserPortfolio(userId, options = {}) {
   const params = [userId];
   const broker = options?.broker;
 
-  let where = "WHERE user_id = $1";
+  let where = `WHERE user_id = $1
+    AND COALESCE(broker, '') NOT IN ('GATECEP-DEMO', 'PRACTICE')
+    AND UPPER(COALESCE(source, '')) NOT LIKE '%PRACTICE%'`;
 
   if (broker && broker !== "ALL") {
     params.push(broker);
@@ -63,20 +65,35 @@ export async function listUserPortfolio(userId, options = {}) {
 export async function listUserPortfolioAccounts(userId) {
   const result = await pool.query(
     `
+      WITH real_holdings AS (
+        SELECT broker, COUNT(*) AS holdings_count, SUM(market_value) AS total_value
+        FROM user_portfolios
+        WHERE user_id = $1
+          AND COALESCE(broker, '') NOT IN ('GATECEP-DEMO', 'PRACTICE')
+          AND UPPER(COALESCE(source, '')) NOT LIKE '%PRACTICE%'
+        GROUP BY broker
+      ), real_cash AS (
+        SELECT broker, SUM(cash_balance) AS available_cash
+        FROM user_cash_balances
+        WHERE user_id = $1
+          AND COALESCE(broker, '') NOT IN ('GATECEP-DEMO', 'PRACTICE')
+          AND UPPER(COALESCE(source, '')) NOT LIKE '%PRACTICE%'
+        GROUP BY broker
+      )
       SELECT
-        broker,
-        COUNT(*) AS holdings_count,
-        SUM(market_value) AS total_value
-      FROM user_portfolios
-      WHERE user_id = $1
-      GROUP BY broker
+        COALESCE(h.broker, c.broker) AS broker,
+        COALESCE(h.holdings_count, 0) AS holdings_count,
+        COALESCE(h.total_value, 0) AS total_value,
+        COALESCE(c.available_cash, 0) AS available_cash
+      FROM real_holdings h
+      FULL OUTER JOIN real_cash c ON c.broker = h.broker
       ORDER BY
         CASE
-          WHEN broker = 'GATECEP-DEMO' THEN 1
-          WHEN broker = 'IMPORT_REVIEW' THEN 2
+          WHEN COALESCE(h.broker, c.broker) = 'GATECEP-DEMO' THEN 1
+          WHEN COALESCE(h.broker, c.broker) = 'IMPORT_REVIEW' THEN 2
           ELSE 3
         END,
-        broker
+        COALESCE(h.broker, c.broker)
     `,
     [userId]
   );
@@ -96,7 +113,9 @@ export async function listUserPortfolioAccounts(userId) {
         ? "IMPORTED"
         : "BROKER",
     holdingsCount: Number(row.holdings_count || 0),
-    totalValue: Number(row.total_value || 0)
+    holdingsValue: Number(row.total_value || 0),
+    availableCash: Number(row.available_cash || 0),
+    totalValue: Number(row.total_value || 0) + Number(row.available_cash || 0)
   }));
 }
 

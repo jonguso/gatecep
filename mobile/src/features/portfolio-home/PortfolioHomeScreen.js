@@ -18,10 +18,12 @@ import {
   loadUnifiedPortfolioRuntime
 } from "../../portfolio/unifiedPortfolioApi";
 import { calculatePortfolioSummary } from "../../shared/portfolio/engine";
-import { loadCanonicalRealAvailableCash } from "../portfolio-cash/canonicalPortfolioCashService";
-import { loadRealAvailableCashForSource } from "../portfolio-cash/accountScopedPortfolioCashService";
 import { CollapsibleSection, StatusBanner } from "../../components/mobile/MobileUI";
 import { isNseMarketSessionOpen } from "../../services/markets/canonicalNseQuoteService";
+import {
+  derivePortfolioAccounts,
+  mergePortfolioAccounts
+} from "./portfolioAccountCatalogService";
 
 const COLORS = ["#22d3ee", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444", "#3b82f6", "#ec4899"];
 const TABS = ["Allocation", "Holdings", "Performance", "More"];
@@ -53,22 +55,25 @@ export default function PortfolioHomeScreen() {
   async function loadHome(account = ALL_ACCOUNTS) {
     try {
       setLoading(true);
-      const [accountResult, canonicalCash] = await Promise.all([
+      const [accountResult, allAccountsPortfolio] = await Promise.all([
         loadPortfolioAccounts().catch(() => ({ accounts: [] })),
-        loadCanonicalRealAvailableCash()
+        loadUnifiedPortfolioRuntime({ broker: "ALL" })
       ]);
 
       const liveAccounts = Array.isArray(accountResult?.accounts) ? accountResult.accounts : [];
-      setAccounts([
-        ALL_ACCOUNTS,
-        ...liveAccounts.filter((item) => item?.type !== "ALL" && item?.broker !== "ALL")
-      ]);
+      const accountCatalog = mergePortfolioAccounts(
+        liveAccounts,
+        derivePortfolioAccounts(allAccountsPortfolio)
+      );
+      setAccounts([ALL_ACCOUNTS, ...accountCatalog]);
 
-      const result = await loadUnifiedPortfolioRuntime({ broker: account?.broker || "ALL" });
+      const result = account?.type === "ALL" || account?.broker === "ALL"
+        ? allAccountsPortfolio
+        : await loadUnifiedPortfolioRuntime({ broker: account?.broker });
       const realHoldings = Array.isArray(result?.holdings) ? result.holdings : [];
-      const resolvedCash = account?.type === "ALL"
-        ? Number(canonicalCash || 0)
-        : Number(await loadRealAvailableCashForSource(account) || 0);
+      const resolvedCash = Number(
+        result?.availableCash ?? result?.summary?.availableCash ?? 0
+      );
 
       setHoldings(realHoldings);
       setCash(resolvedCash);

@@ -155,7 +155,10 @@ export function buildPortfolioSourceCatalog({
     : null;
 
   const allAccounts = normalizedReal.length
-    ? buildAllAccountsPortfolio(normalizedReal)
+    ? buildAllAccountsPortfolio([
+        ...normalizedReal,
+        ...(practice ? [practice] : [])
+      ])
     : null;
 
   return {

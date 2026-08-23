@@ -3,8 +3,8 @@ import {
   upsertUserCashBalance
 } from "./cash.repository.js";
 
-export async function getCashSummary(userId) {
-  const balances = await getUserCashBalances(userId);
+export async function getCashSummary(userId, options = {}) {
+  const balances = await getUserCashBalances(userId, options);
 
   const totalCash = balances.reduce(
     (sum, item) => sum + Number(item.cashBalance || 0),

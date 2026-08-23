@@ -10,7 +10,18 @@
 import { v4 as uuid } from "uuid";
 import { pool } from "../../database/db.js";
 
-export async function getUserCashBalances(userId) {
+export async function getUserCashBalances(userId, options = {}) {
+  const broker = String(options?.broker || "ALL").trim().toUpperCase();
+  const params = [userId];
+  let scope = `
+    AND COALESCE(broker, '') NOT IN ('GATECEP-DEMO', 'PRACTICE')
+    AND UPPER(COALESCE(source, '')) NOT LIKE '%PRACTICE%'`;
+
+  if (broker !== "ALL") {
+    params.push(broker);
+    scope = `AND UPPER(COALESCE(broker, '')) = $${params.length}`;
+  }
+
   const result = await pool.query(
     `
     SELECT
@@ -24,9 +35,10 @@ export async function getUserCashBalances(userId) {
       updated_at AS "updatedAt"
     FROM user_cash_balances
     WHERE user_id = $1
+    ${scope}
     ORDER BY broker
     `,
-    [userId]
+    params
   );
 
   return result.rows;

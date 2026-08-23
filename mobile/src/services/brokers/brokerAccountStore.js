@@ -61,7 +61,8 @@ export async function upsertBrokerAccount({
   defaultBroker = false,
   status = "ACTIVE",
   connectionMode = "MANUAL_PROFILE",
-  apiMode = "PENDING_BROKER_API"
+  apiMode = "PENDING_BROKER_API",
+  feeSchedule = null
 } = {}) {
   const broker = findBrokerById(brokerId || "SIM");
   const accounts = await loadBrokerAccounts();
@@ -89,6 +90,7 @@ export async function upsertBrokerAccount({
     linked: true,
     connectionMode,
     apiMode,
+    feeSchedule: feeSchedule || existing?.feeSchedule || null,
     createdAt: existing?.createdAt || now,
     updatedAt: now,
     lastSyncAt: existing?.lastSyncAt || null

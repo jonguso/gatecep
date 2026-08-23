@@ -80,7 +80,13 @@ export async function loadUnifiedPortfolio(options = {}) {
 
   const quoteSnapshot = await loadCanonicalNseQuotes().catch(() => ({ status: "UNAVAILABLE", quotes: [] }));
   const quoteOverlay = overlayCanonicalNseQuotes(data.holdings || [], quoteSnapshot);
-  const recalculated = calculatePortfolioSummary({ holdings: quoteOverlay.holdings, cash: 0 });
+  const availableCash = Number(
+    data?.availableCash ?? data?.summary?.availableCash ?? 0
+  );
+  const recalculated = calculatePortfolioSummary({
+    holdings: quoteOverlay.holdings,
+    cash: availableCash
+  });
   const refreshedSummary = {
     ...(data.summary || {}),
     totalHoldings: quoteOverlay.totalCount,
@@ -89,15 +95,20 @@ export async function loadUnifiedPortfolio(options = {}) {
     investedValue: recalculated.summary.investedValue,
     totalProfitLoss: recalculated.summary.totalGain,
     totalGain: recalculated.summary.totalGain,
-    totalGainPct: recalculated.summary.totalGainPct
+    totalGainPct: recalculated.summary.totalGainPct,
+    availableCash,
+    netWorth: recalculated.summary.netWorth
   };
   const result = {
     ok: true,
     source: broker,
     priceSource: "USER_PORTFOLIO",
     holdings: quoteOverlay.holdings,
+    cashBalances: Array.isArray(data?.cashBalances) ? data.cashBalances : [],
+    availableCash,
     totalValue: quoteOverlay.holdings.reduce((sum, holding) => sum + Number(holding?.marketValue || 0), 0),
     totalMarketValue: quoteOverlay.holdings.reduce((sum, holding) => sum + Number(holding?.marketValue || 0), 0),
+    netWorth: quoteOverlay.holdings.reduce((sum, holding) => sum + Number(holding?.marketValue || 0), 0) + availableCash,
     totalProfitLoss: recalculated.summary.totalGain,
     summary: refreshedSummary,
     runtimeStatus: "LIVE",
