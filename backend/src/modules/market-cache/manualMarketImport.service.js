@@ -2,6 +2,8 @@ import fs from "fs/promises";
 import path from "path";
 import { fileURLToPath } from "url";
 import { normalizeMyStocksCsv } from "../../services/marketData/MyStocksCsvNormalizer.js";
+import { normalizeApifyEodExport } from "../../services/marketData/ApifyEodExportNormalizer.js";
+import { readLatestVerifiedEodSnapshot, saveVerifiedEodSnapshot } from "./marketEod.repository.js";
 
 const moduleDirectory = path.dirname(fileURLToPath(import.meta.url));
 const defaultAuditDirectory = path.resolve(moduleDirectory, "../../../data/market-imports");
@@ -25,7 +27,16 @@ function publicSummary(snapshot) {
 }
 
 export function previewManualMarketImport(payload = {}) {
-  return publicSummary(normalizeMyStocksCsv(payload));
+  return publicSummary(normalizeManualMarketImport(payload));
+}
+
+export function normalizeManualMarketImport(payload = {}) {
+  const name = String(payload.fileName || "");
+  const text = String(payload.fileText ?? payload.csvText ?? "").replace(/^\uFEFF/, "").trim();
+  const isApify = /apify|dataset_african-stock-market-data/i.test(name)
+    || /"(?:ticker|exchange|scraped_at)"/.test(text.slice(0, 500))
+    || (/^(?:\[|\{)/.test(text) && /"scraped_at"/.test(text.slice(0, 2000)));
+  return isApify ? normalizeApifyEodExport({ ...payload, fileText: text }) : normalizeMyStocksCsv(payload);
 }
 
 export async function persistManualMarketImport(snapshot) {
@@ -43,9 +54,23 @@ export async function persistManualMarketImport(snapshot) {
 }
 
 export async function prepareManualMarketImport(payload = {}) {
-  const snapshot = normalizeMyStocksCsv(payload);
+  const snapshot = normalizeManualMarketImport(payload);
   const audit = await persistManualMarketImport(snapshot);
   return { snapshot, audit };
+}
+
+export async function publishManualVerifiedEod(snapshot) {
+  if (snapshot?.provider !== "APIFY_MANUAL_EOD" || snapshot?.valuationEligible !== true) return null;
+  const latest = await readLatestVerifiedEodSnapshot();
+  if (latest?.marketDate && snapshot.marketDate < latest.marketDate) {
+    const error = new Error(`The ${snapshot.marketDate} export is older than the current ${latest.marketDate} verified EOD snapshot.`);
+    error.code = "STALE_MARKET_SNAPSHOT";
+    throw error;
+  }
+  if (latest?.marketDate === snapshot.marketDate && latest?.payloadHash === snapshot.checksum) {
+    return { duplicate: true, marketDate: snapshot.marketDate, count: snapshot.count, payloadHash: snapshot.checksum };
+  }
+  return { duplicate: false, ...(await saveVerifiedEodSnapshot(snapshot)) };
 }
 
 export async function readLatestManualMarketImport() {

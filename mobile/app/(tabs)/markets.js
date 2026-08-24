@@ -10,6 +10,7 @@ import {
   View
 } from "react-native";
 import ActiveUserBanner from "../../src/components/ActiveUserBanner";
+import MarketDepthModal from "../../src/components/markets/MarketDepthModal";
 import { generateSparkline }
 from "../../src/markets/sparkline";
 import {
@@ -21,11 +22,12 @@ import {
 import useMarketData from "../../src/services/markets/useMarketData";
 
 export default function Markets() {
-  const [tab, setTab] = useState("Summary");
+  const [tab, setTab] = useState("Equities");
   const [search, setSearch] = useState("");
   const [showIndices, setShowIndices] = useState(false);
   const [showWatchlist, setShowWatchlist] = useState(false);
   const [watchlist, setWatchlist] = useState([]);
+  const [selectedSecurity, setSelectedSecurity] = useState(null);
   const market = useMarketData();
 
   const summary = useMemo(() => getMarketSummary(market.rows), [market.rows]);
@@ -158,9 +160,12 @@ async function loadWatchlist() {
             ) : null}
 
             {rows.map((row) => (
-              <View
+              <Pressable
                 key={row.symbol}
                 style={styles.stockRow}
+                onPress={() => setSelectedSecurity(row)}
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${row.symbol} market depth`}
               >
                 <View style={{ flex: 1 }}>
                   <Text style={styles.symbol}>
@@ -188,7 +193,8 @@ async function loadWatchlist() {
                     {row.changePct.toFixed(2)}%
                   </Text>
                 </View>
-              </View>
+                <Text style={styles.rowChevron}>›</Text>
+              </Pressable>
             ))}
           </View>
         </>
@@ -293,9 +299,12 @@ async function loadWatchlist() {
     ) || {};
 
   return (
-    <View
+    <Pressable
   key={symbol}
   style={styles.watchlistCard}
+  onPress={() => stock.symbol && setSelectedSecurity(stock)}
+  accessibilityRole="button"
+  accessibilityLabel={`Open ${symbol} market depth`}
 >
   <View style={styles.watchlistLeft}>
     <View style={styles.logoCircle}>
@@ -349,7 +358,7 @@ async function loadWatchlist() {
 </Text>
    
   </View>
-</View>
+</Pressable>
    );
 })
 
@@ -357,6 +366,11 @@ async function loadWatchlist() {
   </View>
 )}
 
+      <MarketDepthModal
+        security={selectedSecurity}
+        visible={Boolean(selectedSecurity)}
+        onClose={() => setSelectedSecurity(null)}
+      />
     </ScrollView>
   );
 }
@@ -539,7 +553,15 @@ const styles = StyleSheet.create({
     marginTop: 12,
     paddingBottom: 12,
     borderBottomWidth: 1,
-    borderBottomColor: "#1e293b"
+    borderBottomColor: "#1e293b",
+    alignItems: "center",
+    gap: 10
+  },
+
+  rowChevron: {
+    color: "#67e8f9",
+    fontSize: 24,
+    fontWeight: "900"
   },
 
   symbol: {

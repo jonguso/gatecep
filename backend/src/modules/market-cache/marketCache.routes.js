@@ -10,6 +10,7 @@ import {
 } from "./marketCache.service.js";
 import {
   prepareManualMarketImport,
+  publishManualVerifiedEod,
   previewManualMarketImport
 } from "./manualMarketImport.service.js";
 import {
@@ -46,14 +47,19 @@ router.post("/manual-import/preview", authRequired, requireMarketImportKey, (req
 router.post("/manual-import/commit", authRequired, requireMarketImportKey, async (req, res) => {
   try {
     const { snapshot, audit } = await prepareManualMarketImport(req.body || {});
-    const cache = snapshot.valuationEligible
-      ? installManualMarketSnapshot(snapshot)
-      : null;
+    const publication = await publishManualVerifiedEod(snapshot);
+    const cache = publication
+      ? await refreshMarketCache()
+      : snapshot.valuationEligible ? installManualMarketSnapshot(snapshot) : null;
     res.json({
       ok: true,
       auditOnly: !snapshot.valuationEligible,
       message: snapshot.valuationEligible
-        ? `${snapshot.count} verified myStocks prices installed.`
+        ? publication?.duplicate
+          ? `${snapshot.count} verified Apify prices already match the current LOCAL_VERIFIED_EOD snapshot.`
+          : publication
+            ? `${snapshot.count} verified Apify prices published as LOCAL_VERIFIED_EOD.`
+            : `${snapshot.count} verified myStocks prices installed.`
         : `${snapshot.count} daily price rows stored as audit evidence; the valuation cache was not changed.`,
       import: {
         provider: snapshot.provider,
@@ -65,10 +71,11 @@ router.post("/manual-import/commit", authRequired, requireMarketImportKey, async
         rejectedCount: snapshot.rejected.length,
         auditName: audit.auditName
       },
+      publication,
       cache
     });
   } catch (error) {
-    const status = error?.code === "EEXIST" ? 409 : 400;
+    const status = ["EEXIST", "STALE_MARKET_SNAPSHOT"].includes(error?.code) ? 409 : 400;
     res.status(status).json({ ok: false, error: error.message });
   }
 });

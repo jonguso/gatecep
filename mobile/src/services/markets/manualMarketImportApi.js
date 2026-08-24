@@ -29,3 +29,7 @@ export async function previewMyStocksMarketCsv(payload, authorization) {
 export async function commitMyStocksMarketCsv(payload, authorization) {
   return await request("commit", payload, authorization);
 }
+
+// Generic names for the unified myStocks/Apify CSV-or-JSON workflow.
+export const previewManualMarketFile = previewMyStocksMarketCsv;
+export const commitManualMarketFile = commitMyStocksMarketCsv;

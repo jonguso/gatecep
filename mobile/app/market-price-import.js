@@ -12,8 +12,8 @@ import {
   StickyActionBar
 } from "../src/components/mobile/MobileUI";
 import {
-  commitMyStocksMarketCsv,
-  previewMyStocksMarketCsv
+  commitManualMarketFile,
+  previewManualMarketFile
 } from "../src/services/markets/manualMarketImportApi";
 
 function nairobiDate() {
@@ -26,7 +26,7 @@ function nairobiDate() {
 export default function MarketPriceImport() {
   const { accessToken } = useAuth();
   const [file, setFile] = useState(null);
-  const [csvText, setCsvText] = useState("");
+  const [fileText, setFileText] = useState("");
   const [marketDate, setMarketDate] = useState(nairobiDate());
   const [importKey, setImportKey] = useState("");
   const [preview, setPreview] = useState(null);
@@ -35,17 +35,18 @@ export default function MarketPriceImport() {
   const [busy, setBusy] = useState(false);
 
   const payload = useMemo(() => ({
-    csvText,
-    fileName: file?.name || "mystocks-market-data.csv",
+    fileText,
+    csvText: fileText,
+    fileName: file?.name || "market-data-export.csv",
     marketDate
-  }), [csvText, file, marketDate]);
+  }), [fileText, file, marketDate]);
 
   async function chooseFile() {
     setError("");
     setPreview(null);
     setResult(null);
     const picked = await DocumentPicker.getDocumentAsync({
-      type: ["text/csv", "text/comma-separated-values", "application/csv", "text/plain"],
+      type: ["text/csv", "text/comma-separated-values", "application/csv", "application/json", "text/json", "text/plain"],
       copyToCacheDirectory: true,
       multiple: false
     });
@@ -70,21 +71,21 @@ export default function MarketPriceImport() {
       }
       if (!text?.trim()) throw new Error("The selected CSV is empty.");
       setFile(selected);
-      setCsvText(text);
+      setFileText(text);
     } catch (nextError) {
       setFile(null);
-      setCsvText("");
+      setFileText("");
       setError(nextError?.message || "The selected CSV could not be read.");
     }
   }
 
   async function previewFile() {
-    if (!csvText) return setError("Select a myStocks CSV first.");
+    if (!fileText) return setError("Select an Apify JSON/CSV or myStocks CSV first.");
     setBusy(true);
     setError("");
     setResult(null);
     try {
-      const response = await previewMyStocksMarketCsv(payload, { accessToken, importKey });
+      const response = await previewManualMarketFile(payload, { accessToken, importKey });
       setPreview(response.preview);
     } catch (nextError) {
       setPreview(null);
@@ -99,7 +100,7 @@ export default function MarketPriceImport() {
     setBusy(true);
     setError("");
     try {
-      const response = await commitMyStocksMarketCsv(payload, { accessToken, importKey });
+      const response = await commitManualMarketFile(payload, { accessToken, importKey });
       setResult(response);
       setPreview(null);
       Alert.alert("Market import complete", response.message);
@@ -125,7 +126,7 @@ export default function MarketPriceImport() {
     >
       <MobileHeader
         title="Market Price Import"
-        subtitle="Temporary restricted import for licensed myStocks CSV exports. Prices only—holdings, quantities, cash, and cost basis never change."
+        subtitle="Restricted fallback import for Apify JSON/CSV or licensed myStocks CSV exports. Prices only—holdings, quantities, cash, and cost basis never change."
         onBack={() => router.back()}
         actionLabel="Home"
         onAction={() => router.replace("/(tabs)/dashboard")}
@@ -133,8 +134,8 @@ export default function MarketPriceImport() {
 
       <StatusBanner
         tone="warning"
-        title="Manual verified evidence"
-        message="Use Equities Real-Time Market Watch for portfolio valuation. NSE Daily Pricelist is stored as audit evidence and does not replace current prices."
+        title="One verified EOD workflow"
+        message="Apify CSV and JSON are auto-detected and publish to LOCAL_VERIFIED_EOD after confirmation. Equivalent exports are recognized as the same snapshot."
       />
 
       <View style={styles.card}>
@@ -148,7 +149,7 @@ export default function MarketPriceImport() {
           placeholderTextColor="#64748b"
           style={styles.input}
         />
-        <Text style={styles.label}>NSE market date</Text>
+        <Text style={styles.label}>Fallback market date (myStocks only; Apify uses scraped_at)</Text>
         <TextInput
           value={marketDate}
           onChangeText={setMarketDate}
@@ -160,11 +161,11 @@ export default function MarketPriceImport() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.heading}>2. Select myStocks CSV</Text>
+        <Text style={styles.heading}>2. Select verified market export</Text>
         <Pressable style={styles.fileButton} onPress={chooseFile}>
-          <Text style={styles.fileButtonText}>{file?.name || "Choose CSV File"}</Text>
+          <Text style={styles.fileButtonText}>{file?.name || "Choose Apify JSON/CSV or myStocks CSV"}</Text>
         </Pressable>
-        {file ? <Text style={styles.muted}>{Math.max(1, Math.round((file.size || csvText.length) / 1024))} KB selected</Text> : null}
+        {file ? <Text style={styles.muted}>{Math.max(1, Math.round((file.size || fileText.length) / 1024))} KB selected</Text> : null}
         <Pressable
           disabled={busy || !file}
           style={[styles.previewButton, (busy || !file) && styles.disabled]}

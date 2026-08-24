@@ -1,5 +1,6 @@
 import crypto from "node:crypto";
 import { pool } from "../../database/db.js";
+import { normalizeDatabaseMarketDate } from "./marketDate.js";
 
 const numberOrNull = (value) => {
   const parsed = Number(value);
@@ -26,7 +27,8 @@ export async function saveVerifiedEodSnapshot(snapshot = {}) {
   if (!Number.isFinite(generatedAt.getTime())) throw new Error("Verified EOD snapshot requires a valid generated timestamp.");
   if (!rows.length) throw new Error("Verified EOD snapshot contains no usable prices.");
 
-  const payloadHash = crypto.createHash("sha256").update(JSON.stringify(rows)).digest("hex");
+  const payloadHash = String(snapshot.checksum || "").trim()
+    || crypto.createHash("sha256").update(JSON.stringify(rows)).digest("hex");
   const client = await pool.connect();
   try {
     await client.query("BEGIN");
@@ -127,7 +129,7 @@ export async function readLatestVerifiedEodSnapshot() {
     upstreamSource: snapshot.upstream_source,
     valuationEligible: true,
     coverage: snapshot.coverage,
-    marketDate: String(snapshot.market_date).slice(0, 10),
+    marketDate: normalizeDatabaseMarketDate(snapshot.market_date),
     generatedAt: snapshot.generated_at,
     collectedAt: snapshot.collected_at,
     payloadHash: snapshot.payload_hash,

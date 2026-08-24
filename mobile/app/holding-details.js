@@ -19,7 +19,6 @@ export default function HoldingDetails() {
   const [loading, setLoading] = useState(true);
   const [hasVerifiedData, setHasVerifiedData] = useState(false);
   const [notice, setNotice] = useState(null);
-  const [expandedSymbol, setExpandedSymbol] = useState(null);
 
   useFocusEffect(useCallback(() => {
     load();
@@ -126,44 +125,47 @@ export default function HoldingDetails() {
         ) : (
           <View style={styles.list}>
             <Text style={styles.listTitle}>All Securities</Text>
-            <Text style={styles.listHint}>Tap a security to see price, cost, quantity, and return.</Text>
+            <Text style={styles.listHint}>Broker position details for every security. Scroll to review all holdings.</Text>
             {securities.map((security, index) => {
               const symbol = security.symbol || `SECURITY-${index}`;
-              const expanded = expandedSymbol === symbol;
               const gain = number(security.profitLoss);
+              const returnPct = number(security.profitLossPct);
+              const quantity = number(security.quantity);
+              const averagePrice = number(security.averageCost || security.averagePrice);
+              const investedValue = number(security.investedValue || security.costValue) || quantity * averagePrice;
+              const currentPrice = number(security.marketPrice || security.price || security.lastPrice);
+              const currentValue = number(security.marketValue || security.value) || quantity * currentPrice;
+              const sellableQuantity = number(security.settledQuantity ?? security.sellableQuantity ?? security.quantity);
 
               return (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={`Open ${symbol} holding details`}
+                <View
                   key={`${symbol}-${index}`}
-                  style={({ pressed }) => [styles.security, pressed && styles.securityPressed]}
-                  onPress={() => setExpandedSymbol(expanded ? null : symbol)}
+                  style={styles.security}
                 >
                   <View style={styles.securityHeader}>
                     <View style={styles.securityCopy}>
                       <Text style={styles.symbol}>{symbol}</Text>
                       <Text numberOfLines={1} style={styles.name}>{security.name || security.securityName || "Listed security"}</Text>
-                      <Text style={styles.sector}>{security.sector || "Other"}</Text>
+                      <Text style={styles.sector}>{security.sector || "Other"}{security.broker ? ` • ${security.broker}` : ""}</Text>
                     </View>
                     <View style={styles.securityValue}>
-                      <Text style={styles.value}>KES {money(security.marketValue)}</Text>
+                      <Text style={styles.value}>KES {money(currentValue)}</Text>
                       <Text style={gain >= 0 ? styles.positive : styles.negative}>{gain >= 0 ? "+" : ""}KES {money(gain)}</Text>
-                      <Text style={styles.chevron}>{expanded ? "⌃" : "⌄"}</Text>
                     </View>
                   </View>
 
-                  {expanded ? (
-                    <View style={styles.details}>
-                      <Detail label="Quantity" value={number(security.quantity).toLocaleString()} />
-                      <Detail label="Average Cost" value={`KES ${money(security.averageCost || security.averagePrice)}`} />
-                      <Detail label="Market Price" value={`KES ${money(security.marketPrice || security.price)}`} />
-                      <Detail label="Invested Value" value={`KES ${money(security.investedValue)}`} />
-                      <Detail label="Current Value" value={`KES ${money(security.marketValue)}`} />
-                      <Detail label="Return" value={`${number(security.profitLossPct).toFixed(2)}%`} positive={gain >= 0} />
-                    </View>
-                  ) : null}
-                </Pressable>
+                  <View style={styles.details}>
+                    <Detail label="Quantity" value={quantity.toLocaleString()} />
+                    <Detail label="Avg. Price" value={`KES ${money(averagePrice)}`} />
+                    <Detail label="Invested Value" value={`KES ${money(investedValue)}`} />
+                    <Detail label="LTP / Current Price" value={`KES ${money(currentPrice)}`} />
+                    <Detail label="Current Value" value={`KES ${money(currentValue)}`} />
+                    <Detail label="P&L Value" value={`${gain >= 0 ? "+" : ""}KES ${money(gain)}`} positive={gain >= 0} />
+                    <Detail label="P&L %" value={`${returnPct >= 0 ? "+" : ""}${returnPct.toFixed(2)}%`} positive={returnPct >= 0} />
+                    <Detail label="Sellable Qty" value={sellableQuantity.toLocaleString()} />
+                    <Detail label="Settlement" value={security.settlementStatus || "SETTLED"} />
+                  </View>
+                </View>
               );
             })}
           </View>
@@ -233,8 +235,7 @@ const styles = StyleSheet.create({
   list: { marginTop: 14, backgroundColor: "#0f172a", borderColor: "#1e293b", borderWidth: 1, borderRadius: 20, padding: 14 },
   listTitle: { color: "#67e8f9", fontSize: 19, fontWeight: "900" },
   listHint: { color: "#94a3b8", fontSize: 11, marginTop: 4, marginBottom: 5 },
-  security: { minHeight: 76, borderTopColor: "#1e293b", borderTopWidth: 1, paddingVertical: 12, paddingHorizontal: 3 },
-  securityPressed: { backgroundColor: "#1e293b" },
+  security: { borderTopColor: "#334155", borderTopWidth: 1, paddingVertical: 15, paddingHorizontal: 3 },
   securityHeader: { flexDirection: "row", alignItems: "center", gap: 12 },
   securityCopy: { flex: 1, minWidth: 0 },
   symbol: { color: "white", fontSize: 17, fontWeight: "900" },
@@ -244,9 +245,8 @@ const styles = StyleSheet.create({
   value: { color: "white", fontWeight: "900", fontSize: 12 },
   positive: { color: "#86efac", fontWeight: "900", fontSize: 11, marginTop: 4 },
   negative: { color: "#fca5a5", fontWeight: "900", fontSize: 11, marginTop: 4 },
-  chevron: { color: "#c084fc", fontWeight: "900", marginTop: 3 },
   details: { marginTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 8 },
-  detail: { width: "48%", minHeight: 58, borderRadius: 12, backgroundColor: "#020617", padding: 10 },
+  detail: { width: "31.5%", minWidth: 138, flexGrow: 1, minHeight: 58, borderRadius: 12, backgroundColor: "#020617", borderColor: "#1e293b", borderWidth: 1, padding: 10 },
   detailLabel: { color: "#94a3b8", fontSize: 9 },
   detailValue: { color: "white", fontWeight: "900", fontSize: 11, marginTop: 5 },
   homeButton: { minHeight: 50, marginTop: 16, borderRadius: 15, backgroundColor: "#1e293b", alignItems: "center", justifyContent: "center" },

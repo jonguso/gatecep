@@ -1,6 +1,6 @@
 export const MARKET_TABS = [
-  "Summary",
   "Equities",
+  "Summary",
   "Gainers",
   "Losers",
   "Volume",
