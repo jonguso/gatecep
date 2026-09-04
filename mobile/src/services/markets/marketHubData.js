@@ -7,6 +7,19 @@ export const MARKET_TABS = [
   "Turnover"
 ];
 
+export const MARKET_RANK_LIMITS = Object.freeze({
+  Gainers: 10,
+  Losers: 5,
+  Volume: 10,
+  Turnover: 5
+});
+
+function finiteNumber(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
 export const INDEX_ROWS = [
   {
     symbol: "^NASI",
@@ -71,19 +84,31 @@ export function getMarketSummary(rows = []) {
 export function getRowsForTab(tab, rows = []) {
   const marketRows = Array.isArray(rows) ? rows : [];
   if (tab === "Gainers") {
-    return [...marketRows].filter((row) => Number(row.changePct) > 0).sort((a, b) => Number(b.changePct) - Number(a.changePct));
+    return [...marketRows]
+      .filter((row) => finiteNumber(row.changePct) > 0)
+      .sort((a, b) => finiteNumber(b.changePct) - finiteNumber(a.changePct))
+      .slice(0, MARKET_RANK_LIMITS.Gainers);
   }
 
   if (tab === "Losers") {
-    return [...marketRows].filter((row) => Number(row.changePct) < 0).sort((a, b) => Number(a.changePct) - Number(b.changePct));
+    return [...marketRows]
+      .filter((row) => finiteNumber(row.changePct) < 0)
+      .sort((a, b) => finiteNumber(a.changePct) - finiteNumber(b.changePct))
+      .slice(0, MARKET_RANK_LIMITS.Losers);
   }
 
   if (tab === "Volume") {
-    return [...marketRows].sort((a, b) => Number(b.volume || 0) - Number(a.volume || 0));
+    return [...marketRows]
+      .filter((row) => finiteNumber(row.volume) > 0)
+      .sort((a, b) => finiteNumber(b.volume) - finiteNumber(a.volume))
+      .slice(0, MARKET_RANK_LIMITS.Volume);
   }
 
   if (tab === "Turnover") {
-    return [...marketRows].sort((a, b) => Number(b.turnover || 0) - Number(a.turnover || 0));
+    return [...marketRows]
+      .filter((row) => finiteNumber(row.turnover) > 0)
+      .sort((a, b) => finiteNumber(b.turnover) - finiteNumber(a.turnover))
+      .slice(0, MARKET_RANK_LIMITS.Turnover);
   }
 
   return [...marketRows].sort((a, b) => String(a.symbol).localeCompare(String(b.symbol)));

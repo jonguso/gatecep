@@ -1,0 +1,21 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+
+const route = fs.readFileSync("src/modules/coach/coach.routes.js", "utf8");
+assert.match(route, /router\.post\("\/ask", authRequired/);
+assert.match(route, /getPortfolioSummary\(req\.user\.id\)/);
+assert.match(route, /getCashSummary\(req\.user\.id\)/);
+assert.match(route, /getBrokerLinks\(req\.user\.id\)/);
+assert.match(route, /AUTHENTICATED_REAL_CONTEXT/);
+assert.match(route, /readOnly: true/);
+const dashboardRouteIndex = route.indexOf('router.get("/dashboard"');
+const askRouteIndex = route.indexOf('router.post("/ask"');
+assert.ok(dashboardRouteIndex >= 0 && askRouteIndex > dashboardRouteIndex);
+assert.match(route, /\}\);\s*router\.post\("\/ask"/);
+assert.doesNotMatch(route, /req\.body\?\.portfolio/);
+assert.doesNotMatch(route, /req\.body\?\.availableCash/);
+const askBlock = route.slice(route.indexOf('router.post("/ask"'), route.indexOf("export default router"));
+assert.doesNotMatch(askBlock, /\b(insert|update|delete)\b|savePortfolio|saveCash/i);
+console.log("PASS — /coach/ask is authenticated and builds REAL context server-side.");
+console.log("PASS — client portfolio/cash payloads are not trusted.");
+console.log("PASS — the floating Coach endpoint is read-only.");

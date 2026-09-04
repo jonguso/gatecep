@@ -8,37 +8,27 @@ import {
   TextInput,
   View
 } from "react-native";
-import { router } from "expo-router";
-import {
-  refreshCanonicalRealPortfolioSnapshot
-} from "../src/services/portfolio/portfolioSnapshotTrigger";
-
+import { router, useLocalSearchParams } from "expo-router";
+import useMarketData from "../src/services/markets/useMarketData";
 import { validateOrder } from "../src/utils/orderValidator";
-import { loadPortfolio, savePortfolio } from "../src/portfolio/portfolioStore";
 import { userGetItem, userSetItem } from "../src/auth/userStorage";
+import { savePracticePortfolio } from "../src/features/investor/investorContextStore";
 import {
   loadBasketExecution,
   saveBasketExecution,
   updateExecutionOrder
 } from "../src/trade/basketExecutionStore";
-import { buildSyncStatus } from "../src/portfolio/syncStatus";
-
-const STOCKS = [
-  { symbol: "SCOM", name: "Safaricom", sector: "Telecom", price: 30.6, reason: "Beginner-friendly telecom and mobile money exposure." },
-  { symbol: "KCB", name: "KCB Group", sector: "Banking", price: 45, reason: "Large banking exposure with regional presence." },
-  { symbol: "EQTY", name: "Equity Group", sector: "Banking", price: 48, reason: "Strong retail and regional banking franchise." },
-  { symbol: "COOP", name: "Co-operative Bank", sector: "Banking", price: 16, reason: "Lower-priced banking exposure for starter portfolios." },
-  { symbol: "EABL", name: "East African Breweries", sector: "Mfg. and Allied", price: 248, reason: "Defensive consumer income exposure." },
-  { symbol: "BAT", name: "BAT Kenya", sector: "Mfg. and Allied", price: 520, reason: "High dividend defensive stock." }
-];
 
 export default function Trade() {
+  const { symbol: requestedSymbol } = useLocalSearchParams();
+  const market = useMarketData();
+  const stocks = market.rows;
   const [portfolio, setPortfolio] = useState([]);
   const [cash, setCash] = useState(0);
-  const [selectedStock, setSelectedStock] = useState(STOCKS[0]);
+  const [selectedStock, setSelectedStock] = useState({ symbol: "", name: "", sector: "NSE", price: 0 });
   const [side, setSide] = useState("BUY");
   const [quantity, setQuantity] = useState("0");
-  const [limitPrice, setLimitPrice] = useState(String(STOCKS[0].price));
+  const [limitPrice, setLimitPrice] = useState("");
   const [confirmedTrade, setConfirmedTrade] = useState(null);
   const [activeExecution, setActiveExecution] = useState(null);
 
@@ -46,13 +36,23 @@ export default function Trade() {
     load();
   }, []);
 
+  useEffect(() => {
+    if (!stocks.length) return;
+    const target = String(requestedSymbol || selectedStock?.symbol || "").trim().toUpperCase();
+    const verified = stocks.find((item) => String(item.symbol).toUpperCase() === target) || (!target ? stocks[0] : null);
+    if (!verified) return;
+    setSelectedStock(verified);
+    setLimitPrice(String(verified.price));
+    setConfirmedTrade(null);
+  }, [stocks, requestedSymbol]);
+
   async function load() {
-    const savedPortfolio = await loadPortfolio({ revalue: false });
-    const cashRaw = await userGetItem("availableCash");
+    const practiceRaw = await userGetItem("practicePortfolio");
+    const practice = practiceRaw ? JSON.parse(practiceRaw) : {};
     const execution = await loadBasketExecution();
 
-    setPortfolio(savedPortfolio);
-    setCash(Number(cashRaw || 0));
+    setPortfolio(Array.isArray(practice?.holdings) ? practice.holdings : []);
+    setCash(Number(practice?.availableCash || 0));
 
     if (execution?.orders?.length) {
       setActiveExecution(execution);
@@ -92,7 +92,7 @@ export default function Trade() {
     const normalized = normalizeBasketOrder(order);
 
     const stock =
-      STOCKS.find((item) => item.symbol === normalized.symbol) || {
+      stocks.find((item) => item.symbol === normalized.symbol) || {
         symbol: normalized.symbol,
         name: normalized.name || normalized.symbol,
         sector: normalized.sector || "NSE",
@@ -123,18 +123,14 @@ export default function Trade() {
   }, [quantity, limitPrice, selectedStock, side, cash]);
 
   async function getBrokerProfile() {
-    const brokerRaw = await userGetItem("defaultBrokerProfile");
-
-    return brokerRaw
-      ? JSON.parse(brokerRaw)
-      : {
-          broker: "AIB-AXYS",
-          nickname: "Demo Broker",
-          clientNumber: "DEMO",
-          cdsNumber: "DEMO",
-          defaultBroker: true,
-          connectionMode: "SIMULATION"
-        };
+    return {
+      broker: "GATECEP_PRACTICE",
+      nickname: "Practice Account",
+      clientNumber: "PRACTICE",
+      cdsNumber: "PRACTICE",
+      defaultBroker: false,
+      connectionMode: "SIMULATION"
+    };
   }
 
   function applyTradeToPortfolio({
@@ -250,35 +246,13 @@ export default function Trade() {
     nextPortfolio,
     nextCash
   }) {
-    const tradeRaw = await userGetItem("simulatedTrades");
+    const tradeRaw = await userGetItem("practiceSimulatedTrades");
     const trades = tradeRaw ? JSON.parse(tradeRaw) : [];
 
     trades.unshift(trade);
 
-    await savePortfolio(nextPortfolio);
-    await userSetItem("availableCash", String(nextCash));
-    await userSetItem("statementUploaded", "true");
-    await userSetItem("simulatedTrades", JSON.stringify(trades));
-    await userSetItem("firstTradeCompleted", "true");
-
-    await userSetItem(
-      "brokerReadiness",
-      JSON.stringify({
-        brokerSelected: true,
-        cdsCreated: false,
-        brokerOpened: false,
-        brokerFunded: true,
-        starterPortfolioReady: true,
-        readyToInvest: true,
-        firstTradeCompleted: true
-      })
-    );
-
-    await buildSyncStatus();
-
-    await refreshCanonicalRealPortfolioSnapshot({
-      reason: "TRADE_COMMIT"
-    });
+    await savePracticePortfolio({ holdings: nextPortfolio, availableCash: nextCash, status: "ACTIVE", lastActivityType: "TRADE_SIMULATION" });
+    await userSetItem("practiceSimulatedTrades", JSON.stringify(trades));
   }
 
   async function confirmTrade() {
@@ -427,14 +401,14 @@ export default function Trade() {
       let workingPortfolio = [...portfolio];
       let workingCash = Number(cash || 0);
 
-      const tradeRaw = await userGetItem("simulatedTrades");
+      const tradeRaw = await userGetItem("practiceSimulatedTrades");
       const trades = tradeRaw ? JSON.parse(tradeRaw) : [];
 
       const updatedOrders = activeExecution.orders.map(normalizeBasketOrder);
 
       for (const order of pendingOrders) {
         const stock =
-          STOCKS.find((item) => item.symbol === order.symbol) || {
+          stocks.find((item) => item.symbol === order.symbol) || {
             symbol: order.symbol,
             name: order.name || order.symbol,
             sector: order.sector || "NSE",
@@ -528,16 +502,9 @@ export default function Trade() {
             : activeExecution.completedAt
       };
 
-      await savePortfolio(workingPortfolio);
-      await userSetItem("availableCash", String(workingCash));
-      await userSetItem("statementUploaded", "true");
-      await userSetItem("simulatedTrades", JSON.stringify(trades));
+      await savePracticePortfolio({ holdings: workingPortfolio, availableCash: workingCash, status: "ACTIVE", lastActivityType: "BASKET_TRADE_SIMULATION" });
+      await userSetItem("practiceSimulatedTrades", JSON.stringify(trades));
       await saveBasketExecution(updatedExecution);
-      await buildSyncStatus();
-
-      await refreshCanonicalRealPortfolioSnapshot({
-        reason: "BASKET_TRADE_COMMIT"
-      });
 
       setPortfolio(workingPortfolio);
       setCash(workingCash);
@@ -563,7 +530,7 @@ export default function Trade() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Trade</Text>
+        <Text style={styles.title}>Practice Trade</Text>
 
         <Pressable
           style={styles.dashboardButton}
@@ -574,7 +541,7 @@ export default function Trade() {
       </View>
 
       <Text style={styles.subtitle}>
-        Buy or sell securities using your available cash and portfolio holdings.
+        Simulate decisions using Practice cash and holdings. Nothing here changes your REAL broker portfolio.
       </Text>
 
       {activeExecution ? (
@@ -622,7 +589,7 @@ export default function Trade() {
 
       <View style={styles.summaryCard}>
         <Metric label="Available Cash" value={`KES ${money(cash)}`} />
-        <Metric label="Selected Stock" value={selectedStock.symbol} />
+        <Metric label="Selected Stock" value={selectedStock.symbol || "Awaiting verified market"} />
         <Metric label="Side" value={side} />
         <Metric label="Portfolio Positions" value={String(portfolio.length)} />
       </View>
@@ -630,7 +597,9 @@ export default function Trade() {
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Choose Security</Text>
 
-        {STOCKS.map((stock) => (
+        {market.loading ? <Text style={styles.small}>Loading verified NSE securities…</Text> : null}
+        {!market.loading && !stocks.length ? <Text style={styles.reason}>{market.error || "Verified market prices are unavailable. Trading is disabled."}</Text> : null}
+        {stocks.map((stock) => (
           <Pressable
             key={stock.symbol}
             style={[
@@ -644,7 +613,7 @@ export default function Trade() {
               <Text style={styles.small}>
                 {stock.name} • {stock.sector}
               </Text>
-              <Text style={styles.reason}>{stock.reason}</Text>
+              <Text style={styles.reason}>{market.provider || "LOCAL_VERIFIED_EOD"} • {market.lastUpdated ? new Date(market.lastUpdated).toLocaleDateString() : "Verified quote"}</Text>
             </View>
 
             <Text style={styles.price}>KES {money(stock.price)}</Text>

@@ -29,6 +29,8 @@ import portfolioHealthRoutes from "./modules/portfolio-health/portfolioHealth.ro
 import diagnosticsRoutes from "./modules/diagnostics/diagnostics.routes.js";
 import investorProfileRoutes from "./modules/investor-profile/investorProfile.routes.js";
 import userProfileRoutes from "./modules/user-profile/userProfile.routes.js";
+import verifiedNewsRoutes from "./modules/verified-news/verifiedNews.routes.js";
+import { startVerifiedNewsScheduler } from "./modules/verified-news/verifiedNews.scheduler.js";
 import { startRedis } from "./cache/redisClient.js";
 import {
   registerActiveUser,
@@ -108,6 +110,7 @@ app.use("/diagnostics", diagnosticsRoutes);
 app.use("/investor-profile", investorProfileRoutes);
 app.use("/investor-dna", investorDNARoutes);
 app.use("/user-profile", userProfileRoutes);
+app.use("/verified-news", verifiedNewsRoutes);
 
 app.use("/coach-g/broker-link", brokerLinkRoutes);
 app.use("/broker-reports", brokerReportRoutes);
@@ -183,4 +186,6 @@ server.listen(PORT, async () => {
   console.log(
     `Market cache scheduler: running=${schedulerStatus.running}, interval=${schedulerStatus.intervalMs}ms`
   );
+  const newsSchedulerStatus = startVerifiedNewsScheduler();
+  console.log(`Verified news scheduler: running=${newsSchedulerStatus.running}, interval=${newsSchedulerStatus.intervalMs || "disabled"}ms`);
 });

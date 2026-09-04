@@ -15,8 +15,10 @@ const rows = Array.from({ length: 45 }, (_, index) => ({
 }));
 
 assert.equal(getRowsForTab("Equities", rows).length, 45);
-assert.equal(getRowsForTab("Gainers", rows).length, 15);
-assert.equal(getRowsForTab("Losers", rows).length, 15);
+assert.equal(getRowsForTab("Gainers", rows).length, 10);
+assert.equal(getRowsForTab("Losers", rows).length, 5);
+assert.equal(getRowsForTab("Volume", rows).length, 10);
+assert.equal(getRowsForTab("Turnover", rows).length, 5);
 assert.equal(getRowsForTab("Volume", rows)[0].symbol, "SEC01");
 assert.equal(getRowsForTab("Turnover", rows)[0].symbol, "SEC45");
 console.log("PASS — every verified backend security reaches the Equities view.");

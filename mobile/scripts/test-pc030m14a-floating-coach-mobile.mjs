@@ -1,0 +1,24 @@
+import assert from "node:assert/strict";
+import fs from "node:fs";
+
+const layout = fs.readFileSync("app/_layout.js", "utf8");
+const component = fs.readFileSync("src/components/coach/FloatingCoachG.js", "utf8");
+const api = fs.readFileSync("src/features/coach/api/floatingCoachApi.js", "utf8");
+assert.match(layout, /import FloatingCoachG/);
+assert.match(layout, /<FloatingCoachG \/>/);
+assert.match(component, /useGlobalSearchParams/);
+assert.match(component, /Explain \$\{symbol\}/);
+assert.match(component, /loadCanonicalNseQuotes/);
+assert.match(component, /Practice activity stays separate/);
+assert.match(component, /left: 14/);
+assert.doesNotMatch(component, /loadPortfolio/);
+assert.doesNotMatch(component, /availableCash/);
+assert.doesNotMatch(component, /simulatedTrades/);
+assert.doesNotMatch(component, /10\.0\.0\./);
+assert.match(api, /API_URL/);
+assert.match(api, /Authorization: `Bearer \$\{accessToken\}`/);
+assert.match(api, /\/coach\/ask/);
+console.log("PASS — Floating Coach G is globally mounted without overlapping the right-side Menu.");
+console.log("PASS — security routes provide contextual prompts and verified quote context.");
+console.log("PASS — authentication is required and no legacy portfolio/cash keys are read.");
+console.log("PASS — Practice routes are excluded from the REAL Coach G assistant.");

@@ -10,7 +10,7 @@ import {
   View
 } from "react-native";
 import ActiveUserBanner from "../../src/components/ActiveUserBanner";
-import MarketDepthModal from "../../src/components/markets/MarketDepthModal";
+import CompanyLogo from "../../src/components/markets/CompanyLogo";
 import { generateSparkline }
 from "../../src/markets/sparkline";
 import {
@@ -27,7 +27,6 @@ export default function Markets() {
   const [showIndices, setShowIndices] = useState(false);
   const [showWatchlist, setShowWatchlist] = useState(false);
   const [watchlist, setWatchlist] = useState([]);
-  const [selectedSecurity, setSelectedSecurity] = useState(null);
   const market = useMarketData();
 
   const summary = useMemo(() => getMarketSummary(market.rows), [market.rows]);
@@ -72,6 +71,10 @@ async function loadWatchlist() {
 
       <Text style={styles.subtitle}>
         Market intelligence center
+      </Text>
+
+      <Text style={styles.educationPrompt}>
+        Tap a company to explore its price, market depth and verified fundamentals.
       </Text>
 
       <ActiveUserBanner />
@@ -155,7 +158,11 @@ async function loadWatchlist() {
               <Text style={styles.emptyText}>
                 {search.trim()
                   ? "No verified security matches this search."
-                  : "No verified securities are available for this view."}
+                  : tab === "Volume"
+                  ? "Verified traded-volume evidence is unavailable for this snapshot."
+                  : tab === "Turnover"
+                  ? "Verified turnover evidence is unavailable for this snapshot."
+                  : `No verified ${tab.toLowerCase()} are available for this snapshot.`}
               </Text>
             ) : null}
 
@@ -163,10 +170,11 @@ async function loadWatchlist() {
               <Pressable
                 key={row.symbol}
                 style={styles.stockRow}
-                onPress={() => setSelectedSecurity(row)}
+                onPress={() => router.push(`/security/${row.symbol}`)}
                 accessibilityRole="button"
-                accessibilityLabel={`Open ${row.symbol} market depth`}
+                accessibilityLabel={`Explore ${row.symbol} company`}
               >
+                <CompanyLogo security={row} size={42} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.symbol}>
                     {row.symbol}
@@ -302,9 +310,9 @@ async function loadWatchlist() {
     <Pressable
   key={symbol}
   style={styles.watchlistCard}
-  onPress={() => stock.symbol && setSelectedSecurity(stock)}
+  onPress={() => stock.symbol && router.push(`/security/${stock.symbol}`)}
   accessibilityRole="button"
-  accessibilityLabel={`Open ${symbol} market depth`}
+  accessibilityLabel={`Explore ${symbol} company`}
 >
   <View style={styles.watchlistLeft}>
     <View style={styles.logoCircle}>
@@ -366,11 +374,6 @@ async function loadWatchlist() {
   </View>
 )}
 
-      <MarketDepthModal
-        security={selectedSecurity}
-        visible={Boolean(selectedSecurity)}
-        onClose={() => setSelectedSecurity(null)}
-      />
     </ScrollView>
   );
 }
@@ -473,6 +476,13 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     fontSize: 18,
     marginBottom: 12
+  },
+  educationPrompt: {
+    color: "#67e8f9",
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 7,
+    marginBottom: 4
   },
 
   marketStatus: {

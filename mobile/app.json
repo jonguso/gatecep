@@ -8,7 +8,13 @@
     "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "plugins": [
-      "expo-router"
+      "expo-router",
+      [
+        "expo-audio",
+        {
+          "microphonePermission": "Allow GateCEP to record your question for Coach G."
+        }
+      ]
     ],
     "ios": {
       "supportsTablet": false,

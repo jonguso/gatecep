@@ -5,6 +5,7 @@ import { StatusBar } from "expo-status-bar";
 
 import { AuthProvider } from "../src/features/auth/context/AuthContext";
 import AppMenuButton from "../src/components/navigation/AppMenuButton";
+import FloatingCoachG from "../src/components/coach/FloatingCoachG";
 
 export default function Layout() {
   return (
@@ -21,6 +22,7 @@ export default function Layout() {
               animation: "slide_from_right"
             }}
           />
+          <FloatingCoachG />
           <AppMenuButton />
         </AuthProvider>
       </SafeAreaProvider>

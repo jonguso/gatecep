@@ -10,7 +10,10 @@ import {
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 
 import ActiveUserBanner from "../../src/components/ActiveUserBanner";
-import useMarketData from "../../src/markets/useMarketData";
+import CompanyLogo from "../../src/components/markets/CompanyLogo";
+import useMarketData from "../../src/services/markets/useMarketData";
+import { loadFundamentalRecord } from "../../src/features/fundamentals/fundamentalRepository";
+import { buildSecurityEducationModel, explainMetric } from "../../src/services/markets/securityEducationService";
 import { buildWatchlistScores } from "../../src/watchlist/watchlistScoring";
 import { generateWatchlistSignals } from "../../src/utils/watchlistSignals";
 import {
@@ -19,22 +22,6 @@ import {
   WATCHLIST_NAMES
 } from "../../src/watchlist/watchlistStore";
 
-const DIVIDEND_YIELDS = {
-  BAT: 7.8,
-  SCBK: 6.9,
-  KCB: 6.4,
-  ABSA: 6.2,
-  COOP: 5.8,
-  EABL: 5.2,
-  DTK: 5.1,
-  SCOM: 4.7,
-  KNRE: 4.6,
-  SMWF: 3.5,
-  KEGN: 4.2,
-  KQ: 0,
-  GLD: 0
-};
-
 export default function SecurityDetail() {
   const { symbol } = useLocalSearchParams();
   const targetSymbol = String(symbol || "").toUpperCase();
@@ -42,11 +29,13 @@ export default function SecurityDetail() {
   const { rows, connected, loading, lastUpdated, reload } = useMarketData();
 
   const [watchlists, setWatchlists] = useState({});
+  const [fundamentals, setFundamentals] = useState(null);
 
   useFocusEffect(
     useCallback(() => {
       loadUserWatchlists();
-    }, [])
+      loadFundamentalRecord(targetSymbol).then(setFundamentals).catch(() => setFundamentals(null));
+    }, [targetSymbol])
   );
 
   async function loadUserWatchlists() {
@@ -74,7 +63,8 @@ export default function SecurityDetail() {
     return buildWatchlistScores(generated)[0] || null;
   }, [security]);
 
-  const dividendYield = Number(DIVIDEND_YIELDS[targetSymbol] || 0);
+  const education = useMemo(() => buildSecurityEducationModel(security || {}, fundamentals), [security, fundamentals]);
+  const dividendYield = education.fields.dividendYield;
   const price = Number(security?.price || security?.lastPrice || 0);
   const changePct = Number(security?.changePct || 0);
   const positive = changePct >= 0;
@@ -124,8 +114,8 @@ export default function SecurityDetail() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.headerRow}>
-        <Pressable style={styles.backButton} onPress={() => router.back()}>
-          <Text style={styles.backText}>‹ Back</Text>
+        <Pressable style={styles.backButton} onPress={() => router.replace("/(tabs)/markets")}>
+          <Text style={styles.backText}>‹ Back to Markets</Text>
         </Pressable>
 
         <Pressable
@@ -137,9 +127,7 @@ export default function SecurityDetail() {
       </View>
 
       <View style={styles.hero}>
-        <View style={styles.logoCircle}>
-          <Text style={styles.logoText}>{targetSymbol.slice(0, 2)}</Text>
-        </View>
+        <CompanyLogo security={{ ...security, logoUrl: education.profile.logoUrl }} size={64} />
 
         <View style={{ flex: 1 }}>
           <Text style={styles.symbol}>{targetSymbol}</Text>
@@ -165,6 +153,10 @@ export default function SecurityDetail() {
         <Text style={styles.muted}>
           Change: KES {money(security.change || 0)}
         </Text>
+      </View>
+
+      <View style={styles.actionsRow}>
+        <Pressable style={styles.compactAction} onPress={() => addToWatchlist(WATCHLIST_NAMES[0])}><Text style={styles.compactActionText}>+ Watchlist</Text></Pressable>
       </View>
 
       <View style={styles.grid}>
@@ -198,12 +190,66 @@ export default function SecurityDetail() {
       </View>
 
       <View style={styles.card}>
+        <Text style={styles.cardTitle}>Understand the company</Text>
+        <Text style={styles.body}>{education.profile.description || "A verified company description has not been imported yet."}</Text>
+        <MetricLine label="Sector" value={education.profile.sector || "N/A"} />
+        <MetricLine label="Industry" value={education.profile.industry || "N/A"} />
+        <MetricLine label="Fiscal period" value={education.fiscalPeriod || "N/A"} />
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Valuation — what the market is paying</Text>
+        <EducationMetric label="Market capitalisation" value={largeMoney(education.fields.marketCap)} />
+        <EducationMetric label="P/E ratio" value={ratio(education.fields.pe)} help={explainMetric("pe")} />
+        <EducationMetric label="Price / book" value={ratio(education.fields.pb)} help={explainMetric("pb")} />
+        <EducationMetric label="Earnings per share" value={kes(education.fields.eps)} help={explainMetric("eps")} />
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Income & shareholder return</Text>
+        <EducationMetric label="Dividend per share" value={kes(education.fields.dps)} />
+        <EducationMetric label="Dividend yield" value={percent(education.fields.dividendYield)} help={explainMetric("dividendYield")} />
+        <Text style={styles.lesson}>Dividends are not guaranteed. Confirm declaration, book-closure, ex-dividend and payment dates before relying on expected income.</Text>
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Financial strength</Text>
+        <EducationMetric label="Revenue" value={largeMoney(education.fields.revenue)} />
+        <EducationMetric label="Net income" value={largeMoney(education.fields.netIncome)} />
+        <EducationMetric label="Total assets" value={largeMoney(education.fields.assets)} />
+        <EducationMetric label="Shareholders’ equity" value={largeMoney(education.fields.equity)} />
+        <EducationMetric label="Debt / borrowings" value={largeMoney(education.fields.debt)} help={explainMetric("debt")} />
+      </View>
+
+      <View style={education.evidence.available ? styles.evidenceCard : styles.missingCard}>
+        <Text style={styles.cardTitle}>{education.evidence.available ? "Fundamental evidence" : "Fundamentals not yet available"}</Text>
+        {education.evidence.available ? <>
+          <MetricLine label="Verified metrics" value={String(education.evidence.count)} />
+          <MetricLine label="Provider" value={education.evidence.provider || "Imported verified filing"} />
+          <MetricLine label="Reference" value={education.evidence.reference || "Stored source record"} />
+          <MetricLine label="Verified at" value={education.evidence.verifiedAt || "N/A"} />
+        </> : <>
+          <Text style={styles.body}>GateCEP will not estimate P/E, dividends, revenue or debt from the share price. Import an approved issuer filing to unlock evidence-based analysis.</Text>
+          <Pressable style={styles.watchButton} onPress={() => router.push("/fundamental-data-hub")}><Text style={styles.watchButtonText}>Open Fundamental Data Hub</Text></Pressable>
+        </>}
+      </View>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Investor learning checklist</Text>
+        <Text style={styles.lesson}>1. Understand how the company earns money.</Text>
+        <Text style={styles.lesson}>2. Compare several years of earnings and cash flow.</Text>
+        <Text style={styles.lesson}>3. Compare valuation with similar NSE companies.</Text>
+        <Text style={styles.lesson}>4. Check debt, dilution, governance and sector risks.</Text>
+        <Text style={styles.lesson}>5. Decide whether the security fits your goal, horizon and portfolio concentration.</Text>
+      </View>
+
+      <View style={styles.card}>
         <Text style={styles.cardTitle}>Investment Profile</Text>
 
-        <MetricLine label="Dividend Yield" value={`${dividendYield.toFixed(2)}%`} />
+        <MetricLine label="Dividend Yield" value={percent(dividendYield)} />
         <MetricLine
           label="Income Suitability"
-          value={dividendYield >= 5 ? "Strong" : dividendYield > 0 ? "Moderate" : "Low"}
+          value={dividendYield === null ? "Not enough evidence" : dividendYield >= 5 ? "Review for income" : dividendYield > 0 ? "Moderate reported yield" : "No reported yield"}
         />
         <MetricLine
           label="Growth Signal"
@@ -252,13 +298,6 @@ export default function SecurityDetail() {
       </View>
 
       <View style={styles.actions}>
-        <Pressable
-          style={styles.primary}
-          onPress={() => router.push(`/trade?symbol=${targetSymbol}`)}
-        >
-          <Text style={styles.primaryText}>Simulate / Place Trade</Text>
-        </Pressable>
-
         <Pressable
           style={styles.secondary}
           onPress={() => router.push("/watchlist")}
@@ -331,6 +370,19 @@ function MetricLine({ label, value }) {
     </View>
   );
 }
+
+function EducationMetric({ label, value, help }) {
+  return <View style={styles.educationMetric}>
+    <View style={styles.educationMetricTop}><Text style={styles.lineLabel}>{label}</Text><Text style={styles.lineValue}>{value}</Text></View>
+    {help ? <Text style={styles.metricHelp}>{help}</Text> : null}
+  </View>;
+}
+
+function nullable(value) { if (value === null || value === undefined || value === "") return null; return Number.isFinite(Number(value)) ? Number(value) : null; }
+function ratio(value) { const n = nullable(value); return n === null ? "N/A" : `${n.toFixed(2)}×`; }
+function percent(value) { const n = nullable(value); return n === null ? "N/A" : `${n.toFixed(2)}%`; }
+function kes(value) { const n = nullable(value); return n === null ? "N/A" : `KES ${money(n)}`; }
+function largeMoney(value) { const n = nullable(value); if (n === null) return "N/A"; const abs = Math.abs(n); if (abs >= 1e9) return `KES ${(n / 1e9).toFixed(2)}B`; if (abs >= 1e6) return `KES ${(n / 1e6).toFixed(2)}M`; return `KES ${money(n)}`; }
 
 function money(value) {
   return Number(value || 0).toLocaleString(undefined, {
@@ -475,6 +527,9 @@ const styles = StyleSheet.create({
     color: "#94a3b8",
     marginTop: 6
   },
+  actionsRow: { marginTop: 12, flexDirection: "row", gap: 10 },
+  compactAction: { flex: 1, backgroundColor: "#0e7490", borderRadius: 14, padding: 13, alignItems: "center" },
+  compactActionText: { color: "white", fontWeight: "900" },
   grid: {
     marginTop: 18,
     flexDirection: "row",
@@ -549,6 +604,12 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     textAlign: "right"
   },
+  educationMetric: { borderBottomWidth: 1, borderBottomColor: "#1e293b", paddingVertical: 12 },
+  educationMetricTop: { flexDirection: "row", justifyContent: "space-between", gap: 12 },
+  metricHelp: { color: "#94a3b8", fontSize: 12, lineHeight: 18, marginTop: 7 },
+  lesson: { color: "#cbd5e1", lineHeight: 20, marginTop: 8 },
+  evidenceCard: { marginTop: 18, backgroundColor: "#082f49", borderWidth: 1, borderColor: "#0891b2", borderRadius: 22, padding: 18 },
+  missingCard: { marginTop: 18, backgroundColor: "#1c1917", borderWidth: 1, borderColor: "#92400e", borderRadius: 22, padding: 18 },
   watchButton: {
     marginTop: 10,
     backgroundColor: "#1e293b",
