@@ -9,6 +9,8 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useFocusEffect } from "expo-router";
+import { ContainedPanel } from "../src/components/mobile/MobileUI";
+import { loadCanonicalRealTransactionHistory } from "../src/features/wealth-journey/canonicalRealBehaviorHistoryService";
 export default function PortfolioActivity() {
   const [loading, setLoading] = useState(true);
   const [events, setEvents] = useState([]);
@@ -22,26 +24,14 @@ export default function PortfolioActivity() {
   async function load() {
     setLoading(true);
 
-    const tradeRaw = await AsyncStorage.getItem("gatecepSimulatedTrades");
     const uploadRaw = await AsyncStorage.getItem("gatecepLatestUpload");
     const statementRaw = await AsyncStorage.getItem("gatecepStatementSummary");
-    const transactionRaw = await AsyncStorage.getItem("gatecepTransactionSummary");
     const recommendationRaw = await AsyncStorage.getItem("gatecepRecommendationHistory");
+    const transactions = await loadCanonicalRealTransactionHistory();
 
-    const trades = tradeRaw ? JSON.parse(tradeRaw) : [];
     const recommendations = recommendationRaw ? JSON.parse(recommendationRaw) : [];
 
     const nextEvents = [];
-
-    trades.forEach((t) => {
-      nextEvents.push({
-        type: t.side || "TRADE",
-        title: `${t.side || "TRADE"} ${t.quantity} ${t.symbol}`,
-        subtitle: `KES ${money(t.price)} • ${t.status || "SIMULATED"}`,
-        amount: t.side === "BUY" ? -Number(t.totalCost || t.gross || 0) : Number(t.totalCost || t.gross || 0),
-        date: t.tradedAt || t.createdAt || new Date().toISOString()
-      });
-    });
 
     if (uploadRaw) {
       const upload = JSON.parse(uploadRaw);
@@ -65,16 +55,15 @@ export default function PortfolioActivity() {
       });
     }
 
-    if (transactionRaw) {
-      const tx = JSON.parse(transactionRaw);
+    transactions.forEach((tx) => {
       nextEvents.push({
-        type: "HISTORY",
-        title: "Transaction History Imported",
-        subtitle: `${tx.count || 0} transactions • ${tx.fileName || tx.source || "Manual/File"}`,
-        amount: null,
-        date: tx.uploadedAt || new Date().toISOString()
+        type: String(tx.side || "EXECUTION").toUpperCase(),
+        title: `${tx.symbol || "Security"} broker execution`,
+        subtitle: `${tx.broker} • Ref ${tx.brokerReference} • ${tx.quantity} @ KES ${money(tx.price)}`,
+        amount: Number(tx.value || Number(tx.quantity || 0) * Number(tx.price || 0)),
+        date: tx.executionDate
       });
-    }
+    });
 
     recommendations.forEach((r) => {
       nextEvents.push({
@@ -119,7 +108,7 @@ export default function PortfolioActivity() {
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>Portfolio Activity</Text>
           <Text style={styles.subtitle}>
-            Audit trail for uploads, trades, cash updates, and Coach G actions.
+            Audit trail for verified uploads, cash updates, imports, and Coach G actions.
           </Text>
         </View>
 
@@ -137,14 +126,13 @@ export default function PortfolioActivity() {
         <SummaryItem label="Sells" value={`KES ${money(totals.sells)}`} green />
       </View>
 
-      {events.length === 0 ? (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>No Activity Yet</Text>
-          <Text style={styles.body}>
-            Upload a portfolio, save a cash statement, run a trade, or save a Coach G strategy.
-          </Text>
-        </View>
-      ) : (
+      <ContainedPanel
+        title={`Activity (${events.length})`}
+        subtitle="Verified REAL portfolio events • scroll history"
+        emptyMessage="No verified activity yet. Upload a portfolio, save a cash statement, synchronize broker evidence, or save a Coach G strategy. Practice trades remain in Practice only."
+        testID="portfolio-activity-contained-panel"
+      >
+      {events.length ? (
         events.map((event, index) => (
           <View key={`${event.type}-${index}`} style={styles.eventCard}>
             <View style={styles.eventTop}>
@@ -165,7 +153,8 @@ export default function PortfolioActivity() {
             ) : null}
           </View>
         ))
-      )}
+      ) : null}
+      </ContainedPanel>
 
       <Pressable
         style={styles.backButton}

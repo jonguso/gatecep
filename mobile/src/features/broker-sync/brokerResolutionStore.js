@@ -4,7 +4,7 @@ import {
 } from "../../auth/userStorage";
 
 const RESOLUTION_KEY =
-  "brokerReconciliationResolutions";
+  "practiceBrokerReconciliationResolutions";
 
 function normalize(value) {
   if (!value) {

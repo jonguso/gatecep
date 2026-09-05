@@ -84,7 +84,7 @@ const RISK_SECTIONS = [
 export default function PortfolioRiskScreen() {
   const params = useLocalSearchParams();
   const scrollRef = useRef(null);
-  const { width: windowWidth } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [switchingProfile, setSwitchingProfile] = useState(null);
@@ -241,6 +241,7 @@ export default function PortfolioRiskScreen() {
   const nextSection = activeSectionIndex >= 0 && activeSectionIndex < RISK_SECTIONS.length - 1
     ? RISK_SECTIONS[activeSectionIndex + 1]
     : null;
+  const detailPanelHeight = Math.min(430, Math.max(310, windowHeight * 0.38));
   const moveToSection = (sectionId) => {
     setActiveSection(sectionId);
     requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: 0, animated: false }));
@@ -370,6 +371,9 @@ export default function PortfolioRiskScreen() {
         </View>
       )}
 
+      {activeSection ? (
+      <View style={[styles.detailPanel, { height: detailPanelHeight }]}>
+      <ScrollView style={styles.detailPanelScroll} contentContainerStyle={styles.detailPanelContent} nestedScrollEnabled showsVerticalScrollIndicator>
       <Section
         style={activeSection === "assessment" ? null : styles.hidden}
         title="Coach G Risk Assessment"
@@ -886,6 +890,9 @@ export default function PortfolioRiskScreen() {
           />
         )}
       </Section>
+      </ScrollView>
+      </View>
+      ) : null}
 
       <View style={activeSection ? styles.protectionCard : styles.hidden}>
         <Text style={styles.protectionTitle}>Analytics Only</Text>
@@ -1370,6 +1377,9 @@ const styles = StyleSheet.create({
     maxWidth: 900,
     alignSelf: "center"
   },
+  detailPanel: { marginTop: 14, overflow: "hidden" },
+  detailPanelScroll: { flex: 1 },
+  detailPanelContent: { paddingBottom: 8 },
   hidden: {
     display: "none"
   },

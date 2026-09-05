@@ -28,13 +28,13 @@ import {
 export const RESOLUTION_OPTIONS = [
   {
     code:
-      "GATECEP_REAL_ONLY",
+      "GATECEP_PRACTICE_ONLY",
 
     label:
-      "GateCEP-only REAL position",
+      "GateCEP-only Practice position",
 
     description:
-      "This REAL position exists in GateCEP but is missing from the synchronized broker account."
+      "This Practice position exists in GateCEP but is missing from the sandbox mirror."
   },
 
   {

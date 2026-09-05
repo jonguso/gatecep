@@ -72,7 +72,7 @@ export default function BasketExecution() {
   if (!execution || !execution.orders?.length) {
     return (
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Basket Execution</Text>
+        <Text style={styles.title}>Practice Basket Simulation</Text>
         <Text style={styles.subtitle}>No active basket execution found.</Text>
 
         <Pressable
@@ -95,7 +95,7 @@ export default function BasketExecution() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Basket Execution</Text>
+        <Text style={styles.title}>Practice Basket Simulation</Text>
 
         <Pressable
           style={styles.dashboardButton}
@@ -106,7 +106,7 @@ export default function BasketExecution() {
       </View>
 
       <Text style={styles.subtitle}>
-        Track queued and broker-routed basket orders. Filled orders move to
+        Track queued Practice orders and simulated fills. Practice records move to
         portfolio and trade history.
       </Text>
 

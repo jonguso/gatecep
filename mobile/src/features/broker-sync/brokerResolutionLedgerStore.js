@@ -4,7 +4,7 @@ import {
 } from "../../auth/userStorage";
 
 const LEDGER_KEY =
-  "brokerResolutionDecisionLedger";
+  "practiceBrokerResolutionDecisionLedger";
 
 function normalize(value) {
   if (!value) {

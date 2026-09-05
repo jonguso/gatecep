@@ -487,7 +487,7 @@ export default function BrokerSync() {
             styles.secondaryButtonText
           }
         >
-          Compare Broker with REAL Portfolio
+          Open Separate Practice Reconciliation
         </Text>
       </Pressable>
 

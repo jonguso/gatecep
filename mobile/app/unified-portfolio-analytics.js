@@ -52,7 +52,7 @@ export default function UnifiedPortfolioAnalyticsScreen() {
   const [actionFilter, setActionFilter] = useState("RISK");
   const [activeSection, setActiveSection] = useState(initialSection);
   const scrollRef = useRef(null);
-  const { width: windowWidth } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
 
   const loadData = useCallback(async ({ fullLoader = true } = {}) => {
     try {
@@ -143,6 +143,7 @@ export default function UnifiedPortfolioAnalyticsScreen() {
   const nextSection = activeSectionIndex >= 0 && activeSectionIndex < ANALYTICS_SECTIONS.length - 1
     ? ANALYTICS_SECTIONS[activeSectionIndex + 1]
     : null;
+  const detailPanelHeight = Math.min(430, Math.max(310, windowHeight * 0.38));
 
   function moveToSection(sectionId) {
     setActiveSection(sectionId);
@@ -309,6 +310,14 @@ export default function UnifiedPortfolioAnalyticsScreen() {
         </View>
       ) : null}
 
+      {activeSection ? (
+      <View style={[styles.detailPanel, { height: detailPanelHeight }]}>
+      <ScrollView
+        style={styles.detailPanelScroll}
+        contentContainerStyle={styles.detailPanelContent}
+        nestedScrollEnabled
+        showsVerticalScrollIndicator
+      >
       <Section
         style={activeSection !== "health" && styles.hidden}
         title="Executive Health Classification"
@@ -500,6 +509,9 @@ export default function UnifiedPortfolioAnalyticsScreen() {
 
         </View>
       </Section>
+      </ScrollView>
+      </View>
+      ) : null}
 
       <View style={[styles.protectionCard, activeSection && styles.hidden]}>
         <Text style={styles.protectionTitle}>Executive Analytics Only</Text>
@@ -705,6 +717,9 @@ function severityTextStyle(severity) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#020617" },
   content: { padding: 18, paddingTop: 54, paddingBottom: 110, width: "100%", maxWidth: 900, alignSelf: "center" },
+  detailPanel: { marginTop: 14, overflow: "hidden" },
+  detailPanelScroll: { flex: 1 },
+  detailPanelContent: { paddingBottom: 8 },
   hidden: { display: "none" },
   centerScreen: {
     flex: 1,

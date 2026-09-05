@@ -1,12 +1,25 @@
 {
+  "cli": {
+    "version": ">= 23.2.0",
+    "appVersionSource": "remote"
+  },
   "build": {
     "preview": {
+      "distribution": "internal",
+      "environment": "preview",
       "android": {
         "buildType": "apk"
-      },
-      "env": {
-        "EXPO_PUBLIC_API_URL": "https://gatecep-trader-production.up.railway.app"
+      }
+    },
+    "production": {
+      "environment": "production",
+      "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
       }
     }
+  },
+  "submit": {
+    "production": {}
   }
 }

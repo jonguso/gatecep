@@ -18,7 +18,7 @@ export default function OrderBook() {
   }, []);
 
   async function load() {
-    const raw = await userGetItem("simulatedTrades");
+    const raw = await userGetItem("practiceSimulatedTrades");
     setTrades(raw ? JSON.parse(raw) : []);
   }
 
@@ -34,7 +34,7 @@ export default function OrderBook() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Order Book</Text>
+        <Text style={styles.title}>Practice Order Book</Text>
 
         <Pressable
           style={styles.dashboardButton}
@@ -45,7 +45,7 @@ export default function OrderBook() {
       </View>
 
       <Text style={styles.subtitle}>
-        Review simulated orders before real broker execution is connected.
+        Review Practice simulations. These records never represent REAL broker orders or executions.
       </Text>
 
       <View style={styles.summaryCard}>

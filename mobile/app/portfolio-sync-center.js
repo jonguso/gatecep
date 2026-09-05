@@ -5,8 +5,9 @@ import { router, useFocusEffect } from "expo-router";
 import { userGetItem } from "../src/auth/userStorage";
 import { loadUnifiedPortfolio } from "../src/portfolio/unifiedPortfolioApi";
 import { loadBrokerMirror } from "../src/features/broker-sync/brokerSyncService";
-import { buildBrokerReconciliation } from "../src/features/broker-sync/brokerReconciliationService";
 import { adoptVerifiedBrokerSnapshot, loadAuthoritativeBrokerSnapshotPreview } from "../src/features/broker-sync/brokerAuthoritativeSnapshotService";
+import { loadBrokerAccounts } from "../src/services/brokers/brokerAccountStore";
+import { hasConnectedRealBrokerAccount } from "../src/features/broker-sync/brokerCashEvidencePolicy";
 import ActiveUserBanner from "../src/components/ActiveUserBanner";
 import {
   CollapsibleSection,
@@ -16,25 +17,27 @@ import {
   MobileHeader,
   MobileScreen,
   StatusBanner,
-  StickyActionBar
+  StickyActionBar,
+  ContainedPanel
 } from "../src/components/mobile/MobileUI";
 
 const STEPS = ["Verify", "Confirm", "Complete"];
 
 export default function PortfolioSyncCenter() {
-  const [state, setState] = useState({ loading: true, saving: false, error: "", holdingsCount: 0, portfolioValue: 0, cash: 0, source: "", mirror: null, reconciliation: null, preview: null });
+  const [state, setState] = useState({ loading: true, saving: false, error: "", holdingsCount: 0, portfolioValue: 0, cash: 0, source: "", mirror: null, preview: null, connectedRealBroker: false });
   const [confirmVisible, setConfirmVisible] = useState(false);
+  const [activePanel, setActivePanel] = useState("evidence");
 
   useFocusEffect(useCallback(() => { load(); }, []));
 
   async function load() {
     try {
-      const [portfolio, cashRaw, mirror, reconciliation, preview] = await Promise.all([
+      const [portfolio, cashRaw, mirror, preview, brokerAccounts] = await Promise.all([
         loadUnifiedPortfolio(),
         userGetItem("availableCash"),
         loadBrokerMirror(),
-        buildBrokerReconciliation(),
-        loadAuthoritativeBrokerSnapshotPreview()
+        loadAuthoritativeBrokerSnapshotPreview(),
+        loadBrokerAccounts()
       ]);
       const holdings = portfolio?.holdings || [];
       setState({
@@ -45,8 +48,8 @@ export default function PortfolioSyncCenter() {
         cash: Number(cashRaw || 0),
         source: portfolio?.priceSource || portfolio?.source || "",
         mirror,
-        reconciliation,
-        preview
+        preview,
+        connectedRealBroker: hasConnectedRealBrokerAccount(brokerAccounts)
       });
     } catch (error) {
       setState((current) => ({ ...current, loading: false, error: error?.message || "Unable to load the REAL synchronization state." }));
@@ -125,7 +128,15 @@ export default function PortfolioSyncCenter() {
           : "Both the current portfolio valuation and cash/ledger statement are required."}
       />
 
-      <View style={styles.card}>
+      <View style={styles.panelTabs}>
+        {["evidence", "api", "manage", "preview"].map((item) => (
+          <Pressable key={item} style={[styles.panelTab, activePanel === item && styles.panelTabActive]} onPress={() => setActivePanel(item)}>
+            <Text style={[styles.panelTabText, activePanel === item && styles.panelTabTextActive]}>{item === "api" ? "Broker API" : item[0].toUpperCase() + item.slice(1)}</Text>
+          </Pressable>
+        ))}
+      </View>
+
+      {activePanel === "evidence" ? <ContainedPanel title="Required Broker Evidence" subtitle="Complete both records before confirmation" testID="real-sync-evidence-panel">
         <EvidenceRow
           label="Portfolio Valuation"
           ready={valuationReady}
@@ -141,37 +152,37 @@ export default function PortfolioSyncCenter() {
           disabled={!valuationReady}
           onPress={() => router.push("/(tabs)/funds?mode=RECONCILE")}
         />
-      </View>
+      </ContainedPanel> : null}
 
-      <CollapsibleSection title="Connected Broker API" summary="Optional when a live adapter is available">
+      {activePanel === "api" ? <ContainedPanel title="Connected Broker API" subtitle="Optional when a live adapter is available" testID="real-sync-api-panel">
         <Text style={styles.body}>A live broker adapter can supply both valuation and cash evidence. Pending API profiles do not count as synchronized.</Text>
         <ActionButton label="Open Connected Broker Sync" onPress={() => router.push("/broker-sync")} />
-      </CollapsibleSection>
+      </ContainedPanel> : null}
 
-      <CollapsibleSection title="Manage Canonical REAL Data" summary="Initial portfolio, cash, transactions, and manual entry">
+      {activePanel === "manage" ? <ContainedPanel title="Manage Canonical REAL Data" subtitle="Initial portfolio, cash, transactions, and manual entry" testID="real-sync-manage-panel">
         <Text style={styles.body}>These actions change or establish GateCEP's REAL record. They are separate from read-only reconciliation evidence.</Text>
-        <ActionButton label="Create Initial REAL Portfolio" onPress={() => router.push("/broker-upload")} />
-        <ActionButton label="Update REAL Cash" onPress={() => router.push("/(tabs)/funds")} />
+        {state.connectedRealBroker ? (
+          <Text style={styles.protection}>A REAL broker is connected. Holdings and cash must now come through verified broker evidence or the live broker adapter.</Text>
+        ) : (
+          <>
+            <ActionButton label="Create Initial REAL Portfolio" onPress={() => router.push("/broker-upload")} />
+            <ActionButton label="Set Initial REAL Cash" onPress={() => router.push("/(tabs)/funds")} />
+            <ActionButton label="Manual Initial Portfolio" onPress={() => router.push("/manual-portfolio-entry")} />
+          </>
+        )}
         <ActionButton label="Upload Transaction History" onPress={() => router.push("/transactions-upload")} />
-        <ActionButton label="Manual Portfolio Entry" onPress={() => router.push("/manual-portfolio-entry")} />
-      </CollapsibleSection>
+      </ContainedPanel> : null}
 
+      {activePanel === "preview" ? <ContainedPanel title="Authoritative Replacement Preview" subtitle="No change occurs until explicit confirmation" emptyMessage="Complete verified valuation and cash evidence to create a replacement preview." testID="real-sync-preview-panel">
       {state.preview ? (
-        <View style={styles.card}>
+        <View>
           <Text style={styles.previewTitle}>Replacement preview</Text>
           <Text style={styles.body}>Current: {state.preview.current.holdingsCount} holdings • KES {money(state.preview.current.holdingsValue)} • cash KES {money(state.preview.current.cash)}</Text>
           <Text style={styles.body}>Broker: {state.preview.next.holdingsCount} holdings • KES {money(state.preview.next.holdingsValue)} • cash KES {money(state.preview.next.cash)}</Text>
           <Text style={styles.protection}>Daily prices change current value only. They never change broker quantity, cost basis, or cash.</Text>
         </View>
       ) : null}
-
-      {state.reconciliation?.status && evidenceReady ? (
-        <StatusBanner
-          tone={state.reconciliation.status === "MATCHED" ? "success" : "info"}
-          title="Comparison retained for audit"
-          message={`Existing differences (${friendlyStatus(state.reconciliation.status)}) are informational; no issue-by-issue resolution is required.`}
-        />
-      ) : null}
+      </ContainedPanel> : null}
 
       <Modal
         visible={confirmVisible}
@@ -238,6 +249,11 @@ function money(value) { return Number(value || 0).toLocaleString(undefined, { mi
 
 const styles = StyleSheet.create({
   card: { marginTop: 14, backgroundColor: "#0f172a", borderColor: "#1e293b", borderWidth: 1, borderRadius: 18, overflow: "hidden" },
+  panelTabs: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 14 },
+  panelTab: { minHeight: 42, minWidth: "47%", flexGrow: 1, borderRadius: 13, backgroundColor: "#1e293b", alignItems: "center", justifyContent: "center", paddingHorizontal: 10 },
+  panelTabActive: { backgroundColor: "#9333ea" },
+  panelTabText: { color: "#94a3b8", fontWeight: "900", fontSize: 12 },
+  panelTabTextActive: { color: "white" },
   evidenceRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 15, borderBottomColor: "#1e293b", borderBottomWidth: 1 },
   evidenceText: { flex: 1 },
   evidenceLabel: { color: "white", fontWeight: "900", fontSize: 15 },

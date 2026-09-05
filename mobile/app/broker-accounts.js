@@ -11,6 +11,7 @@ import {
 import { router, useFocusEffect } from "expo-router";
 
 import ActiveUserBanner from "../src/components/ActiveUserBanner";
+import { ContainedPanel } from "../src/components/mobile/MobileUI";
 import { userGetItem, userSetItem } from "../src/auth/userStorage";
 
 const BROKER_ACCOUNTS_KEY = "brokerAccounts";
@@ -51,6 +52,7 @@ const AVAILABLE_BROKERS = [
 
 export default function BrokerAccounts() {
   const [accounts, setAccounts] = useState([]);
+  const [activePanel, setActivePanel] = useState("connected");
   const [editingBroker, setEditingBroker] = useState(null);
   const [form, setForm] = useState({
     accountNumber: "",
@@ -292,12 +294,29 @@ export default function BrokerAccounts() {
         </View>
       ) : null}
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Connected Brokers</Text>
-        {accounts.length === 0 ? (
-          <Text style={styles.body}>
-            No brokers connected yet. Add a broker profile below.
+      <View style={styles.panelTabs}>
+        <Pressable
+          style={[styles.panelTab, activePanel === "connected" && styles.panelTabActive]}
+          onPress={() => setActivePanel("connected")}
+        >
+          <Text style={[styles.panelTabText, activePanel === "connected" && styles.panelTabTextActive]}>
+            Connected ({accounts.length})
           </Text>
+        </Pressable>
+        <Pressable
+          style={[styles.panelTab, activePanel === "available" && styles.panelTabActive]}
+          onPress={() => setActivePanel("available")}
+        >
+          <Text style={[styles.panelTabText, activePanel === "available" && styles.panelTabTextActive]}>
+            Available ({availableBrokers.length})
+          </Text>
+        </Pressable>
+      </View>
+
+      {activePanel === "connected" ? (
+      <ContainedPanel title="Connected Brokers" subtitle="Scroll linked broker accounts" emptyMessage="No brokers connected yet. Open Available to add one." testID="connected-brokers-panel">
+        {accounts.length === 0 ? (
+          null
         ) : (
           accounts.map((account) => (
             <View key={account.id} style={styles.accountCard}>
@@ -355,15 +374,13 @@ export default function BrokerAccounts() {
             </View>
           ))
         )}
-      </View>
+      </ContainedPanel>
+      ) : (
 
-      <View style={styles.card}>
-  <Text style={styles.cardTitle}>Available Brokers</Text>
+      <ContainedPanel title="Available Brokers" subtitle="Scroll supported brokers" emptyMessage="All supported brokers are already connected." testID="available-brokers-panel">
 
   {availableBrokers.length === 0 ? (
-    <Text style={styles.body}>
-      All supported brokers are already connected.
-    </Text>
+    null
   ) : (
     availableBrokers.map((broker) => (
       <View key={broker.id} style={styles.availableRow}>
@@ -381,7 +398,8 @@ export default function BrokerAccounts() {
       </View>
     ))
   )}
-</View>
+</ContainedPanel>
+      )}
          
       <Pressable
   style={styles.primary}
@@ -463,6 +481,11 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     marginBottom: 12
   },
+  panelTabs: { flexDirection: "row", gap: 10, marginTop: 20 },
+  panelTab: { flex: 1, minHeight: 44, borderRadius: 14, backgroundColor: "#1e293b", alignItems: "center", justifyContent: "center", paddingHorizontal: 10 },
+  panelTabActive: { backgroundColor: "#9333ea" },
+  panelTabText: { color: "#94a3b8", fontWeight: "900", fontSize: 12 },
+  panelTabTextActive: { color: "white" },
   body: {
     color: "#cbd5e1",
     marginTop: 8,

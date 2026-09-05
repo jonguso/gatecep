@@ -11,6 +11,7 @@ import {
 import { router, useFocusEffect } from "expo-router";
 
 import ActiveUserBanner from "../src/components/ActiveUserBanner";
+import { ContainedPanel } from "../src/components/mobile/MobileUI";
 import {
   createBasketExecution,
   deleteExecutionOrder,
@@ -100,7 +101,7 @@ export default function OrdersReview() {
 
     Alert.alert(
       "Prepare Order Handoff",
-      `${reviewOrders.length} orders will be prepared for broker execution.`,
+      `${reviewOrders.length} orders will be prepared for Practice simulation only.`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -118,7 +119,7 @@ export default function OrdersReview() {
   if (!execution || !orders.length) {
     return (
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Orders Review</Text>
+        <Text style={styles.title}>Practice Orders Review</Text>
 
         <Text style={styles.subtitle}>
           No basket orders found. Create a Coach G trade basket first.
@@ -144,7 +145,7 @@ export default function OrdersReview() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Orders Review</Text>
+        <Text style={styles.title}>Practice Orders Review</Text>
 
         <Pressable
           style={styles.dashboardButton}
@@ -155,7 +156,7 @@ export default function OrdersReview() {
       </View>
 
       <Text style={styles.subtitle}>
-        Review and modify basket orders before preparing broker handoff.
+        Review simulated basket orders. Nothing here is sent to a REAL broker.
       </Text>
 
       <ActiveUserBanner />
@@ -175,23 +176,16 @@ export default function OrdersReview() {
         style={styles.search}
       />
 
-      {reviewOrders.length === 0 ? (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>No Review Orders</Text>
-
-          <Text style={styles.body}>
-            All orders have already been prepared, submitted, filled, cancelled,
-            or removed.
-          </Text>
-
-          <Pressable
-            style={styles.primary}
-            onPress={() => router.push("/(tabs)/trading")}
-          >
-            <Text style={styles.primaryText}>Open Trading</Text>
-          </Pressable>
-        </View>
-      ) : (
+      <ContainedPanel
+        title="Orders Awaiting Review"
+        subtitle={`${reviewOrders.length} editable order${reviewOrders.length === 1 ? "" : "s"}`}
+        emptyMessage="All orders have already been prepared, submitted, filled, cancelled, or removed."
+        minHeight={340}
+        maxHeight={500}
+        heightRatio={0.48}
+        testID="orders-review-panel"
+      >
+      {reviewOrders.length === 0 ? null : (
         reviewOrders.map((order) => (
           <ReviewOrderCard
             key={order.id}
@@ -202,6 +196,7 @@ export default function OrdersReview() {
           />
         ))
       )}
+      </ContainedPanel>
 
       <Pressable
         style={[styles.primary, reviewOrders.length === 0 && styles.disabledButton]}

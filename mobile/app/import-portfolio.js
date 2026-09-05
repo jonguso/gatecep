@@ -13,6 +13,11 @@ import * as DocumentPicker from "expo-document-picker";
 import { router, useLocalSearchParams } from "expo-router";
 import * as FileSystem from "expo-file-system/legacy";
 import * as XLSX from "xlsx";
+import {
+  requireSafeImportFile,
+  requireSafeImportRows,
+  safeWorkbookReadOptions
+} from "../src/security/importFileSecurity";
 
 import { applySecurityMaster } from "../src/utils/nseSecurityMaster";
 import { userSetItem } from "../src/auth/userStorage";
@@ -21,7 +26,9 @@ import {
   loadVerifiedUserCds,
   requireValidBrokerEvidenceIdentity
 } from "../src/features/broker-sync/brokerEvidenceIdentityService";
-import { saveCdsProfile } from "../src/services/brokers/brokerAccountStore";
+import { loadBrokerAccounts, saveCdsProfile } from "../src/services/brokers/brokerAccountStore";
+import { hasConnectedRealBrokerAccount } from "../src/features/broker-sync/brokerCashEvidencePolicy";
+import { extractBrokerPdf } from "../src/services/brokers/brokerPdfExtractionApi";
 
 export default function ImportPortfolio() {
   const params = useLocalSearchParams();
@@ -32,6 +39,7 @@ export default function ImportPortfolio() {
   const [tradingAccount, setTradingAccount] = useState("");
   const [cdsNumber, setCdsNumber] = useState("");
   const [storedCdsNumber, setStoredCdsNumber] = useState(null);
+  const [connectedRealBroker, setConnectedRealBroker] = useState(false);
 
   useEffect(() => {
     loadVerifiedUserCds().then((value) => {
@@ -40,10 +48,23 @@ export default function ImportPortfolio() {
         setStoredCdsNumber(value);
       }
     }).catch(() => {});
+    loadBrokerAccounts()
+      .then((accounts) => setConnectedRealBroker(hasConnectedRealBrokerAccount(accounts)))
+      .catch(() => setConnectedRealBroker(false));
   }, []);
 
   async function pickFile() {
     try {
+      const brokerIsConnected = connectedRealBroker || hasConnectedRealBrokerAccount(await loadBrokerAccounts());
+      if (!reconciliationMode && brokerIsConnected) {
+        Alert.alert(
+          "Connected Broker Holdings Are Read-only",
+          "Use the verified reconciliation upload so GateCEP can preview the broker evidence before replacement."
+        );
+        router.replace("/portfolio-sync-center");
+        return;
+      }
+
       setStatus("Selecting file...");
       
       const result = await DocumentPicker.getDocumentAsync({
@@ -52,6 +73,7 @@ export default function ImportPortfolio() {
         type: [
           "text/csv",
           "application/csv",
+          "application/pdf",
           "application/vnd.ms-excel",
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         ]
@@ -68,8 +90,12 @@ export default function ImportPortfolio() {
         throw new Error("No file selected.");
       }
 
+      await requireSafeImportFile(file);
+
       setStatus(`Reading ${file.name}...`);
 
+      const parsed = await parsePortfolioFile(file);
+      const rows = parsed.rows;
       let accountIdentity = null;
       if (reconciliationMode) {
         const enteredCds = String(cdsNumber || "").trim();
@@ -81,7 +107,8 @@ export default function ImportPortfolio() {
           fileName: file.name,
           userCds: savedCds || enteredCds,
           brokerId,
-          clientAccount: tradingAccount
+          clientAccount: tradingAccount,
+          internalIdentity: parsed.internalIdentity
         });
         if (!savedCds) {
           await saveCdsProfile({
@@ -105,7 +132,6 @@ export default function ImportPortfolio() {
         })
       );
 
-      const rows = await parsePortfolioFile(file);
       const draftRows = rows.map(normalizeHolding).filter(Boolean);
 
       if (!draftRows.length) {
@@ -154,15 +180,20 @@ export default function ImportPortfolio() {
   async function parsePortfolioFile(file) {
     const name = String(file.name || "").toLowerCase();
 
+    if (name.endsWith(".pdf")) {
+      const result = await extractBrokerPdf(file, "valuation");
+      return { rows: requireSafeImportRows(result.rows), internalIdentity: result.identity };
+    }
+
     if (name.endsWith(".csv")) {
       const text = await readFileText(file);
-      const workbook = XLSX.read(text, { type: "string" });
-      return extractRows(workbook);
+      const workbook = XLSX.read(text, safeWorkbookReadOptions("string"));
+      return { rows: extractRows(workbook), internalIdentity: null };
     }
 
     const base64 = await readFileBase64(file);
-    const workbook = XLSX.read(base64, { type: "base64" });
-    return extractRows(workbook);
+    const workbook = XLSX.read(base64, safeWorkbookReadOptions("base64"));
+    return { rows: extractRows(workbook), internalIdentity: null };
   }
 
   function extractRows(workbook) {
@@ -177,12 +208,12 @@ export default function ImportPortfolio() {
     const headerIndex = findHeaderRowIndex(matrix);
 
     if (headerIndex < 0) {
-      return XLSX.utils.sheet_to_json(sheet, { defval: "" });
+      return requireSafeImportRows(XLSX.utils.sheet_to_json(sheet, { defval: "" }));
     }
 
     const headers = matrix[headerIndex].map((item) => String(item || "").trim());
 
-    return matrix
+    return requireSafeImportRows(matrix
       .slice(headerIndex + 1)
       .map((row) => {
         const obj = {};
@@ -198,7 +229,7 @@ export default function ImportPortfolio() {
       .filter((row) => {
         const values = Object.values(row).map((v) => String(v || "").trim());
         return values.some(Boolean);
-      });
+      }));
   }
 
   function findHeaderRowIndex(matrix = []) {
@@ -440,7 +471,7 @@ export default function ImportPortfolio() {
       <Text style={styles.subtitle}>
         {reconciliationMode
           ? "Upload a current broker valuation for read-only comparison with GateCEP's existing REAL portfolio. It will not change REAL holdings until you review and approve a correction."
-          : "Upload a broker valuation CSV or Excel file. GateCEP will extract holdings, then let you review and edit before creating the initial REAL portfolio."}
+          : "Upload a broker valuation PDF, CSV, or Excel file. GateCEP will extract holdings, then let you review and edit before creating the initial REAL portfolio."}
       </Text>
 
       <View style={styles.card}>

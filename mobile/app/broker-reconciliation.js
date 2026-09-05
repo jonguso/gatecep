@@ -30,7 +30,7 @@ export default function BrokerReconciliation() {
       setError("");
       setResult(await buildBrokerReconciliation());
     } catch (loadError) {
-      setError(loadError?.message || "Unable to compare the broker evidence with the REAL portfolio.");
+      setError(loadError?.message || "Unable to compare the Practice broker evidence.");
       setResult(null);
     } finally {
       setLoading(false);
@@ -43,8 +43,8 @@ export default function BrokerReconciliation() {
   const issues = (result?.holdings || []).filter((item) => item.status !== "MATCHED");
 
   function primaryAction() {
-    if (!result?.brokerMirror) return router.replace("/portfolio-sync-center");
-    if (cashRequired) return router.push("/(tabs)/funds?mode=RECONCILE");
+    if (!result?.brokerMirror) return router.replace("/starter-plan");
+    if (cashRequired) return router.push("/starter-plan");
     if (matched) return router.push("/broker-reconciliation-insight");
     return router.push("/broker-reconciliation-case");
   }
@@ -63,7 +63,7 @@ export default function BrokerReconciliation() {
       footer={
         <StickyActionBar
           secondaryLabel="Evidence"
-          onSecondary={() => router.replace("/portfolio-sync-center")}
+          onSecondary={() => router.replace("/starter-plan")}
           primaryLabel={primaryLabel}
           onPrimary={primaryAction}
           primaryDisabled={loading}
@@ -72,13 +72,14 @@ export default function BrokerReconciliation() {
     >
       <DeveloperIdentifier>PC-030M3A</DeveloperIdentifier>
       <MobileHeader
-        title="Portfolio Comparison"
-        subtitle="Step 2: compare independent broker evidence with GateCEP's canonical REAL record."
-        onBack={() => router.replace("/portfolio-sync-center")}
+        title="Practice Reconciliation"
+        subtitle="Practice only: compare sandbox evidence without touching your REAL portfolio."
+        onBack={() => router.replace("/starter-plan")}
         actionLabel="Refresh"
         onAction={loadReconciliation}
       />
       <JourneyStepper steps={STEPS} activeIndex={1} />
+      <StatusBanner tone="warning" title="PRACTICE ONLY" message="This journey cannot read or update REAL holdings, cash, performance history, or connected-broker source-of-truth records." />
 
       {loading ? <StatusBanner tone="info" title="Comparing evidence…" message="Checking holdings, cash, and total account value." /> : null}
       {error ? <StatusBanner tone="danger" title="Comparison unavailable" message={error} /> : null}
@@ -94,8 +95,8 @@ export default function BrokerReconciliation() {
           <MetricStrip items={[
             { label: "Matched", value: result.summary?.matched || 0 },
             { label: "Differences", value: result.summary?.mismatched || 0 },
-            { label: "REAL Total", value: `KES ${money(result.realPortfolio?.totalValue)}` },
-            { label: "Broker Total", value: result.summary?.cashEvidenceAvailable ? `KES ${money(result.brokerMirror?.totalValue)}` : "Cash required" }
+            { label: "Practice Total", value: `KES ${money(result.realPortfolio?.totalValue)}` },
+            { label: "Practice Mirror", value: result.summary?.cashEvidenceAvailable ? `KES ${money(result.brokerMirror?.totalValue)}` : "Practice evidence required" }
           ]} />
 
           <View style={styles.summaryCard}>

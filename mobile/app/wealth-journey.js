@@ -24,6 +24,7 @@ import {
 } from "../src/features/wealth-journey/realWealthJourneyRuntime";
 
 import CoachGReconciliationCard from "../src/features/wealth-journey/components/CoachGReconciliationCard";
+import { ContainedPanel } from "../src/components/mobile/MobileUI";
 
 /*
  * ============================================================
@@ -361,28 +362,11 @@ export default function WealthJourneyScreen() {
           {summary
             ?.goals
             ?.length ? (
-            <View
-              style={
-                styles.section
-              }
+            <ContainedPanel
+              title={`Your Goals (${summary.goals.length})`}
+              subtitle="Coach G progress monitoring • scroll goals"
+              testID="wealth-goals-contained-panel"
             >
-              <Text
-                style={
-                  styles.sectionTitle
-                }
-              >
-                Your Goals
-              </Text>
-
-              <Text
-                style={
-                  styles.sectionText
-                }
-              >
-                Coach G monitors progress and surfaces the most useful
-                next step for each goal.
-              </Text>
-
               {summary
                 .goals
                 .map(
@@ -401,7 +385,7 @@ export default function WealthJourneyScreen() {
                     />
                   )
                 )}
-            </View>
+            </ContainedPanel>
           ) : (
             <NoGoalState />
           )}

@@ -36,7 +36,7 @@ export default function BrokerReconciliationCase() {
   const inSync = workflow?.workflowStatus === "IN_SYNC";
 
   function continueJourney() {
-    if (evidenceRequired) return router.push("/(tabs)/funds?mode=RECONCILE");
+    if (evidenceRequired) return router.push("/starter-plan");
     if (!currentCase || inSync) return router.push("/broker-reconciliation-insight");
     if (currentCase.openCount > 0) return router.push("/broker-resolution");
     return router.push("/broker-reconciliation-insight");
@@ -56,6 +56,7 @@ export default function BrokerReconciliationCase() {
       <DeveloperIdentifier>PC-030M3B</DeveloperIdentifier>
       <MobileHeader title="Review Reconciliation" subtitle="Step 3: confirm the case evidence before documenting each difference." onBack={() => router.replace("/broker-reconciliation")} actionLabel="Refresh" onAction={loadCase} />
       <JourneyStepper steps={STEPS} activeIndex={2} />
+      <StatusBanner tone="warning" title="PRACTICE ONLY" message="Case review documents sandbox differences and cannot change REAL holdings or cash." />
 
       {loading ? <StatusBanner tone="info" title="Preparing the case…" message="Grouping current discrepancies into one auditable review." /> : null}
       {error ? <StatusBanner tone="danger" title="Case unavailable" message={error} /> : null}
@@ -73,8 +74,8 @@ export default function BrokerReconciliationCase() {
           ]} />
 
           <View style={styles.valueCard}>
-            <DataRow label="GateCEP Total" value={`KES ${money(currentCase.gatecepTotal)}`} />
-            <DataRow label="Broker Total" value={`KES ${money(currentCase.brokerTotal)}`} />
+            <DataRow label="Practice Total" value={`KES ${money(currentCase.gatecepTotal)}`} />
+            <DataRow label="Practice Mirror" value={`KES ${money(currentCase.brokerTotal)}`} />
             <DataRow label="Total Difference" value={`KES ${money(currentCase.difference)}`} warning />
             <DataRow label="Cash Difference" value={`KES ${money(currentCase.cashDifference)}`} warning />
           </View>

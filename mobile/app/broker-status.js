@@ -159,10 +159,10 @@ export default function BrokerStatus() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Broker Readiness</Text>
+      <Text style={styles.title}>Practice Broker Readiness</Text>
 
       <Text style={styles.subtitle}>
-        Track the practical steps needed before your first investment.
+        Practice-only checklist for learning before your first simulated investment. This is separate from REAL broker synchronization.
       </Text>
 
       <View style={styles.brokerCard}>

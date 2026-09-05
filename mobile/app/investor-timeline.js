@@ -20,6 +20,7 @@ import {
 import {
   buildInvestorTimeline
 } from "../src/features/investor-timeline/investorTimelineService";
+import { ContainedPanel } from "../src/components/mobile/MobileUI";
 
 export default function InvestorTimeline() {
   const [
@@ -315,10 +316,11 @@ export default function InvestorTimeline() {
             )}
           </View>
 
-          <View
-            style={
-              styles.timelineCard
-            }
+          <ContainedPanel
+            title={`${filter === "ALL" ? "All" : filter.charAt(0) + filter.slice(1).toLowerCase()} Events (${visibleEvents.length})`}
+            subtitle="Verified investor journey • scroll timeline"
+            emptyMessage="No events are available for this category yet."
+            testID="investor-timeline-contained-panel"
           >
             {visibleEvents.length ? (
               visibleEvents.map(
@@ -341,18 +343,8 @@ export default function InvestorTimeline() {
                   />
                 )
               )
-            ) : (
-              <Text
-                style={
-                  styles.emptyText
-                }
-              >
-                No events are
-                available for this
-                category yet.
-              </Text>
-            )}
-          </View>
+            ) : null}
+          </ContainedPanel>
         </>
       ) : null}
 

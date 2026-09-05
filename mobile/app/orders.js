@@ -11,6 +11,7 @@ import {
 import { router, useFocusEffect } from "expo-router";
 
 import ActiveUserBanner from "../src/components/ActiveUserBanner";
+import { ContainedPanel } from "../src/components/mobile/MobileUI";
 import {
   cancelExecutionOrder,
   createBasketExecution,
@@ -100,15 +101,15 @@ export default function Orders() {
 
   async function sendToBroker(order) {
     const routed = await routeExecutionOrder(order.id, {
-      id: order.brokerId || "SIM",
-      name: order.brokerName || "Simulation Broker"
+      id: "GATECEP_PRACTICE",
+      name: "Practice Simulator"
     });
 
     setExecution(routed);
 
     setTimeout(async () => {
       const received = await markBrokerReceived(order.id, {
-        brokerOrderId: `BRK-${Date.now()}-${order.symbol}`,
+        brokerOrderId: `PRACTICE-${Date.now()}-${order.symbol}`,
         status: "BROKER_RECEIVED"
       });
 
@@ -118,12 +119,12 @@ export default function Orders() {
 
   async function fillOrder(order) {
     Alert.alert(
-      "Mark Filled",
-      `Mark ${order.side} ${order.symbol} as broker-filled?`,
+      "Simulate Fill",
+      `Simulate filling ${order.side} ${order.symbol} in Practice?`,
       [
         { text: "Cancel", style: "cancel" },
         {
-          text: "Mark Filled",
+          text: "Simulate Fill",
           onPress: async () => {
             const updated = await markExecutionOrderFilled(order.id, {
               symbol: order.symbol,
@@ -131,7 +132,7 @@ export default function Orders() {
               quantity: order.quantity,
               price: order.price,
               filledAt: new Date().toISOString(),
-              source: "BROKER_CONFIRMATION"
+              source: "PRACTICE_SIMULATION"
             });
 
             setExecution(updated);
@@ -154,7 +155,7 @@ export default function Orders() {
   if (!execution || !orders.length) {
     return (
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Orders</Text>
+        <Text style={styles.title}>Practice Orders</Text>
         <Text style={styles.subtitle}>No active orders found.</Text>
 
         <Pressable style={styles.primary} onPress={() => router.push("/trade-basket")}>
@@ -167,7 +168,7 @@ export default function Orders() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Orders</Text>
+        <Text style={styles.title}>Practice Orders</Text>
 
         <Pressable
           style={styles.dashboardButton}
@@ -178,7 +179,7 @@ export default function Orders() {
       </View>
 
       <Text style={styles.subtitle}>
-        GateCEP OMS for reviewing, queueing, routing, and tracking broker orders.
+        Practice-only order simulation. REAL executions are imported from broker evidence and cannot be created here.
       </Text>
 
       <ActiveUserBanner />
@@ -212,11 +213,16 @@ export default function Orders() {
         style={styles.search}
       />
 
-      {visibleOrders.length === 0 ? (
-        <View style={styles.card}>
-          <Text style={styles.body}>No orders found in {tab}.</Text>
-        </View>
-      ) : (
+      <ContainedPanel
+        title={`${tab} Orders`}
+        subtitle={`${visibleOrders.length} matching order${visibleOrders.length === 1 ? "" : "s"}`}
+        emptyMessage={`No orders found in ${tab}.`}
+        minHeight={340}
+        maxHeight={500}
+        heightRatio={0.48}
+        testID="orders-status-panel"
+      >
+      {visibleOrders.length === 0 ? null : (
         visibleOrders.map((order) => (
           <OrderCard
             key={order.id}
@@ -229,6 +235,7 @@ export default function Orders() {
           />
         ))
       )}
+      </ContainedPanel>
 
       <Pressable style={styles.secondary} onPress={() => router.push("/orders-review")}>
         <Text style={styles.secondaryText}>Open Orders Review</Text>
@@ -320,13 +327,13 @@ function OrderCard({
 
       {canRoute && (
         <Pressable style={styles.primarySmall} onPress={onSendToBroker}>
-          <Text style={styles.primaryText}>Send To Broker</Text>
+          <Text style={styles.primaryText}>Route in Practice</Text>
         </Pressable>
       )}
 
       {canFill && (
         <Pressable style={styles.primarySmall} onPress={onFill}>
-          <Text style={styles.primaryText}>Mark Broker Filled</Text>
+          <Text style={styles.primaryText}>Simulate Fill</Text>
         </Pressable>
       )}
 

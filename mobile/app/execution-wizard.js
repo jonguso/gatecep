@@ -63,7 +63,7 @@ export default function ExecutionWizard() {
       <Text style={styles.title}>Execution Wizard</Text>
 
       <Text style={styles.subtitle}>
-        Guided path from Coach G recommendation to broker execution.
+        Practice-only path from a Coach G idea to simulated order review. REAL execution occurs only at the broker.
       </Text>
 
       <ActiveUserBanner />

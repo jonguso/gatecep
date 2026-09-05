@@ -15,6 +15,7 @@ import {
 } from "../src/auth/userStorage";
 import { addUserBroker } from "../src/features/brokers/api/userBrokerApi";
 import { BROKERS, getDefaultBroker } from "../src/constants/brokers";
+import { ContainedPanel } from "../src/components/mobile/MobileUI";
 
 const brokers = [
 "GATECEP-DEMO",
@@ -138,6 +139,8 @@ await userSetItem(
         uploaded valuation or statement to the correct broker profile.
       </Text>
 
+      <ContainedPanel title="Broker Identity" subtitle="Scroll to review and save broker matching details" minHeight={420} maxHeight={610} heightRatio={0.66} testID="broker-profile-form-panel">
+
       <View style={styles.notice}>
         <Text style={styles.noticeTitle}>Informational Only</Text>
         <Text style={styles.noticeText}>
@@ -234,6 +237,7 @@ await userSetItem(
       <Pressable onPress={() => router.push("/broker-account-center")}>
         <Text style={styles.backLink}>Back to Broker Account Center</Text>
       </Pressable>
+      </ContainedPanel>
     </ScrollView>
   );
 }

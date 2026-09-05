@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   Platform,
@@ -13,12 +13,18 @@ import * as DocumentPicker from "expo-document-picker";
 import { router, useLocalSearchParams } from "expo-router";
 import * as XLSX from "xlsx";
 import * as FileSystem from "expo-file-system/legacy";
+import {
+  requireSafeImportFile,
+  requireSafeImportRows,
+  safeWorkbookReadOptions
+} from "../../src/security/importFileSecurity";
 
 import {
   userSetItem
 } from "../../src/auth/userStorage";
 import { getCurrentSession } from "../../src/auth/authStore";
 import { API_URL } from "../../src/config/apiConfig";
+import { extractBrokerPdf } from "../../src/services/brokers/brokerPdfExtractionApi";
 import { getStoredAccessToken } from "../../src/features/auth/storage/authStorage";
 import {
   refreshCanonicalRealPortfolioSnapshot
@@ -32,6 +38,12 @@ import {
   loadVerifiedUserCds,
   requireValidBrokerEvidenceIdentity
 } from "../../src/features/broker-sync/brokerEvidenceIdentityService";
+import { loadBrokerAccounts } from "../../src/services/brokers/brokerAccountStore";
+import {
+  extractStatementEffectiveDate,
+  hasConnectedRealBrokerAccount,
+  requireVerifiedBrokerCashEvidence
+} from "../../src/features/broker-sync/brokerCashEvidencePolicy";
 
 export default function Funds() {
   const params = useLocalSearchParams();
@@ -42,6 +54,14 @@ export default function Funds() {
   const [status, setStatus] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
   const [statementIdentity, setStatementIdentity] = useState(null);
+  const [statementEffectiveDate, setStatementEffectiveDate] = useState(null);
+  const [connectedRealBroker, setConnectedRealBroker] = useState(false);
+
+  useEffect(() => {
+    loadBrokerAccounts()
+      .then((accounts) => setConnectedRealBroker(hasConnectedRealBrokerAccount(accounts)))
+      .catch(() => setConnectedRealBroker(false));
+  }, []);
 
   async function pickStatementFile() {
     try {
@@ -53,6 +73,7 @@ export default function Funds() {
         type: [
           "text/csv",
           "application/csv",
+          "application/pdf",
           "application/vnd.ms-excel",
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         ]
@@ -69,16 +90,21 @@ export default function Funds() {
         throw new Error("No file selected.");
       }
 
+      await requireSafeImportFile(file);
+
       setSelectedFile(file);
       setStatus(`Selected ${file.name}. Reading statement...`);
 
-      const rows = await parseStatementFile(file);
+      const parsed = await parseStatementFile(file);
+      const rows = parsed.rows;
 
       if (!rows.length) {
         throw new Error("No rows found in statement file.");
       }
 
-      setStatementIdentity(extractStatementIdentity(rows));
+      setStatementIdentity(parsed.internalIdentity || extractStatementIdentity(rows));
+      const effectiveDate = extractStatementEffectiveDate(rows);
+      setStatementEffectiveDate(effectiveDate);
 
       const extractedCash = extractAvailableCash(rows);
 
@@ -90,9 +116,9 @@ export default function Funds() {
 
       setCash(String(extractedCash));
       setStatus(
-        `${file.name} read successfully. Available cash detected: KES ${money(
-          extractedCash
-        )}`
+        `${file.name} read successfully. Available cash detected: KES ${money(extractedCash)}. ${
+          effectiveDate ? `Statement date: ${effectiveDate}.` : "Statement effective date not found."
+        }`
       );
     } catch (error) {
       setStatus(`Statement read failed: ${error.message}`);
@@ -103,31 +129,32 @@ export default function Funds() {
   async function parseStatementFile(file) {
     const name = String(file.name || "").toLowerCase();
 
+    if (name.endsWith(".pdf")) {
+      const result = await extractBrokerPdf(file, "cash");
+      return { rows: requireSafeImportRows(result.rows), internalIdentity: result.identity };
+    }
+
     if (name.endsWith(".csv")) {
       const text = await readFileText(file);
 
-      const workbook = XLSX.read(text, {
-        type: "string"
-      });
+      const workbook = XLSX.read(text, safeWorkbookReadOptions("string"));
 
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
 
-      return XLSX.utils.sheet_to_json(sheet, {
+      return { rows: requireSafeImportRows(XLSX.utils.sheet_to_json(sheet, {
         defval: ""
-      });
+      })), internalIdentity: null };
     }
 
     const base64 = await readFileBase64(file);
 
-    const workbook = XLSX.read(base64, {
-      type: "base64"
-    });
+    const workbook = XLSX.read(base64, safeWorkbookReadOptions("base64"));
 
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
 
-    return XLSX.utils.sheet_to_json(sheet, {
+    return { rows: requireSafeImportRows(XLSX.utils.sheet_to_json(sheet, {
       defval: ""
-    });
+    })), internalIdentity: null };
   }
 
   async function readFileText(file) {
@@ -237,7 +264,8 @@ export default function Funds() {
         source: selectedFile
           ? "MOBILE_STATEMENT_UPLOAD"
           : "MANUAL_STATEMENT_ENTRY",
-        fileName: selectedFile?.name || null
+        fileName: selectedFile?.name || null,
+        statementEffectiveDate
       };
 
       if (reconciliationMode) {
@@ -262,11 +290,18 @@ export default function Funds() {
           expectedAccountKey: mirror.brokerAccountKey
         });
 
+        const verifiedCashEvidence = requireVerifiedBrokerCashEvidence({
+          cashBalance: amount,
+          statementEffectiveDate,
+          accountIdentity
+        });
+
         await attachVerifiedBrokerCashEvidence({
           cashBalance: amount,
           fileName: selectedFile.name,
           broker,
-          accountIdentity
+          accountIdentity,
+          statementEffectiveDate: verifiedCashEvidence.statementEffectiveDate
         });
 
         await userSetItem("brokerCashEvidenceUploaded", "true");
@@ -282,6 +317,15 @@ export default function Funds() {
         Alert.alert(
           "Broker Cash Evidence Ready",
           "The matching broker statement is ready. Review and confirm the complete broker snapshot before GateCEP replaces its REAL record."
+        );
+        router.replace("/portfolio-sync-center");
+        return;
+      }
+
+      if (connectedRealBroker) {
+        Alert.alert(
+          "Connected Broker Cash Is Read-only",
+          "Use Portfolio Sync Center and verified broker evidence to update this REAL cash balance."
         );
         router.replace("/portfolio-sync-center");
         return;
@@ -364,6 +408,14 @@ const token =
           : "Import or enter your broker cash / ledger statement to calculate available cash for Coach G."}
       </Text>
 
+      {!reconciliationMode && connectedRealBroker ? (
+        <View style={styles.statusBox}>
+          <Text style={styles.statusText}>
+            Connected REAL broker cash is read-only here. Update it through verified broker synchronization.
+          </Text>
+        </View>
+      ) : null}
+
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Broker</Text>
 
@@ -384,7 +436,7 @@ const token =
         <Text style={styles.cardTitle}>Statement Upload</Text>
 
         <Text style={styles.help}>
-          Select a CSV or Excel statement from your phone. Gatecep will try to
+          Select a PDF, CSV, or Excel statement from your phone. Gatecep will try to
           detect available cash, trading space, or ledger balance.
         </Text>
 
@@ -419,11 +471,22 @@ const token =
         />
       </View>
 
-      <Pressable style={styles.primary} onPress={saveStatement}>
+      <Pressable
+        style={styles.primary}
+        onPress={() => {
+          if (!reconciliationMode && connectedRealBroker) {
+            router.push("/portfolio-sync-center");
+            return;
+          }
+          saveStatement();
+        }}
+      >
         <Text style={styles.primaryText}>
           {reconciliationMode
             ? "Confirm Broker Cash Evidence and Compare"
-            : "Save Statement"}
+            : connectedRealBroker
+              ? "Open Verified Broker Cash Flow"
+              : "Save Initial Cash Statement"}
         </Text>
       </Pressable>
 

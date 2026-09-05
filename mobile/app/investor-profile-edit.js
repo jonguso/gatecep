@@ -24,6 +24,7 @@ import {
   mergeProfileSources,
   normalizeInvestorProfile
 } from "../src/features/profile/investorProfileContract";
+import { ContainedPanel } from "../src/components/mobile/MobileUI";
 
 const GOALS = ["Build Wealth", "Family Security", "Home Purchase", "Dividend Income", "Retirement", "Education", "Preserve Capital", "Need Guidance"];
 const RISKS = ["Conservative", "Balanced", "Growth", "Aggressive"];
@@ -173,7 +174,7 @@ export default function InvestorProfileEdit() {
         Update your investor profile, onboarding answers, risk profile, and goals.
       </Text>
 
-      <View style={styles.card}>
+      <ContainedPanel title="Investor Profile Details" subtitle="Scroll to review every investor setting" minHeight={420} maxHeight={610} heightRatio={0.66} testID="investor-profile-form-panel">
         <Text style={styles.label}>Name</Text>
 
         <TextInput
@@ -227,7 +228,7 @@ export default function InvestorProfileEdit() {
         >
           <Text style={styles.secondaryText}>Cancel</Text>
         </Pressable>
-      </View>
+      </ContainedPanel>
     </ScrollView>
   );
 }

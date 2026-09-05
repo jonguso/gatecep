@@ -96,6 +96,46 @@ export function MetricStrip({ items = [] }) {
   );
 }
 
+export function ContainedPanel({
+  title,
+  subtitle,
+  action = null,
+  children,
+  emptyMessage = "",
+  minHeight = 310,
+  maxHeight = 430,
+  heightRatio = 0.38,
+  testID
+}) {
+  const { height } = useWindowDimensions();
+  const panelHeight = Math.min(maxHeight, Math.max(minHeight, height * heightRatio));
+
+  return (
+    <View style={[styles.containedPanel, { height: panelHeight }]} testID={testID}>
+      <View style={styles.containedHeader}>
+        <View style={styles.containedHeading}>
+          <Text style={styles.sectionTitle}>{title}</Text>
+          {subtitle ? <Text style={styles.sectionSummary}>{subtitle}</Text> : null}
+        </View>
+        {action}
+      </View>
+      {React.Children.count(children) ? (
+        <ScrollView
+          style={styles.containedScroll}
+          contentContainerStyle={styles.containedContent}
+          nestedScrollEnabled
+          showsVerticalScrollIndicator
+          keyboardShouldPersistTaps="handled"
+        >
+          {children}
+        </ScrollView>
+      ) : (
+        <Text style={styles.containedEmpty}>{emptyMessage}</Text>
+      )}
+    </View>
+  );
+}
+
 export function CollapsibleSection({ title, summary, children, initiallyOpen = false }) {
   const [open, setOpen] = useState(initiallyOpen);
   return (
@@ -205,6 +245,12 @@ const styles = StyleSheet.create({
   metric: { width: 145, backgroundColor: "#0f172a", borderColor: "#1e293b", borderWidth: 1, borderRadius: 16, padding: 14 },
   metricLabel: { color: "#94a3b8", fontSize: 11 },
   metricValue: { color: "white", fontWeight: "900", fontSize: 16, marginTop: 6 },
+  containedPanel: { marginTop: 14, backgroundColor: "#0f172a", borderColor: "#1e293b", borderWidth: 1, borderRadius: 18, overflow: "hidden", padding: 15 },
+  containedHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", gap: 10, paddingBottom: 10 },
+  containedHeading: { flex: 1 },
+  containedScroll: { flex: 1 },
+  containedContent: { paddingBottom: 8 },
+  containedEmpty: { color: "#94a3b8", lineHeight: 20, paddingVertical: 14 },
   section: { marginTop: 14, backgroundColor: "#0f172a", borderColor: "#1e293b", borderWidth: 1, borderRadius: 18, overflow: "hidden" },
   sectionHeader: { flexDirection: "row", alignItems: "center", padding: 15 },
   sectionHeading: { flex: 1 },

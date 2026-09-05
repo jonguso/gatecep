@@ -12,7 +12,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 
 import { loadUnifiedPortfolioRuntime } from "../src/portfolio/unifiedPortfolioApi";
 import { calculatePortfolioSummary } from "../src/shared/portfolio/engine";
-import { StatusBanner } from "../src/components/mobile/MobileUI";
+import { ContainedPanel, StatusBanner } from "../src/components/mobile/MobileUI";
 
 export default function HoldingDetails() {
   const [holdings, setHoldings] = useState([]);
@@ -123,9 +123,11 @@ export default function HoldingDetails() {
             </Pressable>
           </View>
         ) : (
-          <View style={styles.list}>
-            <Text style={styles.listTitle}>All Securities</Text>
-            <Text style={styles.listHint}>Broker position details for every security. Scroll to review all holdings.</Text>
+          <ContainedPanel
+            title={`All Securities (${securities.length})`}
+            subtitle="Broker position details • scroll holdings"
+            testID="holdings-contained-panel"
+          >
             {securities.map((security, index) => {
               const symbol = security.symbol || `SECURITY-${index}`;
               const gain = number(security.profitLoss);
@@ -168,7 +170,7 @@ export default function HoldingDetails() {
                 </View>
               );
             })}
-          </View>
+          </ContainedPanel>
         )}
 
         <Pressable style={styles.homeButton} onPress={() => router.replace("/(tabs)/dashboard")}>

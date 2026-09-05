@@ -8,6 +8,7 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
+import { ContainedPanel } from "../src/components/mobile/MobileUI";
 
 export default function TradeHistory() {
   const [trades, setTrades] = useState([]);
@@ -57,26 +58,17 @@ export default function TradeHistory() {
         <Metric label="Fees" value={`KES ${money(summary.totalFees)}`} />
       </View>
 
-      {trades.length === 0 ? (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>No Trades Yet</Text>
-
-          <Text style={styles.body}>
-            Run your first simulated trade to begin building order history.
-          </Text>
-
-          <Pressable
-            style={styles.primary}
-            onPress={() => router.push("/first-trade")}
-          >
-            <Text style={styles.primaryText}>Start First Trade Simulation</Text>
-          </Pressable>
-        </View>
-      ) : (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Orders</Text>
-
-          {trades.map((trade, index) => (
+      <ContainedPanel
+        title="Practice Trade Records"
+        subtitle={`${trades.length} simulated trade${trades.length === 1 ? "" : "s"}`}
+        emptyMessage="No Practice trades yet. Run your first simulated trade to begin building Practice history."
+        minHeight={330}
+        maxHeight={480}
+        heightRatio={0.46}
+        testID="practice-trade-history-panel"
+      >
+      {trades.length === 0 ? null : (
+          trades.map((trade, index) => (
             <View key={`${trade.symbol}-${trade.tradedAt}-${index}`} style={styles.tradeRow}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.symbol}>
@@ -110,9 +102,9 @@ export default function TradeHistory() {
                 </Text>
               </View>
             </View>
-          ))}
-        </View>
+          ))
       )}
+      </ContainedPanel>
 
       <Pressable style={styles.primary} onPress={() => router.push("/first-trade")}>
         <Text style={styles.primaryText}>New Simulated Trade</Text>

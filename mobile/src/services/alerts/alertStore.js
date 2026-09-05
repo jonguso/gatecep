@@ -1,5 +1,6 @@
 import { userGetItem, userSetItem } from "../auth/userStorage";
 import { loadUnifiedPortfolio } from "../portfolio/unifiedPortfolioApi";
+import { loadCanonicalRealTransactionHistory } from "../../features/wealth-journey/canonicalRealBehaviorHistoryService";
 
 export async function buildAlerts() {
   const portfolioData = await loadUnifiedPortfolio();
@@ -7,11 +8,10 @@ export async function buildAlerts() {
 
   const cashRaw = await userGetItem("availableCash");
   const calendarRaw = await userGetItem("marketCalendar");
-  const txRaw = await userGetItem("transactionHistory");
 
   const cash = Number(cashRaw || 0);
   const calendar = calendarRaw ? JSON.parse(calendarRaw) : [];
-  const transactions = txRaw ? JSON.parse(txRaw) : [];
+  const transactions = await loadCanonicalRealTransactionHistory();
 
   const alerts = [];
 

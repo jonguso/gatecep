@@ -22,6 +22,7 @@ import {
 } from "../../src/coach/recommendationLifecycleStore";
 
 import CoachGReconciliationCard from "../../src/features/wealth-journey/components/CoachGReconciliationCard";
+import { loadCanonicalRealTransactionHistory } from "../../src/features/wealth-journey/canonicalRealBehaviorHistoryService";
 
 export default function Coach() {
   const [portfolio, setPortfolio] = useState([]);
@@ -55,8 +56,7 @@ export default function Coach() {
     const txUploadedRaw =
       await userGetItem("transactionsUploaded");
 
-    const txRaw =
-      await userGetItem("transactionHistory");
+    const verifiedTransactions = await loadCanonicalRealTransactionHistory();
 
     const historyRaw =
       await userGetItem("recommendationHistory");
@@ -67,9 +67,8 @@ export default function Coach() {
       setDashboardContext(JSON.parse(contextRaw));
     }
 
-    setTransactionsUploaded(txUploadedRaw === "true");
-
-    setTransactions(txRaw ? JSON.parse(txRaw) : []);
+    setTransactionsUploaded(txUploadedRaw === "true" && verifiedTransactions.length > 0);
+    setTransactions(verifiedTransactions);
     setRecommendationHistory(historyRaw ? JSON.parse(historyRaw) : []);
   }
 

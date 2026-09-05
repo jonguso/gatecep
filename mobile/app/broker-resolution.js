@@ -66,6 +66,7 @@ export default function BrokerResolution() {
       <DeveloperIdentifier>PC-030M3B</DeveloperIdentifier>
       <MobileHeader title="Resolve Differences" subtitle="Step 4: document one explanation at a time without changing either portfolio." onBack={() => router.replace("/broker-reconciliation-case")} actionLabel="Refresh" onAction={loadWorkflow} />
       <JourneyStepper steps={STEPS} activeIndex={3} />
+      <StatusBanner tone="warning" title="PRACTICE ONLY" message="Resolution choices are sandbox notes. They cannot import, trade, or modify the REAL portfolio." />
 
       {loading ? <StatusBanner tone="info" title="Loading resolutions…" message="Checking the current case and decision ledger." /> : null}
       {error ? <StatusBanner tone="danger" title="Resolution unavailable" message={error} /> : null}

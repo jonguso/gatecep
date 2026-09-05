@@ -1,11 +1,30 @@
-import {
-  loadCanonicalRealBrokerPortfolio
-} from "./canonicalRealBrokerPortfolioService";
+import { userGetItem } from "../../auth/userStorage";
+import { loadInvestorContext } from "../investor/investorContextStore";
 
-import {
-  loadBrokerMirror,
-  isVerifiedRealBrokerMirror
-} from "./brokerSyncService";
+async function loadPracticeReconciliationEvidence() {
+  const [context, mirrorRaw] = await Promise.all([
+    loadInvestorContext(),
+    userGetItem("practiceBrokerMirror").catch(() => null)
+  ]);
+  const practicePortfolio = context?.practicePortfolio || null;
+  let practiceBrokerMirror = null;
+  try { practiceBrokerMirror = mirrorRaw ? JSON.parse(mirrorRaw) : null; } catch { practiceBrokerMirror = null; }
+  if (!practiceBrokerMirror && practicePortfolio?.holdings?.length) {
+    const holdings = practicePortfolio.holdings;
+    practiceBrokerMirror = {
+      isPractice: true,
+      mode: "PRACTICE",
+      broker: "GATECEP_PRACTICE",
+      accountName: "Practice Mirror",
+      holdings,
+      holdingsValue: holdings.reduce((sum, item) => sum + number(item?.marketValue ?? item?.value ?? (number(item?.quantity) * number(item?.marketPrice ?? item?.price))), 0),
+      cashBalance: number(practicePortfolio?.availableCash),
+      cashEvidenceAvailable: true,
+      syncedAt: practicePortfolio?.updatedAt || null
+    };
+  }
+  return { practicePortfolio, practiceBrokerMirror };
+}
 
 function number(value) {
   const parsed = Number(value || 0);
@@ -78,21 +97,20 @@ function buildHoldingMap(
 }
 
 export async function buildBrokerReconciliation() {
-  const [
-    realPortfolio,
-    brokerMirror
-  ] = await Promise.all([
-    loadCanonicalRealBrokerPortfolio(),
-    loadBrokerMirror()
-  ]);
+  const {
+    practicePortfolio,
+    practiceBrokerMirror: practiceMirror
+  } = await loadPracticeReconciliationEvidence();
+  const realPortfolio = practicePortfolio;
+  const brokerMirror = practiceMirror;
 
-  if (!realPortfolio?.holdings?.length) {
+  if (!practicePortfolio?.holdings?.length) {
     return {
       status:
-        "NO_REAL_PORTFOLIO",
+        "NO_PRACTICE_PORTFOLIO",
 
       message:
-        "No canonical REAL portfolio is available for reconciliation.",
+        "No Practice portfolio is available for reconciliation.",
 
       realPortfolio:
         null,
@@ -107,15 +125,15 @@ export async function buildBrokerReconciliation() {
     };
   }
 
-  if (!brokerMirror) {
+  if (!practiceMirror) {
     return {
       status:
         "NO_BROKER_MIRROR",
 
       message:
-        "No synchronized broker portfolio is available yet.",
+        "No Practice broker mirror is available yet.",
 
-      realPortfolio,
+      realPortfolio: practicePortfolio,
 
       brokerMirror:
         null,
@@ -128,16 +146,8 @@ export async function buildBrokerReconciliation() {
     };
   }
 
-  if (!isVerifiedRealBrokerMirror(brokerMirror)) {
-    return {
-      status: "NO_VERIFIED_BROKER_MIRROR",
-      message:
-        "A fresh connected-broker synchronization is required before reconciliation.",
-      realPortfolio,
-      brokerMirror: null,
-      holdings: [],
-      summary: emptySummary()
-    };
+  if (practiceMirror?.isPractice !== true && practiceMirror?.mode !== "PRACTICE") {
+    return { status: "PRACTICE_EVIDENCE_REQUIRED", message: "Only an explicitly marked Practice broker mirror can be reconciled here.", realPortfolio: practicePortfolio, brokerMirror: null, holdings: [], summary: emptySummary() };
   }
 
   const realHoldings =

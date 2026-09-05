@@ -32,6 +32,8 @@ import {
 import {
   saveVerifiedUploadedBrokerMirror
 } from "../src/features/broker-sync/brokerSyncService";
+import { loadBrokerAccounts } from "../src/services/brokers/brokerAccountStore";
+import { hasConnectedRealBrokerAccount } from "../src/features/broker-sync/brokerCashEvidencePolicy";
 
 export default function ReviewPortfolioImport() {
   const params = useLocalSearchParams();
@@ -39,9 +41,13 @@ export default function ReviewPortfolioImport() {
   const [rows, setRows] = useState([]);
   const [editingIndex, setEditingIndex] = useState(null);
   const [editingRow, setEditingRow] = useState(null);
+  const [connectedRealBroker, setConnectedRealBroker] = useState(false);
 
   useEffect(() => {
     loadDraft();
+    loadBrokerAccounts()
+      .then((accounts) => setConnectedRealBroker(hasConnectedRealBrokerAccount(accounts)))
+      .catch(() => setConnectedRealBroker(false));
   }, []);
 
   async function loadDraft() {
@@ -256,6 +262,16 @@ export default function ReviewPortfolioImport() {
       Alert.alert(
         "Broker Evidence Ready",
         "The verified valuation is ready. Add the matching cash statement, then confirm the broker snapshot. No REAL holdings were changed yet."
+      );
+      router.replace("/portfolio-sync-center");
+      return;
+    }
+
+    const brokerIsConnected = connectedRealBroker || hasConnectedRealBrokerAccount(await loadBrokerAccounts());
+    if (brokerIsConnected) {
+      Alert.alert(
+        "Connected Broker Holdings Are Read-only",
+        "This ordinary import cannot replace connected REAL holdings. Upload it as verified broker evidence from Portfolio Sync Center."
       );
       router.replace("/portfolio-sync-center");
       return;

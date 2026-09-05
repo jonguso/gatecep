@@ -68,7 +68,7 @@ export default function ExecutionAudit() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Execution Audit</Text>
+        <Text style={styles.title}>Practice Execution Audit</Text>
 
         <Pressable
           style={styles.dashboardButton}
@@ -79,7 +79,7 @@ export default function ExecutionAudit() {
       </View>
 
       <Text style={styles.subtitle}>
-        Permanent local audit trail for OMS lifecycle events, broker routing,
+        Practice-only local audit trail for simulated lifecycle events and routing,
         confirmations, fills, cancellations, and errors.
       </Text>
 

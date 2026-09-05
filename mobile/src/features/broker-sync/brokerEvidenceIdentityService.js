@@ -75,7 +75,9 @@ export function validateBrokerEvidenceIdentity({
   if (!cdsNumber) errors.push("Add and verify the user's CDS number before uploading broker evidence.");
   if (!normalizedBrokerId) errors.push("Broker ID is required.");
   if (!normalizedClientAccount) errors.push("Broker client account is required.");
-  if (!brokerFileIdentifier) errors.push("The filename must end with the investor CDS number.");
+  if (!brokerFileIdentifier && !internalIdentity?.tradingAccount) {
+    errors.push("The broker evidence must identify the investor CDS in the document or filename.");
+  }
   if (cdsNumber && brokerFileIdentifier && cdsNumber !== brokerFileIdentifier) {
     errors.push("This file belongs to a different CDS investor.");
   }

@@ -37,7 +37,7 @@ export default function ExecutionBridge() {
       </Text>
 
       <Text style={styles.subtitle}>
-        Coach G → Broker Execution Pipeline
+        Coach G → Practice Simulation Pipeline
       </Text>
 
       <ActiveUserBanner />

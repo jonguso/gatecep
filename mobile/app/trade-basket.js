@@ -71,7 +71,7 @@ export default function TradeBasket() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Trade Basket</Text>
+        <Text style={styles.title}>Practice Trade Basket</Text>
 
         <Pressable
           style={styles.dashboardButton}

@@ -358,15 +358,13 @@ export default function BrokerReconciliationActions() {
       <Text
         style={styles.title}
       >
-        Reconciliation Action Center
+        Practice Reconciliation Actions
       </Text>
 
       <Text
         style={styles.subtitle}
       >
-        Manage controlled follow-up actions
-        created from broker reconciliation
-        decisions.
+        PRACTICE ONLY — manage sandbox follow-up notes. These actions never enter the REAL investor record.
       </Text>
 
       {error ? (

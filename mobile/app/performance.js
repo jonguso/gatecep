@@ -63,12 +63,13 @@ const [historicalSummary, setHistoricalSummary] = useState(null);
   const [showTimelineCash, setShowTimelineCash] = useState(false);
   const [selectedTimelinePoint, setSelectedTimelinePoint] = useState(null);
 
-  const { width: windowWidth } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const activeSectionIndex = PERFORMANCE_SECTIONS.findIndex((section) => section.id === activeSection);
   const previousSection = activeSectionIndex > 0 ? PERFORMANCE_SECTIONS[activeSectionIndex - 1] : null;
   const nextSection = activeSectionIndex >= 0 && activeSectionIndex < PERFORMANCE_SECTIONS.length - 1
     ? PERFORMANCE_SECTIONS[activeSectionIndex + 1]
     : null;
+  const detailPanelHeight = Math.min(430, Math.max(310, windowHeight * 0.38));
   const moveToSection = (sectionId) => {
     setActiveSection(sectionId);
     requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: 0, animated: false }));
@@ -381,6 +382,9 @@ const [historicalSummary, setHistoricalSummary] = useState(null);
             </View>
           ) : null}
 
+          {activeSection ? (
+          <View style={[styles.detailPanel, { height: detailPanelHeight }]}>
+          <ScrollView style={styles.detailPanelScroll} contentContainerStyle={styles.detailPanelContent} nestedScrollEnabled showsVerticalScrollIndicator>
           <View style={[styles.card, activeSection !== "timeline" && styles.hidden]}>
             <View style={styles.sectionHeaderRow}>
               <View style={{ flex: 1 }}>
@@ -1632,6 +1636,9 @@ const [historicalSummary, setHistoricalSummary] = useState(null);
               </View>
             ))}
           </View>
+          </ScrollView>
+          </View>
+          ) : null}
         </>
       )}
 
@@ -2826,6 +2833,9 @@ function money(v) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#020617" },
   content: { padding: 20, paddingTop: 60, paddingBottom: 120 },
+  detailPanel: { marginTop: 14, overflow: "hidden" },
+  detailPanelScroll: { flex: 1 },
+  detailPanelContent: { paddingBottom: 8 },
   hidden: { display: "none" },
   center: {
     flex: 1,

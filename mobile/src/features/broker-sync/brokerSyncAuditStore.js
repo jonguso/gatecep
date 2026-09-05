@@ -4,7 +4,7 @@ import {
 } from "../../auth/userStorage";
 
 const AUDIT_KEY =
-  "brokerSyncAuditHistory";
+  "practiceBrokerSyncAuditHistory";
 
 /*
  * ============================================================

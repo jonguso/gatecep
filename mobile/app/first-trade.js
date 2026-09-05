@@ -12,14 +12,13 @@ import { router } from "expo-router";
 
 import { validateOrder } from "../src/utils/orderValidator";
 import {
-  loadPortfolio,
-  savePortfolio
-} from "../src/portfolio/portfolioStore";
+  loadInvestorContext,
+  savePracticePortfolio
+} from "../src/features/investor/investorContextStore";
 import {
   userGetItem,
   userSetItem
 } from "../src/auth/userStorage";
-import { buildSyncStatus } from "../src/portfolio/syncStatus";
 
 const STOCKS = [
   {
@@ -80,11 +79,11 @@ export default function FirstTrade() {
   }, []);
 
   async function load() {
-    const savedPortfolio = await loadPortfolio({ revalue: false });
-    const cashRaw = await userGetItem("availableCash");
+    const context = await loadInvestorContext();
+    const practice = context?.practicePortfolio || {};
 
-    setPortfolio(savedPortfolio);
-    setCash(Number(cashRaw || 0));
+    setPortfolio(Array.isArray(practice?.holdings) ? practice.holdings : []);
+    setCash(Number(practice?.availableCash || 0));
   }
 
   function selectStock(stock) {
@@ -138,18 +137,14 @@ export default function FirstTrade() {
       return;
     }
 
-    const brokerRaw = await userGetItem("defaultBrokerProfile");
-
-    const brokerProfile = brokerRaw
-      ? JSON.parse(brokerRaw)
-      : {
-          broker: "AIB-AXYS",
-          nickname: "Demo Broker",
-          clientNumber: "DEMO",
-          cdsNumber: "DEMO",
-          defaultBroker: true,
-          connectionMode: "SIMULATION"
-        };
+    const brokerProfile = {
+      broker: "PRACTICE",
+      nickname: "Practice Simulator",
+      clientNumber: "PRACTICE",
+      cdsNumber: "PRACTICE",
+      defaultBroker: false,
+      connectionMode: "SIMULATION"
+    };
 
     const validation = validateOrder({
       side,
@@ -290,34 +285,26 @@ export default function FirstTrade() {
       status: "SIMULATED_EXECUTED",
       orderType: "MARKET",
       settlementStatus: "SETTLED",
-      source: "FIRST_TRADE_SIMULATION"
+      source: "FIRST_TRADE_SIMULATION",
+      isPractice: true,
+      isReal: false,
+      sourceType: "PRACTICE"
     };
 
-    const tradeRaw = await userGetItem("simulatedTrades");
+    const tradeRaw = await userGetItem("practiceSimulatedTrades");
     const trades = tradeRaw ? JSON.parse(tradeRaw) : [];
 
     trades.unshift(trade);
 
-    await savePortfolio(nextPortfolio);
-    await userSetItem("availableCash", String(estimate.remainingCash));
-    await userSetItem("statementUploaded", "true");
-    await userSetItem("simulatedTrades", JSON.stringify(trades));
-    await userSetItem("firstTradeCompleted", "true");
-
-    await userSetItem(
-      "brokerReadiness",
-      JSON.stringify({
-        brokerSelected: true,
-        cdsCreated: false,
-        brokerOpened: false,
-        brokerFunded: true,
-        starterPortfolioReady: true,
-        readyToInvest: true,
-        firstTradeCompleted: true
-      })
-    );
-
-    await buildSyncStatus();
+    await savePracticePortfolio({
+      ...(await loadInvestorContext())?.practicePortfolio,
+      holdings: nextPortfolio,
+      availableCash: estimate.remainingCash,
+      status: "ACTIVE",
+      lastActivityType: "FIRST_TRADE_SIMULATION"
+    });
+    await userSetItem("practiceSimulatedTrades", JSON.stringify(trades));
+    await userSetItem("practiceFirstTradeCompleted", "true");
 
     setPortfolio(nextPortfolio);
     setCash(estimate.remainingCash);
@@ -332,7 +319,7 @@ export default function FirstTrade() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.headerRow}>
-        <Text style={styles.title}>First Trade Simulation</Text>
+        <Text style={styles.title}>Practice First Trade</Text>
 
         <Pressable
           style={styles.dashboardButton}
@@ -343,7 +330,7 @@ export default function FirstTrade() {
       </View>
 
       <Text style={styles.subtitle}>
-        Practice your first buy or sell before real broker execution is connected.
+        Practice your first buy or sell safely. This simulation never changes your REAL broker holdings, cash, readiness, or history.
       </Text>
 
       <View style={styles.summaryCard}>

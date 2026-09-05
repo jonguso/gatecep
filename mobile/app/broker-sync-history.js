@@ -34,7 +34,8 @@ export default function BrokerSyncHistory() {
       footer={<StickyActionBar secondaryLabel="Completion" onSecondary={() => router.replace("/broker-reconciliation-insight")} primaryLabel="Return to Sync Center" onPrimary={() => router.replace("/portfolio-sync-center")} />}
     >
       <DeveloperIdentifier>PC-030M3C</DeveloperIdentifier>
-      <MobileHeader title="Sync History" subtitle="Review one verified synchronization or reconciliation event at a time." onBack={() => router.replace("/broker-reconciliation-insight")} actionLabel="Refresh" onAction={loadHistory} />
+      <MobileHeader title="Practice Sync History" subtitle="Review one sandbox reconciliation event at a time." onBack={() => router.replace("/broker-reconciliation-insight")} actionLabel="Refresh" onAction={loadHistory} />
+      <StatusBanner tone="warning" title="PRACTICE ONLY" message="This history is isolated from REAL broker synchronization and portfolio evidence." />
 
       {loading ? <StatusBanner tone="info" title="Loading synchronization history…" /> : null}
       {error ? <StatusBanner tone="danger" title="History unavailable" message={error} /> : null}

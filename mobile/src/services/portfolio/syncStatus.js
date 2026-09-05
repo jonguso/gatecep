@@ -1,5 +1,6 @@
 import { userGetItem, userSetItem } from "../auth/userStorage";
 import { loadUnifiedPortfolio } from "./unifiedPortfolioApi";
+import { loadCanonicalRealTransactionHistory } from "../../features/wealth-journey/canonicalRealBehaviorHistoryService";
 
 export async function buildSyncStatus() {
   const portfolio = await loadUnifiedPortfolio();
@@ -10,7 +11,6 @@ export async function buildSyncStatus() {
   const legacyBrokerRaw = await userGetItem("brokerProfile");
 
   const brokerSkippedRaw = await userGetItem("brokerProfileSkipped");
-  const txRaw = await userGetItem("transactionHistory");
 
   const portfolioUploaded = await userGetItem("statementUploaded");
   const cashUploaded = await userGetItem("cashStatementUploaded");
@@ -21,7 +21,7 @@ export async function buildSyncStatus() {
 
   const brokerRaw = defaultBrokerRaw || legacyBrokerRaw;
   const brokerProfile = brokerRaw ? JSON.parse(brokerRaw) : null;
-  const transactions = txRaw ? JSON.parse(txRaw) : [];
+  const transactions = await loadCanonicalRealTransactionHistory();
 
   const statementSummary = statementSummaryRaw
     ? JSON.parse(statementSummaryRaw)
@@ -62,7 +62,7 @@ export async function buildSyncStatus() {
 
     portfolioUploaded: portfolioUploaded === "true",
     cashUploaded: cashUploaded === "true",
-    transactionsUploaded: transactionsUploaded === "true",
+    transactionsUploaded: transactionsUploaded === "true" && transactions.length > 0,
 
     lastPortfolioSync: statementSummary?.uploadedAt || null,
     lastCashSync: statementSummary?.uploadedAt || null,

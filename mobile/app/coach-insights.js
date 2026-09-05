@@ -26,6 +26,7 @@ import {
   userGetItem,
   userSetItem
 } from "../src/auth/userStorage";
+import { loadCanonicalRealTransactionHistory } from "../src/features/wealth-journey/canonicalRealBehaviorHistoryService";
 
 export default function Coach() {
   const [portfolio, setPortfolio] = useState([]);
@@ -58,10 +59,8 @@ export default function Coach() {
     const savedPortfolio = portfolioData?.holdings || [];
     const contextRaw = await userGetItem("coachContext");
     const txUploadedRaw = await userGetItem("transactionsUploaded");
-    const txRaw = await userGetItem("transactionHistory");
+    const scopedTransactions = await loadCanonicalRealTransactionHistory();
     const historyRaw = await userGetItem("recommendationHistory");
-
-    const scopedTransactions = txRaw ? JSON.parse(txRaw) : [];
 
     setPortfolio(savedPortfolio);
     setTransactions(scopedTransactions);
@@ -73,7 +72,7 @@ export default function Coach() {
       setDashboardContext(JSON.parse(contextRaw));
     }
 
-    setTransactionsUploaded(txUploadedRaw === "true");
+    setTransactionsUploaded(txUploadedRaw === "true" && scopedTransactions.length > 0);
     setRecommendationHistory(historyRaw ? JSON.parse(historyRaw) : []);
   }
 

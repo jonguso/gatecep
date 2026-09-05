@@ -234,7 +234,7 @@ export default function BrokerRouting() {
   if (!execution || !orders.length) {
     return (
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Broker Routing</Text>
+        <Text style={styles.title}>Practice Routing</Text>
 
         <Text style={styles.subtitle}>
           No active orders found. Create or queue basket orders first.
@@ -253,7 +253,7 @@ export default function BrokerRouting() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Broker Routing</Text>
+        <Text style={styles.title}>Practice Routing</Text>
 
         <Pressable
           style={styles.dashboardButton}
@@ -264,7 +264,7 @@ export default function BrokerRouting() {
       </View>
 
       <Text style={styles.subtitle}>
-        Select which broker should receive each order before routing to
+        Select a simulated broker route for learning. No REAL order is transmitted to
         execution.
       </Text>
 
@@ -386,7 +386,7 @@ function RoutingCard({ order, onSelectBroker, onRoute }) {
         onPress={onRoute}
       >
         <Text style={styles.primaryText}>
-          {canRoute ? "Route This Order" : "Select Broker First"}
+          {canRoute ? "Route Practice Order" : "Select Practice Route First"}
         </Text>
       </Pressable>
     </View>

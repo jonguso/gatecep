@@ -3,6 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import ActiveUserBanner from "../../src/components/ActiveUserBanner";
 import { loadTradingHubData } from "../../src/services/trade/tradingHubStore";
+import { ContainedPanel } from "../../src/components/mobile/MobileUI";
 
 const TABS = ["Account", "Orders", "Depth", "Activity"];
 export default function Trading() {
@@ -15,11 +16,13 @@ export default function Trading() {
     <ActiveUserBanner />
     <View style={s.notice}><Text style={s.noticeTitle}>Broker controlled</Text><Text style={s.body}>GateCEP does not submit trades, move money, or mark orders filled. Records appear only from a verified broker connection or import.</Text></View>
     <View style={s.tabs}>{TABS.map(x=><Pressable key={x} style={[s.tab,tab===x&&s.activeTab]} onPress={()=>setTab(x)}><Text style={tab===x?s.activeTabText:s.tabText}>{x}</Text></Pressable>)}</View>
-    {error?<Unavailable title="Trading data unavailable" message={error}/>:null}
-    {!error&&tab==="Account"?<><View style={s.card}><Text style={s.label}>Trading account</Text><Text style={s.cardTitle}>{broker?.broker||broker?.name||"No verified broker account"}</Text><Text style={s.body}>Client: {broker?.clientNumber||broker?.accountNumber||"Unavailable"}</Text><Text style={s.body}>Available cash: {data?.cashAvailable?`KES ${money(cash)}`:"Unavailable until a verified statement is loaded"}</Text></View><Pressable style={s.primary} onPress={()=>router.push("/broker-accounts")}><Text style={s.primaryText}>{broker?"Manage Broker Account":"Connect Broker Account"}</Text></Pressable><Pressable style={s.secondary} onPress={()=>router.push("/portfolio-sync-center")}><Text style={s.secondaryText}>Sync Broker Evidence</Text></Pressable></>:null}
-    {!error&&tab==="Orders"?<Unavailable title="Verified broker orders" message="No verified broker order feed is connected. GateCEP will not display locally simulated orders as broker orders."/>:null}
-    {!error&&tab==="Depth"?<Unavailable title="Verified market depth" message="Level 2 order-book depth is unavailable until a licensed NSE or broker depth feed is connected. Local EOD prices are not market depth."/>:null}
-    {!error&&tab==="Activity"?<Unavailable title="Verified execution activity" message="No verified broker execution feed is connected. Completed transactions can be reviewed after broker import or API synchronization." action="Open Portfolio Activity" onPress={()=>router.push("/portfolio-activity")}/>:null}
+    <ContainedPanel title={tab} subtitle="One trading view at a time" testID="trading-contained-panel">
+      {error?<Unavailable title="Trading data unavailable" message={error}/>:null}
+      {!error&&tab==="Account"?<><View style={s.card}><Text style={s.label}>Trading account</Text><Text style={s.cardTitle}>{broker?.broker||broker?.name||"No verified broker account"}</Text><Text style={s.body}>Client: {broker?.clientNumber||broker?.accountNumber||"Unavailable"}</Text><Text style={s.body}>Available cash: {data?.cashAvailable?`KES ${money(cash)}`:"Unavailable until a verified statement is loaded"}</Text></View><Pressable style={s.primary} onPress={()=>router.push("/broker-accounts")}><Text style={s.primaryText}>{broker?"Manage Broker Account":"Connect Broker Account"}</Text></Pressable><Pressable style={s.secondary} onPress={()=>router.push("/portfolio-sync-center")}><Text style={s.secondaryText}>Sync Broker Evidence</Text></Pressable></>:null}
+      {!error&&tab==="Orders"?<Unavailable title="Verified broker orders" message="No verified broker order feed is connected. GateCEP will not display locally simulated orders as broker orders."/>:null}
+      {!error&&tab==="Depth"?<Unavailable title="Verified market depth" message="Level 2 order-book depth is unavailable until a licensed NSE or broker depth feed is connected. Local EOD prices are not market depth."/>:null}
+      {!error&&tab==="Activity"?<Unavailable title="Verified execution activity" message="No verified broker execution feed is connected. Completed transactions can be reviewed after broker import or API synchronization." action="Open Portfolio Activity" onPress={()=>router.push("/portfolio-activity")}/>:null}
+    </ContainedPanel>
   </ScrollView>;
 }
 function Unavailable({title,message,action,onPress}){return <View style={s.unavailable}><Text style={s.cardTitle}>{title}</Text><Text style={s.body}>{message}</Text>{action?<Pressable style={s.secondary} onPress={onPress}><Text style={s.secondaryText}>{action}</Text></Pressable>:null}</View>}

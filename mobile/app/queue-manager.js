@@ -18,7 +18,6 @@ import {
   updateExecutionOrder
 } from "../src/trade/basketExecutionStore";
 import { ORDER_STATUS } from "../src/trade/orderLifecycle";
-import { placeBrokerOrder } from "../src/brokers/brokerAdapters";
 
 const FLOW = [
   ORDER_STATUS.REVIEW,
@@ -86,7 +85,7 @@ export default function QueueManager() {
 
     Alert.alert(
       "Route Orders",
-      `${queued.length} orders will be sent through the broker adapter layer.`,
+      `${queued.length} orders will be routed inside the Practice simulator. Nothing is sent to a broker.`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -101,11 +100,17 @@ export default function QueueManager() {
                 routedAt: new Date().toISOString()
               });
 
-              const brokerResponse = await placeBrokerOrder({
-                ...order,
-                brokerId: order.brokerId || "SIM",
-                brokerName: order.brokerName || "Simulation Broker"
-              });
+              const now = new Date().toISOString();
+              const brokerResponse = {
+                brokerId: "GATECEP_PRACTICE",
+                brokerName: "Practice Simulator",
+                brokerOrderId: `PRACTICE-${Date.now()}-${order.symbol}`,
+                status: "PRACTICE_RECEIVED",
+                message: "Practice simulator received the order.",
+                submittedAt: now,
+                receivedAt: now,
+                isPractice: true
+              };
 
               latest = await updateExecutionOrder(order.id, {
                 brokerId: brokerResponse.brokerId || order.brokerId || "SIM",
@@ -168,7 +173,7 @@ export default function QueueManager() {
                 brokerName: order.brokerName,
                 brokerOrderId: order.brokerOrderId,
                 filledAt: new Date().toISOString(),
-                source: "BROKER_CONFIRMATION"
+                source: "PRACTICE_SIMULATION"
               });
             }
 
@@ -196,7 +201,7 @@ export default function QueueManager() {
   if (!execution || !orders.length) {
     return (
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Queue Manager</Text>
+        <Text style={styles.title}>Practice Queue Manager</Text>
 
         <Text style={styles.subtitle}>
           No active OMS queue found. Create a basket first.
@@ -233,8 +238,7 @@ export default function QueueManager() {
       </View>
 
       <Text style={styles.subtitle}>
-        OMS control center using broker adapters for routing and broker
-        confirmation.
+        Practice-only lifecycle simulator. It does not call broker adapters or create REAL execution evidence.
       </Text>
 
       <ActiveUserBanner />

@@ -35,19 +35,20 @@ export default function OrderHandoff() {
 
     Alert.alert(
       "Copied",
-      "Broker order instructions copied."
+      "Practice order scenario copied."
     );
   }
 
 async function saveAndReturn() {
   await userSetItem(
-    "latestOrderHandoff",
+    "latestPracticeOrderHandoff",
     JSON.stringify({
       broker: pack?.broker || null,
       orders: pack?.orders || [],
       totalOrders: pack?.totalOrders || 0,
       totalValue: pack?.totalValue || 0,
-      status: "HANDOFF_READY",
+      status: "PRACTICE_SCENARIO_READY",
+      isPractice: true,
       savedAt: new Date().toISOString()
     })
   );
@@ -62,11 +63,11 @@ async function saveAndReturn() {
       contentContainerStyle={styles.content}
     >
       <Text style={styles.title}>
-        Order Handoff
+        Practice Order Scenario
       </Text>
       
       <Text style={styles.subtitle}>
-        Broker-ready execution package.
+        Learning-only order scenario. This cannot be submitted to a REAL broker by GateCEP.
       </Text>
    
       <View style={styles.card}>
@@ -104,7 +105,7 @@ async function saveAndReturn() {
         onPress={copyOrders}
       >
         <Text style={styles.primaryText}>
-          Copy Broker Order Pack
+          Copy Practice Scenario
         </Text>
       </Pressable>
 <Pressable style={styles.primary} onPress={saveAndReturn}>

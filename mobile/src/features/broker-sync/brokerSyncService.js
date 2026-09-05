@@ -9,6 +9,7 @@ import {
 import {
   syncBrokerPortfolio
 } from "../../services/brokers/brokerPortfolioSync";
+import { requireVerifiedBrokerCashEvidence } from "./brokerCashEvidencePolicy";
 
 const BROKER_MIRROR_KEY =
   "brokerMirrorPortfolio";
@@ -437,13 +438,13 @@ export async function attachVerifiedBrokerCashEvidence({
   cashBalance,
   fileName = null,
   broker = null,
-  accountIdentity = null
+  accountIdentity = null,
+  statementEffectiveDate = null
 } = {}) {
-  const amount = Number(cashBalance);
-
-  if (!Number.isFinite(amount) || amount < 0) {
-    throw new Error("Verified broker cash evidence requires a valid balance.");
-  }
+  const verified = requireVerifiedBrokerCashEvidence({
+    cashBalance, statementEffectiveDate, accountIdentity
+  });
+  const amount = verified.cashBalance;
 
   const mirror = await loadBrokerMirror();
 
@@ -466,6 +467,7 @@ export async function attachVerifiedBrokerCashEvidence({
     cashBalance: amount,
     cashEvidenceAvailable: true,
     cashEvidenceFileName: fileName,
+    cashEvidenceEffectiveDate: verified.statementEffectiveDate,
     source: "BROKER_VALUATION_AND_CASH_UPLOAD",
     runtimeMode: "REAL_VERIFIED_UPLOAD"
   });

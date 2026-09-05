@@ -1,17 +1,18 @@
 import React from "react";
 import { Pressable, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
+import { MobileHeader, MobileScreen, StatusBanner } from "../src/components/mobile/MobileUI";
 
 export default function AccountEdit() {
   return (
-    <View style={styles.screen}>
-      <Text style={styles.title}>Account Edit</Text>
-      <Text style={styles.body}>Account editing will be available here.</Text>
+    <MobileScreen testID="account-edit-screen">
+      <MobileHeader title="Account Edit" subtitle="Account identity settings" onBack={() => router.back()} />
+      <StatusBanner tone="info" title="Account editing is not yet available" message="Use Investor Profile Edit for investing goals and Broker Profile for broker details." />
 
       <Pressable style={styles.button} onPress={() => router.back()}>
         <Text style={styles.buttonText}>Back</Text>
       </Pressable>
-    </View>
+    </MobileScreen>
   );
 }
 

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ScrollView,
   Text,
@@ -15,6 +15,8 @@ import {
   refreshCanonicalRealPortfolioSnapshot
 } from "../src/services/portfolio/portfolioSnapshotTrigger";
 import { router } from "expo-router";
+import { loadBrokerAccounts } from "../src/services/brokers/brokerAccountStore";
+import { hasConnectedRealBrokerAccount } from "../src/features/broker-sync/brokerCashEvidencePolicy";
 
 const market = {
   ABSA: { price: 29, sector: "Banking" },
@@ -34,6 +36,13 @@ export default function ManualPortfolioEntry() {
   const [quantity, setQuantity] = useState("");
   const [avgPrice, setAvgPrice] = useState("");
   const [rows, setRows] = useState([]);
+  const [connectedRealBroker, setConnectedRealBroker] = useState(false);
+
+  useEffect(() => {
+    loadBrokerAccounts()
+      .then((accounts) => setConnectedRealBroker(hasConnectedRealBrokerAccount(accounts)))
+      .catch(() => setConnectedRealBroker(false));
+  }, []);
 
   const enrichedRows = useMemo(() => {
     return rows.map((row) => {
@@ -90,6 +99,16 @@ export default function ManualPortfolioEntry() {
   }
 
   async function submitPortfolio() {
+  const brokerIsConnected = connectedRealBroker || hasConnectedRealBrokerAccount(await loadBrokerAccounts());
+  if (brokerIsConnected) {
+    Alert.alert(
+      "Connected Broker Holdings Are Read-only",
+      "Use Portfolio Sync Center and verified broker evidence to replace the REAL portfolio."
+    );
+    router.replace("/portfolio-sync-center");
+    return;
+  }
+
   if (enrichedRows.length === 0) {
     Alert.alert("No holdings", "Add at least one holding.");
     return;
@@ -153,10 +172,18 @@ export default function ManualPortfolioEntry() {
       <Text style={styles.title}>Confirm Portfolio Holdings</Text>
 
       <Text style={styles.subtitle}>
-        Add your holdings manually. Later, uploaded files will populate this same screen for review and correction.
+        {connectedRealBroker
+          ? "Your connected REAL broker holdings are read-only here. Use verified broker synchronization."
+          : "Add holdings only for initial REAL portfolio setup before connecting a broker."}
       </Text>
 
-      <View style={styles.card}>
+      {connectedRealBroker ? (
+        <Pressable style={styles.secondary} onPress={() => router.replace("/portfolio-sync-center")}>
+          <Text style={styles.secondaryText}>Open Verified Broker Sync</Text>
+        </Pressable>
+      ) : null}
+
+      {!connectedRealBroker ? <View style={styles.card}>
         <Text style={styles.label}>Security Symbol</Text>
         <TextInput
           value={symbol}
@@ -190,7 +217,7 @@ export default function ManualPortfolioEntry() {
         <Pressable style={styles.secondary} onPress={addRow}>
           <Text style={styles.secondaryText}>Add Holding</Text>
         </Pressable>
-      </View>
+      </View> : null}
 
       <Text style={styles.sectionTitle}>Review Holdings</Text>
 

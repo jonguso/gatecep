@@ -12,11 +12,13 @@ import {
   userGetItem
 } from "../src/auth/userStorage";
 import { buildSyncStatus } from "../src/portfolio/syncStatus";
+import { ContainedPanel } from "../src/components/mobile/MobileUI";
 
 export default function BrokerUpload() {
   const [portfolioUploaded, setPortfolioUploaded] = useState(false);
   const [cashUploaded, setCashUploaded] = useState(false);
   const [transactionsUploaded, setTransactionsUploaded] = useState(false);
+  const [activePanel, setActivePanel] = useState("required");
 
   useEffect(() => {
     loadStatus();
@@ -62,8 +64,12 @@ export default function BrokerUpload() {
         <StatusRow label="Transaction / Order History" done={transactionsUploaded} />
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Required Uploads</Text>
+      <View style={styles.panelTabs}>
+        <Pressable style={[styles.panelTab, activePanel === "required" && styles.panelTabActive]} onPress={() => setActivePanel("required")}><Text style={[styles.panelTabText, activePanel === "required" && styles.panelTabTextActive]}>Required</Text></Pressable>
+        <Pressable style={[styles.panelTab, activePanel === "optional" && styles.panelTabActive]} onPress={() => setActivePanel("optional")}><Text style={[styles.panelTabText, activePanel === "optional" && styles.panelTabTextActive]}>Optional</Text></Pressable>
+      </View>
+
+      {activePanel === "required" ? <ContainedPanel title="Required Uploads" subtitle="Valuation and cash evidence" testID="broker-upload-required-panel">
 
         <Pressable
           style={styles.docOption}
@@ -91,10 +97,9 @@ export default function BrokerUpload() {
             Upload statement to calculate available cash and trading space.
           </Text>
         </Pressable>
-      </View>
+      </ContainedPanel> : null}
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Optional Uploads</Text>
+      {activePanel === "optional" ? <ContainedPanel title="Optional Uploads" subtitle="Supporting transaction evidence" testID="broker-upload-optional-panel">
 
         <Pressable
           style={styles.docOption}
@@ -109,7 +114,7 @@ export default function BrokerUpload() {
             goal alignment.
           </Text>
         </Pressable>
-      </View>
+      </ContainedPanel> : null}
 
       <Pressable
         style={[
@@ -208,6 +213,11 @@ const styles = StyleSheet.create({
     fontSize: 18,
     marginBottom: 12
   },
+  panelTabs: { flexDirection: "row", gap: 10, marginTop: 20 },
+  panelTab: { flex: 1, minHeight: 44, borderRadius: 14, backgroundColor: "#1e293b", alignItems: "center", justifyContent: "center" },
+  panelTabActive: { backgroundColor: "#9333ea" },
+  panelTabText: { color: "#94a3b8", fontWeight: "900" },
+  panelTabTextActive: { color: "white" },
   statusRow: {
     flexDirection: "row",
     justifyContent: "space-between",

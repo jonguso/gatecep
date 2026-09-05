@@ -34,7 +34,8 @@ export default function BrokerResolutionLedger() {
       footer={<StickyActionBar secondaryLabel="Completion" onSecondary={() => router.replace("/broker-reconciliation-insight")} primaryLabel="Sync History" onPrimary={() => router.push("/broker-sync-history")} />}
     >
       <DeveloperIdentifier>PC-030M3C</DeveloperIdentifier>
-      <MobileHeader title="Decision Ledger" subtitle="A permanent record of how reconciliation differences were explained." onBack={() => router.replace("/broker-reconciliation-insight")} actionLabel="Refresh" onAction={loadLedger} />
+      <MobileHeader title="Practice Decision Ledger" subtitle="A sandbox record of how Practice reconciliation differences were explained." onBack={() => router.replace("/broker-reconciliation-insight")} actionLabel="Refresh" onAction={loadLedger} />
+      <StatusBanner tone="warning" title="PRACTICE ONLY" message="These notes cannot modify REAL holdings, cash, performance, or broker records." />
 
       {loading ? <StatusBanner tone="info" title="Loading decision history…" /> : null}
       {error ? <StatusBanner tone="danger" title="Ledger unavailable" message={error} /> : null}

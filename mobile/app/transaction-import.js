@@ -13,8 +13,16 @@ import * as DocumentPicker from "expo-document-picker";
 import * as FileSystem from "expo-file-system/legacy";
 import { router } from "expo-router";
 import * as XLSX from "xlsx";
+import {
+  requireSafeImportFile,
+  requireSafeImportRows,
+  safeWorkbookReadOptions
+} from "../src/security/importFileSecurity";
 import { userSetItem } from "../src/auth/userStorage";
 import { buildSyncStatus } from "../src/portfolio/syncStatus";
+import { partitionBrokerExecutionEvidence } from "../src/features/broker-sync/brokerExecutionEvidencePolicy";
+import { ContainedPanel } from "../src/components/mobile/MobileUI";
+import { extractBrokerPdf } from "../src/services/brokers/brokerPdfExtractionApi";
 
 export default function TransactionImport() {
   const [form, setForm] = useState({
@@ -39,6 +47,7 @@ export default function TransactionImport() {
         type: [
           "text/csv",
           "application/csv",
+          "application/pdf",
           "application/vnd.ms-excel",
           "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
         ]
@@ -54,6 +63,8 @@ export default function TransactionImport() {
       if (!file) {
         throw new Error("No file selected.");
       }
+
+      await requireSafeImportFile(file);
 
       setSelectedFile(file);
       setStatus(`Selected ${file.name}. Reading transactions...`);
@@ -80,25 +91,28 @@ export default function TransactionImport() {
   async function parseTransactionFile(file) {
     const name = String(file.name || "").toLowerCase();
 
+    if (name.endsWith(".pdf")) {
+      const result = await extractBrokerPdf(file, "orders");
+      return requireSafeImportRows(result.rows);
+    }
+
     if (name.endsWith(".csv")) {
       const text = await readFileText(file);
-      const workbook = XLSX.read(text, { type: "string" });
+      const workbook = XLSX.read(text, safeWorkbookReadOptions("string"));
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
 
-      return XLSX.utils.sheet_to_json(sheet, { defval: "" });
+      return requireSafeImportRows(XLSX.utils.sheet_to_json(sheet, { defval: "" }));
     }
 
     const base64 = await readFileBase64(file);
 
-    const workbook = XLSX.read(base64, {
-      type: "base64"
-    });
+    const workbook = XLSX.read(base64, safeWorkbookReadOptions("base64"));
 
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
 
-    return XLSX.utils.sheet_to_json(sheet, {
+    return requireSafeImportRows(XLSX.utils.sheet_to_json(sheet, {
       defval: ""
-    });
+    }));
   }
 
   async function readFileText(file) {
@@ -208,7 +222,7 @@ export default function TransactionImport() {
         "Transaction Date",
         "Order Date",
         "Last Modified Date & Time"
-      ]) || new Date().toISOString().slice(0, 10);
+      ]);
 
     const sideText = String(sideRaw).toUpperCase();
 
@@ -234,7 +248,12 @@ export default function TransactionImport() {
       price: finalPrice,
       date: String(date),
       value: amount || finalQuantity * finalPrice,
-      source: selectedFile?.name || "MANUAL_OR_FILE"
+      source: selectedFile?.name || "MANUAL_OR_FILE",
+      brokerReference: findValue(["Broker Reference", "Contract Note", "Contract Note Number", "Trade Reference", "Order Reference"]),
+      broker: findValue(["Broker", "Broker Name", "Dealer"]),
+      fees: cleanNumber(findValue(["Total Fees", "Fees", "Brokerage and Fees", "Charges"])),
+      settlementStatus: findValue(["Settlement Status"]),
+      settlementDate: findValue(["Settlement Date"])
     };
   }
 
@@ -249,7 +268,7 @@ export default function TransactionImport() {
       side: form.side,
       quantity: cleanNumber(form.quantity),
       price: cleanNumber(form.price),
-      date: form.date || new Date().toISOString().slice(0, 10),
+      date: form.date,
       value: cleanNumber(form.quantity) * cleanNumber(form.price),
       source: "MANUAL_ENTRY"
     };
@@ -271,13 +290,16 @@ export default function TransactionImport() {
     return;
   }
 
-  await userSetItem("transactionHistory", JSON.stringify(transactions));
-  await userSetItem("transactionsUploaded", "true");
+  const { verified, unverified } = partitionBrokerExecutionEvidence(transactions);
+  await userSetItem("transactionHistory", JSON.stringify(verified));
+  await userSetItem("unverifiedTransactionHistory", JSON.stringify(unverified));
+  await userSetItem("transactionsUploaded", verified.length ? "true" : "false");
 
   await userSetItem(
     "transactionUploadSummary",
     JSON.stringify({
-      count: transactions.length,
+      count: verified.length,
+      rejectedCount: unverified.length,
       uploadedAt: new Date().toISOString(),
       source: selectedFile ? "TRANSACTION_IMPORT_FILE" : "MANUAL_ENTRY",
       fileName: selectedFile?.name || null
@@ -286,25 +308,24 @@ export default function TransactionImport() {
 
   await buildSyncStatus();
 
-  Alert.alert("Saved", "Transaction history saved for Coach G.");
+  Alert.alert("Evidence Reviewed", `${verified.length} verified broker executions saved; ${unverified.length} incomplete records remain UNVERIFIED.`);
 
   router.replace("/portfolio-sync-center");
 }
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Transaction History</Text>
+      <Text style={styles.title}>Broker Execution Evidence</Text>
 
       <Text style={styles.subtitle}>
-        Upload or enter buy and sell activity so Coach G can understand your
-        investing behavior.
+        REAL activity requires broker date, reference, broker identity, executed quantity and price, fees, and settlement evidence. Manual or incomplete rows remain UNVERIFIED.
       </Text>
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Upload Transaction File</Text>
 
         <Text style={styles.help}>
-          Select CSV or Excel order history from your phone. Expected columns may
+          Select PDF, CSV, or Excel order history from your phone. Expected columns may
           include Symbol, Buy/Sell, Quantity, Price, and Date.
         </Text>
 
@@ -322,7 +343,8 @@ export default function TransactionImport() {
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Manual Transaction Entry</Text>
+        <Text style={styles.cardTitle}>Manual Unverified Note</Text>
+        <Text style={styles.help}>Manual entries cannot become REAL execution evidence. Use a broker file containing the required evidence fields.</Text>
 
         <TextInput
           placeholder="Symbol e.g. SCOM"
@@ -366,7 +388,7 @@ export default function TransactionImport() {
         />
 
         <TextInput
-          placeholder="Date YYYY-MM-DD optional"
+          placeholder="Broker execution date YYYY-MM-DD"
           placeholderTextColor="#64748b"
           value={form.date}
           onChangeText={(value) => setForm({ ...form, date: value })}
@@ -379,8 +401,7 @@ export default function TransactionImport() {
       </View>
 
       {transactions.length > 0 && (
-        <View style={styles.card}>
-          <Text style={styles.cardTitle}>Transactions Ready</Text>
+        <ContainedPanel title="Evidence Ready for Review" subtitle={`${transactions.length} imported record${transactions.length === 1 ? "" : "s"}`} testID="transaction-evidence-review-panel">
 
           {transactions.map((t, index) => (
             <View key={`${t.symbol}-${index}`} style={styles.txRow}>
@@ -397,11 +418,11 @@ export default function TransactionImport() {
               </Text>
             </View>
           ))}
-        </View>
+        </ContainedPanel>
       )}
 
       <Pressable style={styles.primary} onPress={saveTransactions}>
-        <Text style={styles.primaryText}>Save Transaction History</Text>
+        <Text style={styles.primaryText}>Validate Broker Evidence</Text>
       </Pressable>
 
       <Pressable style={styles.backButton} onPress={() => router.replace("/broker-upload")}>

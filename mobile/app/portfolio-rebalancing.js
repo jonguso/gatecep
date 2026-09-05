@@ -14,6 +14,7 @@ import {
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View
 } from "react-native";
 
@@ -58,6 +59,7 @@ const REBALANCE_SECTIONS = [
 export default function PortfolioRebalancingScreen() {
   const params = useLocalSearchParams();
   const scrollRef = useRef(null);
+  const { height: windowHeight } = useWindowDimensions();
   const [
     loading,
     setLoading
@@ -241,6 +243,7 @@ export default function PortfolioRebalancingScreen() {
   const nextSection = activeSectionIndex >= 0 && activeSectionIndex < REBALANCE_SECTIONS.length - 1
     ? REBALANCE_SECTIONS[activeSectionIndex + 1]
     : null;
+  const detailPanelHeight = Math.min(430, Math.max(310, windowHeight * 0.38));
 
   const moveToSection = (sectionId) => {
     setActiveSection(sectionId);
@@ -570,6 +573,9 @@ export default function PortfolioRebalancingScreen() {
         </View>
       )}
 
+      {activeSection ? (
+      <View style={[styles.focusedPanel, { height: detailPanelHeight }]}>
+      <ScrollView style={styles.focusedPanelScroll} contentContainerStyle={styles.focusedPanelContent} nestedScrollEnabled showsVerticalScrollIndicator>
       <Section
         style={activeSection !== "health" && styles.hidden}
         title="Coach G Portfolio Health"
@@ -1410,6 +1416,9 @@ export default function PortfolioRebalancingScreen() {
           />
         )}
       </Section>
+      </ScrollView>
+      </View>
+      ) : null}
 
       <View
         style={activeSection ? styles.protectionCard : styles.hidden}
@@ -2491,6 +2500,9 @@ const styles =
       paddingBottom:
         110
     },
+    focusedPanel: { marginTop: 14, overflow: "hidden" },
+    focusedPanelScroll: { flex: 1 },
+    focusedPanelContent: { paddingBottom: 8 },
 
     centerScreen: {
       flex:

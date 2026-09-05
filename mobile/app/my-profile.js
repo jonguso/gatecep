@@ -16,6 +16,7 @@ import { getUserBrokers } from "../src/features/brokers/api/userBrokerApi";
 import { userGetItem } from "../src/auth/userStorage";
 import { logout } from "../src/auth/authStore";
 import ActiveUserBanner from "../src/components/ActiveUserBanner";
+import { ContainedPanel } from "../src/components/mobile/MobileUI";
 import {
   mergeProfileSources
 } from "../src/features/profile/investorProfileContract";
@@ -27,6 +28,7 @@ export default function MyProfile() {
   const [broker, setBroker] = useState(null);
   const [cash, setCash] = useState(0);
   const [portfolioValue, setPortfolioValue] = useState(0);
+  const [activeSection, setActiveSection] = useState("Account");
 
   useFocusEffect(
     useCallback(() => {
@@ -110,10 +112,16 @@ const displayName =
 
       <ActiveUserBanner />
 
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>Account</Text>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabs}>
+        {["Account", "Investor", "Broker", "Portfolio"].map((item) => (
+          <Pressable key={item} style={[styles.tab, activeSection === item && styles.tabActive]} onPress={() => setActiveSection(item)}>
+            <Text style={[styles.tabText, activeSection === item && styles.tabTextActive]}>{item}</Text>
+          </Pressable>
+        ))}
+      </ScrollView>
 
+      {activeSection === "Account" ? <ContainedPanel title="Account" testID="profile-account-panel">
+        <View style={styles.cardHeader}>
           <Pressable
             style={styles.editChip}
             onPress={() => router.push("/account-edit")}
@@ -125,12 +133,10 @@ const displayName =
         <Info label="Username" value={user?.username || "N/A"} />
         <Info label="Email" value={user?.email || "N/A"} />
         <Info label="User ID" value={user?.id || "N/A"} />
-      </View>
+      </ContainedPanel> : null}
 
-      <View style={styles.card}>
+      {activeSection === "Investor" ? <ContainedPanel title="Investor Profile" testID="profile-investor-panel">
         <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>Investor Profile</Text>
-
           <Pressable
             style={styles.editChip}
             onPress={() => router.push("/investor-profile-edit")}
@@ -156,11 +162,9 @@ const displayName =
           }
           value={`KES ${money(profile?.amount ?? constraints.amount ?? 0)}`}
         />
-      </View>
+      </ContainedPanel> : null}
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Broker</Text>
-
+      {activeSection === "Broker" ? <ContainedPanel title="Broker" testID="profile-broker-panel">
         <Info
           label="Status"
           value={broker ? "Connected / Profile Added" : "No broker connected"}
@@ -175,11 +179,9 @@ const displayName =
         >
           <Text style={styles.secondaryText}>Update Broker Profile</Text>
         </Pressable>
-      </View>
+      </ContainedPanel> : null}
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Portfolio Summary</Text>
-
+      {activeSection === "Portfolio" ? <ContainedPanel title="Portfolio Summary" testID="profile-portfolio-panel">
         <Info label="Available Cash" value={`KES ${money(cash)}`} />
         <Info label="Portfolio Value" value={`KES ${money(portfolioValue)}`} />
 
@@ -189,7 +191,7 @@ const displayName =
         >
           <Text style={styles.secondaryText}>Open Portfolio Hub</Text>
         </Pressable>
-      </View>
+      </ContainedPanel> : null}
 
       <Pressable
         style={styles.secondary}
@@ -256,6 +258,11 @@ const styles = StyleSheet.create({
     marginBottom: 12
   },
   cardTitle: { color: "#67e8f9", fontSize: 18, fontWeight: "900" },
+  tabs: { gap: 8, marginTop: 18, paddingRight: 8 },
+  tab: { minHeight: 42, minWidth: 92, paddingHorizontal: 14, borderRadius: 14, backgroundColor: "#1e293b", alignItems: "center", justifyContent: "center" },
+  tabActive: { backgroundColor: "#9333ea" },
+  tabText: { color: "#94a3b8", fontWeight: "900" },
+  tabTextActive: { color: "white" },
   editChip: {
     backgroundColor: "#1e293b",
     borderColor: "#334155",

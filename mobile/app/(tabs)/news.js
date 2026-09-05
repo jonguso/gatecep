@@ -6,6 +6,7 @@ import useMarketData from "../../src/services/markets/useMarketData";
 import { loadCorporateActions } from "../../src/features/corporate-actions/corporateActionStore";
 import { loadVerifiedNews } from "../../src/services/news/verifiedNewsApi";
 import { NEWS_TABS, buildVerifiedNews, getNewsForTab, getNewsSummary } from "../../src/news/newsHubData";
+import { ContainedPanel } from "../../src/components/mobile/MobileUI";
 
 export default function News() {
   const { accessToken } = useAuth();
@@ -49,9 +50,12 @@ export default function News() {
     </View>
     <View style={s.tabs}>{NEWS_TABS.map((item) => <Pressable key={item} style={[s.tab, tab === item && s.active]} onPress={() => setTab(item)}><Text style={tab === item ? s.activeText : s.tabText}>{item}</Text></Pressable>)}</View>
     <View style={s.summary}><Metric label="Market" value={summary.market}/><Metric label="Company" value={summary.company}/><Metric label="Dividends" value={summary.dividends}/><Metric label="Coach G" value={summary.coachG}/></View>
-    <View style={s.card}>
-      <Text style={s.cardTitle}>{tab}</Text>
-      {!newsStatus.loading && !rows.length ? <Text style={s.body}>No verified {tab.toLowerCase()} items are available. GateCEP does not substitute placeholder news.</Text> : null}
+    <ContainedPanel
+      title={`${tab} (${rows.length})`}
+      subtitle="Scroll verified items"
+      emptyMessage={!newsStatus.loading ? `No verified ${tab.toLowerCase()} items are available. GateCEP does not substitute placeholder news.` : "Loading verified news…"}
+      testID="news-contained-panel"
+    >
       {rows.map((item) => <Pressable key={item.id} disabled={!item.url} style={s.row} onPress={() => item.url && Linking.openURL(item.url)}>
         <View style={s.top}><View style={[s.badge, item.trustLevel === "OFFICIAL" ? s.official : s.reported]}><Text style={s.badgeText}>{item.trustLevel === "OFFICIAL" ? "Official" : item.category === "Coach G" ? "Analysis" : "Reported"}</Text></View><Text style={s.date}>{item.date || "Date unavailable"}</Text></View>
         <Text style={s.newsTitle}>{item.symbol ? `${item.symbol} · ` : ""}{item.title}</Text>
@@ -59,7 +63,7 @@ export default function News() {
         <Text style={s.body}>{item.detail}</Text>
         {item.url ? <Text style={s.open}>Open original source ↗</Text> : null}
       </Pressable>)}
-    </View>
+    </ContainedPanel>
   </ScrollView>;
 }
 

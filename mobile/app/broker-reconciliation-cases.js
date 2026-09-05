@@ -172,15 +172,13 @@ export default function BrokerReconciliationCases() {
       <Text
         style={styles.title}
       >
-        Reconciliation Case Registry
+        Practice Reconciliation Cases
       </Text>
 
       <Text
         style={styles.subtitle}
       >
-        Review historical broker
-        reconciliation cases and their
-        lifecycle status.
+        PRACTICE ONLY — review sandbox reconciliation cases and their lifecycle status.
       </Text>
 
       {error ? (

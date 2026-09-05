@@ -22,11 +22,13 @@ import {
 
 import ActiveUserBanner from "../src/components/ActiveUserBanner";
 import { BROKERS } from "../src/constants/brokers";
+import { ContainedPanel } from "../src/components/mobile/MobileUI";
 
 
 export default function BrokerAccountCenter() {
   const [broker, setBroker] = useState(null);
   const [profile, setProfile] = useState(null);
+  const [activePanel, setActivePanel] = useState("connected");
 
   useFocusEffect(
     useCallback(() => {
@@ -114,8 +116,15 @@ setBroker(brokerList.length ? brokerList[0] : null);
 
       <ActiveUserBanner />
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Connected Broker</Text>
+      <View style={styles.panelTabs}>
+        {["connected", "recommendation", "supported"].map((item) => (
+          <Pressable key={item} style={[styles.panelTab, activePanel === item && styles.panelTabActive]} onPress={() => setActivePanel(item)}>
+            <Text style={[styles.panelTabText, activePanel === item && styles.panelTabTextActive]}>{item === "connected" ? "Connected" : item === "recommendation" ? "Coach G" : "Brokers"}</Text>
+          </Pressable>
+        ))}
+      </View>
+
+      {activePanel === "connected" ? <ContainedPanel title="Connected Broker" testID="broker-center-connected-panel">
 
         {broker ? (
           <>
@@ -130,21 +139,17 @@ setBroker(brokerList.length ? brokerList[0] : null);
         ) : (
           <Text style={styles.body}>No broker connected yet.</Text>
         )}
-      </View>
+      </ContainedPanel> : null}
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Coach G Recommendation</Text>
-
+      {activePanel === "recommendation" ? <ContainedPanel title="Coach G Recommendation" testID="broker-center-coach-panel">
         <Text style={styles.body}>
           Based on your current profile, Coach G recommends:
         </Text>
 
         <Text style={styles.recommended}>{recommended}</Text>
-      </View>
+      </ContainedPanel> : null}
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Supported Brokers</Text>
-
+      {activePanel === "supported" ? <ContainedPanel title="Supported Brokers" subtitle="Scroll available broker profiles" testID="broker-center-supported-panel">
         {BROKERS.map((item) => (
           <View key={item.name} style={styles.brokerRow}>
             <View style={{ flex: 1 }}>
@@ -164,7 +169,7 @@ setBroker(brokerList.length ? brokerList[0] : null);
             </Pressable>
           </View>
         ))}
-      </View>
+      </ContainedPanel> : null}
 
       <Pressable
         style={styles.secondary}
@@ -219,6 +224,11 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     marginBottom: 12
   },
+  panelTabs: { flexDirection: "row", gap: 8, marginTop: 18 },
+  panelTab: { flex: 1, minHeight: 44, borderRadius: 14, backgroundColor: "#1e293b", alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
+  panelTabActive: { backgroundColor: "#9333ea" },
+  panelTabText: { color: "#94a3b8", fontWeight: "900", fontSize: 12 },
+  panelTabTextActive: { color: "white" },
   body: { color: "#cbd5e1", lineHeight: 21, marginTop: 8 },
   recommended: {
     color: "#fbbf24",

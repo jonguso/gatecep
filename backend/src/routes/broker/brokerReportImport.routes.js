@@ -1,6 +1,8 @@
 import express from "express";
 import multer from "multer";
 import XLSX from "xlsx";
+import { authRequired } from "../../middleware/authRequired.js";
+import { extractBrokerPdf } from "../../services/brokerReports/brokerPdfExtraction.service.js";
 
 import {
   normalizeHolding,
@@ -17,7 +19,21 @@ import {
 const router = express.Router();
 
 const upload = multer({
-  storage: multer.memoryStorage()
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }
+});
+
+router.post("/extract-pdf", authRequired, upload.single("file"), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ ok: false, error: "PDF file required." });
+    if (req.file.mimetype !== "application/pdf" && !req.file.originalname.toLowerCase().endsWith(".pdf")) {
+      return res.status(415).json({ ok: false, error: "Only PDF broker evidence is accepted." });
+    }
+    const result = await extractBrokerPdf(req.file.buffer, req.body.reportType);
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    res.status(422).json({ ok: false, error: error.message });
+  }
 });
 
 function normalizeBroker(value) {

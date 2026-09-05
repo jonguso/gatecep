@@ -41,8 +41,8 @@ export default function BrokerReconciliationInsight() {
         <StickyActionBar
           secondaryLabel="Resolution"
           onSecondary={() => router.replace("/broker-resolution")}
-          primaryLabel="Finish & Return to Portfolio"
-          onPrimary={() => router.replace("/portfolio-hub")}
+          primaryLabel="Finish Practice Review"
+          onPrimary={() => router.replace("/starter-plan")}
           primaryDisabled={loading}
         />
       }
@@ -50,8 +50,9 @@ export default function BrokerReconciliationInsight() {
       <DeveloperIdentifier>PC-030M3C</DeveloperIdentifier>
       <MobileHeader title="Reconciliation Insight" subtitle="Step 5: understand the result and the next responsible action." onBack={() => router.replace("/broker-resolution")} actionLabel="Refresh" onAction={loadInsight} />
       <JourneyStepper steps={STEPS} activeIndex={4} />
+      <StatusBanner tone="warning" title="PRACTICE ONLY" message="Coach G explains sandbox reconciliation only. REAL portfolio evidence remains isolated." />
 
-      {loading ? <StatusBanner tone="info" title="Coach G is interpreting…" message="Reviewing the current REAL portfolio and verified broker evidence." /> : null}
+      {loading ? <StatusBanner tone="info" title="Coach G is interpreting…" message="Reviewing Practice portfolio and sandbox mirror evidence." /> : null}
       {error ? <StatusBanner tone="danger" title="Insight unavailable" message={error} /> : null}
 
       {insight ? (
@@ -79,7 +80,7 @@ export default function BrokerReconciliationInsight() {
           {issues.length ? (
             <IssuePager issues={issues} renderIssue={(issue) => <InsightIssue issue={issue} />} />
           ) : (
-            <StatusBanner tone="success" title="No reconciliation issues" message="The current holdings and cash evidence match the GateCEP REAL record." />
+            <StatusBanner tone="success" title="No reconciliation issues" message="The Practice holdings and sandbox mirror evidence match." />
           )}
 
           <CollapsibleSection title="Read-Only Protection" summary="Coach G explains; it does not modify portfolios">

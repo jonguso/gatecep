@@ -26,12 +26,12 @@ import {
 } from "./portfolioAccountCatalogService";
 
 const COLORS = ["#22d3ee", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444", "#3b82f6", "#ec4899"];
-const TABS = ["Allocation", "Holdings", "Performance", "More"];
+const TABS = ["Allocation", "Holdings", "More"];
 const ALL_ACCOUNTS = { broker: "ALL", label: "All Accounts", type: "ALL" };
 
 export default function PortfolioHomeScreen() {
   const { user } = useAuth();
-  const { width } = useWindowDimensions();
+  const { width, height } = useWindowDimensions();
   const [tab, setTab] = useState("Allocation");
   const [loading, setLoading] = useState(true);
   const [hasVerifiedData, setHasVerifiedData] = useState(false);
@@ -107,6 +107,7 @@ export default function PortfolioHomeScreen() {
   const diversification = sectorRows.length >= 5 ? "Good" : sectorRows.length >= 3 ? "Moderate" : "Concentrated";
   const firstName = String(user?.username || user?.name || user?.email || "Investor").split(/[\s@.]/)[0];
   const chartSize = Math.min(Math.max(width - 84, 220), 286);
+  const activePanelHeight = Math.min(430, Math.max(310, height * 0.38));
   const authenticatedAgain = notice?.status === "AUTH_REQUIRED" || notice?.status === "AUTH_EXPIRED";
 
   function selectAccount(account) {
@@ -163,6 +164,8 @@ export default function PortfolioHomeScreen() {
           {TABS.map((item) => <Pressable key={item} style={[styles.tab, tab === item && styles.tabActive]} onPress={() => setTab(item)}><Text style={tab === item ? styles.tabTextActive : styles.tabText}>{item}</Text></Pressable>)}
         </View>
 
+        <View style={[styles.activePanel, { height: activePanelHeight }]}>
+        <ScrollView nestedScrollEnabled showsVerticalScrollIndicator contentContainerStyle={styles.activePanelContent}>
         {tab === "Allocation" ? (
           <>
             <View style={styles.primaryCard}>
@@ -189,17 +192,9 @@ export default function PortfolioHomeScreen() {
           </View>
         ) : null}
 
-        {tab === "Performance" ? (
-          <View style={styles.primaryCard}>
-            <Text style={styles.cardTitle}>Verified Performance</Text>
-            <Text style={styles.cardHint}>Current value compared with the actual recorded cost basis.</Text>
-            <View style={styles.performanceHero}><Text style={styles.performanceLabel}>TOTAL RETURN</Text><Text style={Number(summary.totalGain || 0) >= 0 ? styles.performanceGain : styles.performanceLoss}>KES {money(summary.totalGain)}</Text><Text style={styles.performancePct}>{number(summary.totalGainPct).toFixed(2)}%</Text></View>
-            <StatusBanner tone="info" title="Historical periods and benchmark" message="Open Performance for genuine snapshot history. Unavailable periods remain N/A rather than becoming synthetic returns." />
-            <PrimaryRoute label="Open Performance Details" route="/performance" />
-          </View>
-        ) : null}
-
         {tab === "More" ? <MoreDestinations /> : null}
+        </ScrollView>
+        </View>
 
         <AccountModal visible={accountModalOpen} accounts={accounts} selected={selectedAccount} onSelect={selectAccount} onClose={() => setAccountModalOpen(false)} />
         <SectorModal sector={selectedSector} onClose={() => setSelectedSector(null)} />
@@ -309,6 +304,7 @@ const styles = StyleSheet.create({
   signInButton: { backgroundColor: "#7f1d1d", borderRadius: 13, minHeight: 46, marginTop: 8, alignItems: "center", justifyContent: "center" }, signInText: { color: "white", fontWeight: "900" },
   hero: { marginTop: 12, backgroundColor: "#1d0b38", borderColor: "#6b21a8", borderWidth: 1, borderRadius: 21, padding: 16 }, heroLabel: { color: "#d8b4fe", fontSize: 10, fontWeight: "900" }, heroValue: { color: "white", fontSize: 30, fontWeight: "900", marginTop: 4 }, gain: { color: "#86efac", fontWeight: "900", fontSize: 12, marginTop: 4 }, loss: { color: "#fca5a5", fontWeight: "900", fontSize: 12, marginTop: 4 }, quickMetrics: { flexDirection: "row", gap: 8, marginTop: 13 }, quickMetric: { flex: 1, minWidth: 0, backgroundColor: "#09051d", borderRadius: 12, padding: 10 }, quickLabel: { color: "#94a3b8", fontSize: 9 }, quickValue: { color: "white", fontWeight: "900", fontSize: 12, marginTop: 4 },
   tabs: { flexDirection: "row", gap: 6, marginTop: 12 }, tab: { flex: 1, minWidth: 0, minHeight: 44, borderRadius: 13, backgroundColor: "#1e293b", alignItems: "center", justifyContent: "center", paddingHorizontal: 4 }, tabActive: { backgroundColor: "#9333ea" }, tabText: { color: "#94a3b8", fontWeight: "900", fontSize: 11 }, tabTextActive: { color: "white", fontWeight: "900", fontSize: 11 },
+  activePanel: { marginTop: 12, overflow: "hidden" }, activePanelContent: { paddingBottom: 8 },
   primaryCard: { marginTop: 12, backgroundColor: "#0f172a", borderColor: "#1e293b", borderWidth: 1, borderRadius: 20, padding: 15 }, cardHeader: { flexDirection: "row", alignItems: "center", gap: 12 }, cardTitle: { color: "#67e8f9", fontSize: 18, fontWeight: "900" }, cardHint: { color: "#94a3b8", fontSize: 11, marginTop: 4 }, sectorCount: { color: "#c084fc", fontSize: 11, fontWeight: "900" }, flex: { flex: 1 }, allocationMetrics: { flexDirection: "row", gap: 7, marginTop: 12 }, allocationMetric: { flex: 1, minWidth: 0, minHeight: 62, borderRadius: 13, borderColor: "#334155", borderWidth: 1, backgroundColor: "#020617", padding: 9, justifyContent: "center" }, allocationMetricLabel: { color: "#94a3b8", fontSize: 9 }, allocationMetricValue: { color: "white", fontSize: 11, fontWeight: "900", marginTop: 5 }, chart: { alignItems: "center", justifyContent: "center", marginVertical: 5 }, chartHint: { color: "#94a3b8", fontSize: 10, marginTop: -4, marginBottom: 5 },
   sectorRow: { minHeight: 58, flexDirection: "row", alignItems: "center", gap: 7, borderTopColor: "#1e293b", borderTopWidth: 1, paddingHorizontal: 4 }, sectorRowPressed: { backgroundColor: "#1e293b" }, dot: { width: 10, height: 10, borderRadius: 5 }, sectorDirection: { width: 13, fontWeight: "900", textAlign: "center" }, sectorUp: { color: "#86efac", fontWeight: "900", fontSize: 10 }, sectorDown: { color: "#fca5a5", fontWeight: "900", fontSize: 10 }, sectorFlat: { color: "#94a3b8", fontWeight: "900", fontSize: 10 }, sectorName: { color: "#e2e8f0", fontWeight: "800", flex: 1 }, sectorNumbers: { alignItems: "flex-end", minWidth: 64 }, sectorValue: { color: "white", fontWeight: "900", fontSize: 10 }, sectorWeight: { color: "#e2e8f0", fontWeight: "900", fontSize: 10, width: 43, textAlign: "right" }, sectorArrow: { color: "#67e8f9", fontWeight: "900", fontSize: 22 }, sectorToggle: { minHeight: 46, marginTop: 10, borderRadius: 13, backgroundColor: "#1e293b", alignItems: "center", justifyContent: "center" }, sectorToggleText: { color: "#67e8f9", fontWeight: "900" }, moreHint: { color: "#94a3b8", textAlign: "center", marginTop: 12, fontSize: 11 },
   coachCard: { marginTop: 12, backgroundColor: "#062031", borderColor: "#0e7490", borderWidth: 1, borderRadius: 18, padding: 14, flexDirection: "row", alignItems: "center" }, coachLabel: { color: "#67e8f9", fontSize: 10, fontWeight: "900" }, coachText: { color: "white", lineHeight: 19, fontWeight: "700", marginTop: 5 }, arrow: { color: "#c084fc", fontSize: 24, fontWeight: "900", marginLeft: 8 },
