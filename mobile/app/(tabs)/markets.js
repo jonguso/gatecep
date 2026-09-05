@@ -1,12 +1,13 @@
 import { router, useFocusEffect } from "expo-router";
 import { userGetItem } from "../../src/auth/userStorage";
-import React, { useMemo, useState, useCallback } from "react";
+import React, { useMemo, useState, useCallback, useEffect, useRef } from "react";
 import {
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View
 } from "react-native";
 import ActiveUserBanner from "../../src/components/ActiveUserBanner";
@@ -17,17 +18,20 @@ import {
   MARKET_TABS,
   INDEX_ROWS,
   getMarketSummary,
-  getRowsForTab
+  getRowsForTab,
+  getTurnoverMetric
 } from "../../src/markets/marketHubData";
 import useMarketData from "../../src/services/markets/useMarketData";
 
 export default function Markets() {
+  const { height: windowHeight } = useWindowDimensions();
   const [tab, setTab] = useState("Equities");
   const [search, setSearch] = useState("");
-  const [showIndices, setShowIndices] = useState(false);
-  const [showWatchlist, setShowWatchlist] = useState(false);
+  const [activePanel, setActivePanel] = useState("market");
   const [watchlist, setWatchlist] = useState([]);
   const market = useMarketData();
+  const resultsScrollRef = useRef(null);
+  const resultsPanelHeight = Math.min(430, Math.max(310, windowHeight * 0.38));
 
   const summary = useMemo(() => getMarketSummary(market.rows), [market.rows]);
 
@@ -44,6 +48,10 @@ export default function Markets() {
         row.name.toLowerCase().includes(search.toLowerCase())
     );
   }, [tab, search, market.rows]);
+
+  useEffect(() => {
+    resultsScrollRef.current?.scrollTo({ y: 0, animated: false });
+  }, [tab, search]);
 
   useFocusEffect(
   useCallback(() => {
@@ -107,7 +115,10 @@ async function loadWatchlist() {
               styles.tabButton,
               tab === item && styles.activeTab
             ]}
-            onPress={() => setTab(item)}
+            onPress={() => {
+              setTab(item);
+              setActivePanel("market");
+            }}
           >
             <Text
               style={
@@ -122,14 +133,14 @@ async function loadWatchlist() {
         ))}
       </View>
 
-      {tab === "Summary" && (
+      {activePanel === "market" && tab === "Summary" && (
         <View style={styles.card}>
           <Text style={styles.cardTitle}>
             Market Summary
           </Text>
 
           <View style={styles.summaryStrip}>
-  <SummaryBox label="Turnover" value={`KES ${money(summary.turnover)}`} />
+  <SummaryBox label={summary.turnoverEstimated ? "Est. Turnover" : "Turnover"} value={`KES ${money(summary.turnover)}`} />
   <SummaryBox label="Volume" value={summary.volume.toLocaleString()} />
   <SummaryBox label="Securities" value={summary.securities.toLocaleString()} />
   <SummaryBox label="Gainers" value={summary.gainers} positive />
@@ -139,7 +150,7 @@ async function loadWatchlist() {
         </View>
       )}
 
-       {tab !== "Summary" && (
+       {activePanel === "market" && tab !== "Summary" && (
         <>
           <TextInput
             value={search}
@@ -149,10 +160,13 @@ async function loadWatchlist() {
             style={styles.search}
           />
 
-          <View style={styles.card}>
-            <Text style={styles.cardTitle}>
-              {tab} ({rows.length})
-            </Text>
+          <View style={[styles.card, styles.resultsCard, { height: resultsPanelHeight }]}>
+            <View style={styles.resultsHeader}>
+              <Text style={styles.cardTitle}>
+                {tab} ({rows.length})
+              </Text>
+              <Text style={styles.scrollHint}>Scroll securities ↕</Text>
+            </View>
 
             {!market.loading && rows.length === 0 ? (
               <Text style={styles.emptyText}>
@@ -166,6 +180,14 @@ async function loadWatchlist() {
               </Text>
             ) : null}
 
+            <ScrollView
+              ref={resultsScrollRef}
+              style={styles.resultsScroll}
+              contentContainerStyle={styles.resultsContent}
+              nestedScrollEnabled
+              showsVerticalScrollIndicator
+              keyboardShouldPersistTaps="handled"
+            >
             {rows.map((row) => (
               <Pressable
                 key={row.symbol}
@@ -185,41 +207,25 @@ async function loadWatchlist() {
                   </Text>
                 </View>
 
-                <View>
-                  <Text style={styles.price}>
-                    {Number(row.price).toFixed(2)}
-                  </Text>
-
-                  <Text
-                    style={
-                      row.changePct >= 0
-                        ? styles.positive
-                        : styles.negative
-                    }
-                  >
-                    {row.changePct >= 0 ? "+" : ""}
-                    {row.changePct.toFixed(2)}%
-                  </Text>
-                </View>
+                <MarketRowMetric tab={tab} row={row} />
                 <Text style={styles.rowChevron}>›</Text>
               </Pressable>
             ))}
+            </ScrollView>
           </View>
         </>
       )}
 
       <Pressable
         style={styles.expandCard}
-        onPress={() =>
-          setShowIndices(!showIndices)
-        }
+        onPress={() => setActivePanel(activePanel === "indices" ? "market" : "indices")}
       >
         <Text style={styles.expandTitle}>
-          {showIndices ? "−" : "+"} Indices
+          {activePanel === "indices" ? "−" : "+"} Indices
         </Text>
       </Pressable>
 
-      {showIndices && (
+      {activePanel === "indices" && (
   <View style={styles.card}>
     {INDEX_ROWS.map((item) => (
       <View
@@ -275,14 +281,14 @@ async function loadWatchlist() {
 
       <Pressable
   style={styles.expandCard}
-  onPress={() => setShowWatchlist(!showWatchlist)}
+  onPress={() => setActivePanel(activePanel === "watchlist" ? "market" : "watchlist")}
 >
   <View style={styles.expandHeader}>
     <Text style={styles.expandTitle}>
-      {showWatchlist ? "−" : "+"} Watchlist
+      {activePanel === "watchlist" ? "−" : "+"} Watchlist
     </Text>
 
-    {showWatchlist ? (
+    {activePanel === "watchlist" ? (
       <Pressable
         style={styles.manageBtn}
         onPress={() => router.push("/watchlist")}
@@ -293,14 +299,25 @@ async function loadWatchlist() {
   </View>
 </Pressable>
 
-{showWatchlist && (
-  <View style={styles.card}>
+{activePanel === "watchlist" && (
+  <View style={[styles.card, styles.resultsCard, { height: resultsPanelHeight }]}>
+    <View style={styles.resultsHeader}>
+      <Text style={styles.cardTitle}>Watchlist ({watchlist.length})</Text>
+      <Text style={styles.scrollHint}>Scroll securities ↕</Text>
+    </View>
     {watchlist.length === 0 ? (
-      <Text style={styles.body}>
+      <Text style={styles.emptyText}>
         No securities selected.
       </Text>
     ) : (
-     watchlist.map((symbol) => {
+      <ScrollView
+        style={styles.resultsScroll}
+        contentContainerStyle={styles.resultsContent}
+        nestedScrollEnabled
+        showsVerticalScrollIndicator
+        keyboardShouldPersistTaps="handled"
+      >
+      {watchlist.map((symbol) => {
   const stock =
     getRowsForTab("Equities", market.rows).find(
       (item) => item.symbol === symbol
@@ -368,7 +385,8 @@ async function loadWatchlist() {
   </View>
 </Pressable>
    );
-})
+})}
+      </ScrollView>
 
     )}
   </View>
@@ -390,6 +408,36 @@ function SummaryBox({ label, value, positive, negative }) {
         ]}
       >
         {value}
+      </Text>
+    </View>
+  );
+}
+
+function MarketRowMetric({ tab, row }) {
+  if (tab === "Volume") {
+    return (
+      <View style={styles.rowMetric}>
+        <Text style={styles.metricCaption}>Volume</Text>
+        <Text style={styles.activityValue}>{Number(row.volume || 0).toLocaleString()}</Text>
+      </View>
+    );
+  }
+
+  if (tab === "Turnover") {
+    const turnover = getTurnoverMetric(row);
+    return (
+      <View style={styles.rowMetric}>
+        <Text style={styles.metricCaption}>{turnover.estimated ? "Est. turnover" : "Turnover"}</Text>
+        <Text style={styles.activityValue}>KES {money(turnover.value)}</Text>
+      </View>
+    );
+  }
+
+  return (
+    <View style={styles.rowMetric}>
+      <Text style={styles.price}>{Number(row.price).toFixed(2)}</Text>
+      <Text style={Number(row.changePct || 0) >= 0 ? styles.positive : styles.negative}>
+        {Number(row.changePct || 0) >= 0 ? "+" : ""}{Number(row.changePct || 0).toFixed(2)}%
       </Text>
     </View>
   );
@@ -476,6 +524,32 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     fontSize: 18,
     marginBottom: 12
+  },
+
+  resultsCard: {
+    overflow: "hidden"
+  },
+
+  resultsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 10
+  },
+
+  scrollHint: {
+    color: "#94a3b8",
+    fontSize: 11,
+    fontWeight: "800",
+    marginBottom: 12
+  },
+
+  resultsScroll: {
+    flex: 1
+  },
+
+  resultsContent: {
+    paddingBottom: 8
   },
   educationPrompt: {
     color: "#67e8f9",
@@ -587,6 +661,24 @@ const styles = StyleSheet.create({
   price: {
     color: "white",
     fontWeight: "900",
+    textAlign: "right"
+  },
+
+  rowMetric: {
+    minWidth: 118,
+    alignItems: "flex-end"
+  },
+
+  metricCaption: {
+    color: "#94a3b8",
+    fontSize: 10,
+    fontWeight: "800"
+  },
+
+  activityValue: {
+    color: "#86efac",
+    fontWeight: "900",
+    marginTop: 3,
     textAlign: "right"
   },
 

@@ -20,6 +20,21 @@ function finiteNumber(value) {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
+export function getTurnoverMetric(row = {}) {
+  const reported = finiteNumber(row.turnover);
+  if (reported > 0) {
+    return { value: reported, estimated: false };
+  }
+
+  const price = finiteNumber(row.price);
+  const volume = finiteNumber(row.volume);
+  if (price > 0 && volume > 0) {
+    return { value: price * volume, estimated: true };
+  }
+
+  return { value: 0, estimated: false };
+}
+
 export const INDEX_ROWS = [
   {
     symbol: "^NASI",
@@ -60,10 +75,8 @@ export function getMarketSummary(rows = []) {
   const gainers = marketRows.filter((row) => Number(row.changePct) > 0).length;
   const decliners = marketRows.filter((row) => Number(row.changePct) < 0).length;
 
-  const turnover = marketRows.reduce(
-    (sum, row) => sum + Number(row.turnover || 0),
-    0
-  );
+  const turnoverMetrics = marketRows.map(getTurnoverMetric);
+  const turnover = turnoverMetrics.reduce((sum, metric) => sum + metric.value, 0);
 
   const volume = marketRows.reduce(
     (sum, row) => sum + Number(row.volume || 0),
@@ -72,6 +85,7 @@ export function getMarketSummary(rows = []) {
 
   return {
     turnover,
+    turnoverEstimated: turnoverMetrics.some((metric) => metric.estimated),
     volume,
     securities: marketRows.length,
     gainers,
@@ -106,8 +120,8 @@ export function getRowsForTab(tab, rows = []) {
 
   if (tab === "Turnover") {
     return [...marketRows]
-      .filter((row) => finiteNumber(row.turnover) > 0)
-      .sort((a, b) => finiteNumber(b.turnover) - finiteNumber(a.turnover))
+      .filter((row) => getTurnoverMetric(row).value > 0)
+      .sort((a, b) => getTurnoverMetric(b).value - getTurnoverMetric(a).value)
       .slice(0, MARKET_RANK_LIMITS.Turnover);
   }
 
