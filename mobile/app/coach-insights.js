@@ -12,27 +12,21 @@ import {
 import { router, useFocusEffect } from "expo-router";
 import { createBasketExecution } from "../src/trade/basketExecutionStore";
 import {
-  RECOMMENDATION_STATUS,
-  saveRecommendationRecord,
-  updateRecommendationStatus
+  RECOMMENDATION_STATUS
 } from "../src/coach/recommendationLifecycleStore";
 
 import { loadUnifiedPortfolio } from "../src/portfolio/unifiedPortfolioApi";
 import ActiveUserBanner from "../src/components/ActiveUserBanner";
 import { buildCoachPortfolioReview } from "../src/portfolio/coachPortfolioReview";
-import { buildPerformanceAttribution } from "../src/portfolio/performanceAttribution";
 import { saveTradeBasket } from "../src/trade/tradeBasketStore";
 import {
   userGetItem,
   userSetItem
 } from "../src/auth/userStorage";
-import { loadCanonicalRealTransactionHistory } from "../src/features/wealth-journey/canonicalRealBehaviorHistoryService";
 
 export default function Coach() {
   const [portfolio, setPortfolio] = useState([]);
   const [dashboardContext, setDashboardContext] = useState(null);
-  const [transactionsUploaded, setTransactionsUploaded] = useState(false);
-  const [transactions, setTransactions] = useState([]);
   const [recommendationHistory, setRecommendationHistory] = useState([]);
 
   const [amount, setAmount] = useState(10000);
@@ -46,7 +40,6 @@ export default function Coach() {
   const [goalOpen, setGoalOpen] = useState(false);
   const [scenarioOpen, setScenarioOpen] = useState(false);
   const [showResults, setShowResults] = useState(false);
-  const [attribution, setAttribution] = useState(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -58,21 +51,14 @@ export default function Coach() {
     const portfolioData = await loadUnifiedPortfolio();
     const savedPortfolio = portfolioData?.holdings || [];
     const contextRaw = await userGetItem("coachContext");
-    const txUploadedRaw = await userGetItem("transactionsUploaded");
-    const scopedTransactions = await loadCanonicalRealTransactionHistory();
-    const historyRaw = await userGetItem("recommendationHistory");
+    const historyRaw = await userGetItem("practiceCoachRecommendationHistory");
 
     setPortfolio(savedPortfolio);
-    setTransactions(scopedTransactions);
-    setAttribution(
-      buildPerformanceAttribution(savedPortfolio, scopedTransactions)
-    );
 
     if (contextRaw) {
       setDashboardContext(JSON.parse(contextRaw));
     }
 
-    setTransactionsUploaded(txUploadedRaw === "true" && scopedTransactions.length > 0);
     setRecommendationHistory(historyRaw ? JSON.parse(historyRaw) : []);
   }
 
@@ -176,7 +162,8 @@ export default function Coach() {
   }
 
  async function saveRecommendation() {
-  const record = await saveRecommendationRecord({
+  const record = {
+    id: `PRACTICE-COACH-${Date.now()}`,
     portfolioValue: value,
     largestSector,
     amount,
@@ -186,13 +173,18 @@ export default function Coach() {
     sectorPlan,
     status: RECOMMENDATION_STATUS.SAVED,
     executionStatus: "NOT_STARTED",
+    source: "PRACTICE_COACH_G_SIMULATION",
+    isPractice: true,
+    isReal: false,
+    createdAt: new Date().toISOString(),
     version: "3.8.1"
-  });
+  };
 
-  const historyRaw = await userGetItem("recommendationHistory");
-  setRecommendationHistory(historyRaw ? JSON.parse(historyRaw) : []);
+  const nextHistory = [record, ...recommendationHistory].slice(0, 100);
+  await userSetItem("practiceCoachRecommendationHistory", JSON.stringify(nextHistory));
+  setRecommendationHistory(nextHistory);
 
-  Alert.alert("Saved", "Coach G strategy saved to your profile.");
+  Alert.alert("Practice strategy saved", "This simulation was saved only inside the Practice Lab.");
 
   return record;
 }
@@ -232,89 +224,10 @@ export default function Coach() {
 
 await createBasketExecution();
 
-if (latestStrategy?.id) {
-  await updateRecommendationStatus(
-    latestStrategy.id,
-    RECOMMENDATION_STATUS.BASKET_CREATED,
-    {
-      executionStatus: "BASKET_CREATED",
-      basketCreatedAt: new Date().toISOString(),
-      basketCount: basketItems.length,
-      message: "Trade basket created from Coach G recommendation."
-    }
-  );
-}
 setShowResults(false);
 setShowSimulator(false);
 
 router.push("/(tabs)/trading");
-  }
-
-  function buildBehaviorInsights() {
-    if (!transactionsUploaded || !transactions.length) {
-      return [
-        "Upload transaction history so Coach G can analyze buying and selling behavior."
-      ];
-    }
-
-    const buys = transactions.filter(
-      (t) => String(t.side || "").toUpperCase() === "BUY"
-    );
-
-    const sells = transactions.filter(
-      (t) => String(t.side || "").toUpperCase() === "SELL"
-    );
-
-    const totalValue = transactions.reduce(
-      (sum, t) => sum + Number(t.value || 0),
-      0
-    );
-
-    const avgTrade = transactions.length > 0 ? totalValue / transactions.length : 0;
-
-    const symbolCount = {};
-
-    buys.forEach((t) => {
-      const symbol = String(t.symbol || "").toUpperCase();
-
-      if (symbol) {
-        symbolCount[symbol] = (symbolCount[symbol] || 0) + 1;
-      }
-    });
-
-    const repeatedBuys = Object.entries(symbolCount)
-      .filter(([, count]) => count >= 2)
-      .map(([symbol]) => symbol);
-
-    const heavyRepeatBuys = Object.entries(symbolCount)
-      .filter(([, count]) => count >= 3)
-      .map(([symbol]) => symbol);
-
-    const insights = [];
-
-    insights.push(
-      `Coach G reviewed ${transactions.length} transactions (${buys.length} buys / ${sells.length} sells).`
-    );
-
-    insights.push(`Average trade size: KES ${money(avgTrade)}.`);
-
-    if (repeatedBuys.length > 0) {
-      insights.push(`Repeated accumulation detected in ${repeatedBuys.join(", ")}.`);
-    }
-
-    if (heavyRepeatBuys.length > 0) {
-      insights.push(
-        `Heavy repeat buying detected in ${heavyRepeatBuys.join(", ")}. Watch concentration risk.`
-      );
-    }
-
-    if (transactions.length >= 15) {
-      insights.push(
-        "Trading frequency appears elevated. Coach G will monitor for overtrading."
-      );
-    }
-
-    return insights;
   }
 
   function buildSectorDetails(sector) {
@@ -419,7 +332,7 @@ router.push("/(tabs)/trading");
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Coach G Recommendation Workspace</Text>
+        <Text style={styles.title}>Practice Coach G Lab</Text>
 
         <Pressable
           style={styles.dashboardButton}
@@ -435,15 +348,22 @@ router.push("/(tabs)/trading");
           }
         >
           <Text style={styles.dashboardButtonText}>
-            Coach G
+            REAL Coach G
           </Text>
         </Pressable>
       </View>
 
       <ActiveUserBanner />
 
+      <View style={styles.practiceBanner}>
+        <Text style={styles.practiceLabel}>PRACTICE ONLY</Text>
+        <Text style={styles.practiceText}>
+          Simulations use your REAL portfolio as a read-only baseline. They never place broker orders, change REAL holdings, or create REAL execution evidence.
+        </Text>
+      </View>
+
       <View style={styles.card}>
-        <Text style={styles.section}>Recommendation & Execution Review</Text>
+        <Text style={styles.section}>Read-only Scenario Baseline</Text>
 
         <Text style={styles.metric2}>
           {portfolioReview.score}/100 ({portfolioReview.rating})
@@ -485,15 +405,11 @@ router.push("/(tabs)/trading");
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.section}>Analysis Center</Text>
+        <Text style={styles.section}>Practice Records</Text>
 
         <View style={styles.quickGrid}>
-          <QuickCard title="My Holdings" desc="View current positions" route="/holding-details" />
-          <QuickCard title="Performance" desc="Track portfolio growth" route="/performance" />
-          <QuickCard title="Activity" desc="View portfolio audit trail" route="/portfolio-activity" />
-          <QuickCard title="Watchlist" desc="Track stocks and Coach G signals" route="/watchlist" />
-          <QuickCard title="Order Book" desc="Review open orders" route="/order-book" />
-          <QuickCard title="Trade History" desc="Review completed trades" route="/trade-history" />
+          <QuickCard title="Practice Order Book" desc="Review simulated orders only" route="/order-book" />
+          <QuickCard title="Practice Trade History" desc="Review simulated trades only" route="/trade-history" />
         </View>
       </View>
 
@@ -510,65 +426,7 @@ router.push("/(tabs)/trading");
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.section}>Behavior Analysis</Text>
-        {buildBehaviorInsights().map((item, index) => (
-          <Text key={index} style={styles.body}>• {item}</Text>
-        ))}
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.section}>Performance Attribution</Text>
-
-        <Text style={styles.body}>
-          Best performer:{" "}
-          {attribution?.bestPerformer
-            ? `${attribution.bestPerformer.symbol} (${Number(
-                attribution.bestPerformer.profitLossPct || 0
-              ).toFixed(2)}%)`
-            : "N/A"}
-        </Text>
-
-        <Text style={styles.body}>
-          Worst performer:{" "}
-          {attribution?.worstPerformer
-            ? `${attribution.worstPerformer.symbol} (${Number(
-                attribution.worstPerformer.profitLossPct || 0
-              ).toFixed(2)}%)`
-            : "N/A"}
-        </Text>
-
-        <Text style={styles.body}>
-          Largest position:{" "}
-          {attribution?.largestPosition
-            ? `${attribution.largestPosition.symbol} - KES ${money(
-                attribution.largestPosition.marketValue ||
-                  attribution.largestPosition.value
-              )}`
-            : "N/A"}
-        </Text>
-
-        <Text style={styles.body}>
-          Most accumulated:{" "}
-          {attribution?.mostAccumulated
-            ? `${attribution.mostAccumulated.symbol} (${attribution.mostAccumulated.buys} buys)`
-            : "N/A"}
-        </Text>
-
-        <Text style={styles.body}>
-          Most traded:{" "}
-          {attribution?.mostTraded
-            ? `${attribution.mostTraded.symbol} (${attribution.mostTraded.trades} trades)`
-            : "N/A"}
-        </Text>
-
-        <Text style={styles.body}>
-          Estimated annual dividend income: KES{" "}
-          {money(attribution?.estimatedDividendIncome || 0)}
-        </Text>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.section}>Latest Saved Strategy</Text>
+        <Text style={styles.section}>Latest Practice Strategy</Text>
 
         {latestStrategy ? (
           <>
@@ -578,7 +436,7 @@ router.push("/(tabs)/trading");
           </>
         ) : (
           <Text style={styles.body}>
-            No saved strategy yet. Run a simulation and save it to your profile.
+            No Practice strategy yet. Run a simulation to create one.
           </Text>
         )}
       </View>
@@ -590,7 +448,7 @@ router.push("/(tabs)/trading");
           setShowSimulator(true);
         }}
       >
-        <Text style={styles.primaryText}>Simulate Coach G Recommendations</Text>
+        <Text style={styles.primaryText}>Start Practice Recommendation Simulation</Text>
       </Pressable>
 
       <View style={styles.card}>
@@ -673,9 +531,9 @@ function SimulatorModal({
         <View style={styles.simulatorModal}>
           <View style={styles.popupHeader}>
             <View style={{ flex: 1 }}>
-              <Text style={styles.popupTitle}>Coach G Investment Simulator</Text>
+              <Text style={styles.popupTitle}>Practice Investment Simulator</Text>
               <Text style={styles.body}>
-                Test how new money could improve your portfolio.
+                Test a hypothetical allocation. No REAL portfolio or broker record will change.
               </Text>
             </View>
 
@@ -799,7 +657,7 @@ function SimulatorModal({
                   style={styles.primary}
                   onPress={createTradeBasketFromRecommendation}
                 >
-                  <Text style={styles.primaryText}>Create Trade Basket</Text>
+                  <Text style={styles.primaryText}>Create Practice Trade Basket</Text>
                 </Pressable>
               </View>
             </View>
@@ -940,6 +798,16 @@ const styles = StyleSheet.create({
     borderColor: "#1e293b",
     borderWidth: 1
   },
+  practiceBanner: {
+    marginTop: 18,
+    padding: 18,
+    backgroundColor: "rgba(147,51,234,.16)",
+    borderRadius: 20,
+    borderColor: "#a855f7",
+    borderWidth: 1
+  },
+  practiceLabel: { color: "#e9d5ff", fontWeight: "900", fontSize: 16 },
+  practiceText: { marginTop: 8, color: "#ddd6fe", lineHeight: 20 },
   label: { color: "#94a3b8", marginTop: 8 },
   metric: { fontSize: 30, fontWeight: "900", color: "#67e8f9" },
   metric2: { fontSize: 24, fontWeight: "900", color: "white" },

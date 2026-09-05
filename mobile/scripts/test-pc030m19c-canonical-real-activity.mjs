@@ -18,12 +18,14 @@ assert.match(canonical, /gatecepExecutionAuditLoaded: false/);
 assert.match(canonical, /NONE_GATECEP_PRACTICE_ONLY/);
 assert.doesNotMatch(canonical, /loadExecutionAuditTrail/);
 
-for (const consumer of [coach, insights, alerts, sync, activity]) {
+for (const consumer of [coach, alerts, sync, activity]) {
   assert.match(consumer, /loadCanonicalRealTransactionHistory/);
 }
-for (const consumer of [coach, insights, alerts, sync]) {
+for (const consumer of [coach, alerts, sync]) {
   assert.doesNotMatch(consumer, /userGetItem\("transactionHistory"\)/);
 }
+assert.match(insights, /PRACTICE ONLY/);
+assert.doesNotMatch(insights, /loadCanonicalRealTransactionHistory/);
 
 assert.match(sync, /transactions\.length > 0/);
 assert.match(activity, /tx\.executionDate/);

@@ -1,6 +1,11 @@
 const clean = (value) => String(value ?? "").trim();
 
-function normalizeDate(value) {
+const MONTHS = {
+  JAN: 1, FEB: 2, MAR: 3, APR: 4, MAY: 5, JUN: 6,
+  JUL: 7, AUG: 8, SEP: 9, OCT: 10, NOV: 11, DEC: 12
+};
+
+export function normalizeBrokerStatementDate(value) {
   if (value instanceof Date && !Number.isNaN(value.getTime())) {
     return value.toISOString().slice(0, 10);
   }
@@ -18,6 +23,14 @@ function normalizeDate(value) {
 
   const dayFirst = text.match(/\b(\d{1,2})[-/.](\d{1,2})[-/.](20\d{2})\b/);
   if (dayFirst) return validDate(Number(dayFirst[3]), Number(dayFirst[2]), Number(dayFirst[1]));
+
+  // Broker PDFs commonly use 03-Sep-2026. Hermes does not guarantee that
+  // Date.parse understands this non-ISO format, so normalize it explicitly.
+  const namedMonth = text.match(/\b(\d{1,2})[-/\s]([A-Za-z]{3,9})[-/\s](20\d{2})\b/);
+  if (namedMonth) {
+    const month = MONTHS[namedMonth[2].slice(0, 3).toUpperCase()];
+    if (month) return validDate(Number(namedMonth[3]), month, Number(namedMonth[1]));
+  }
 
   const parsed = new Date(text);
   return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
@@ -40,21 +53,21 @@ export function extractStatementEffectiveDate(rows = []) {
     for (const [key, value] of entries) {
       const normalizedKey = clean(key).toUpperCase().replace(/[^A-Z0-9]/g, "");
       if (acceptedKeys.has(normalizedKey)) {
-        const date = normalizeDate(value);
+        const date = normalizeBrokerStatementDate(value);
         if (date) return date;
       }
 
       const valueText = clean(value);
       const labelInValue = valueText.match(/(?:statement|as\s*of|balance|valuation|report|effective)\s*date\s*[:=-]?\s*(.+)$/i);
       if (labelInValue) {
-        const date = normalizeDate(labelInValue[1]);
+        const date = normalizeBrokerStatementDate(labelInValue[1]);
         if (date) return date;
       }
 
       if (/(?:statement|asof|balance|valuation|report|effective)date/i.test(valueText.replace(/[^A-Za-z0-9]/g, ""))) {
         for (const [, candidate] of entries) {
           if (candidate === value) continue;
-          const date = normalizeDate(candidate);
+          const date = normalizeBrokerStatementDate(candidate);
           if (date) return date;
         }
       }
@@ -71,7 +84,7 @@ export function extractStatementEffectiveDate(rows = []) {
     for (const [key, value] of Object.entries(row || {})) {
       const normalizedKey = clean(key).toUpperCase().replace(/[^A-Z0-9]/g, "");
       if (!dateColumnKeys.has(normalizedKey)) continue;
-      const date = normalizeDate(value);
+      const date = normalizeBrokerStatementDate(value);
       if (date) datedEntries.push(date);
     }
   }
@@ -92,7 +105,7 @@ export function hasConnectedRealBrokerAccount(accounts = []) {
 export function requireVerifiedBrokerCashEvidence({ cashBalance, statementEffectiveDate, accountIdentity } = {}) {
   const amount = Number(cashBalance);
   if (!Number.isFinite(amount) || amount < 0) throw new Error("Verified broker cash evidence requires a valid balance.");
-  const effectiveDate = normalizeDate(statementEffectiveDate);
+  const effectiveDate = normalizeBrokerStatementDate(statementEffectiveDate);
   if (!effectiveDate) throw new Error("The broker statement effective date is required.");
   if (!accountIdentity || accountIdentity.identityStatus !== "VERIFIED") {
     throw new Error("Verified broker account identity is required.");

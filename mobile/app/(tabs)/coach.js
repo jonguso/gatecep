@@ -430,14 +430,12 @@ export default function Coach() {
 
         <View style={styles.quickGrid}>
           <QuickCard title="Wealth Journey" desc="Review goals, progress, and Coach G check-ins" route="/wealth-journey" />
-          <QuickCard title="Recommendation Workspace" desc="Review saved recommendations and prepare a trade basket" route="/coach-insights" />
+          <QuickCard title="Practice Recommendation Lab" desc="Run clearly separated simulations without changing your REAL portfolio" route="/coach-insights" />
           <QuickCard title="Portfolio Hub" desc="Open your current portfolio view" route="/portfolio-hub" />
           <QuickCard title="My Holdings" desc="View current positions" route="/holding-details" />
           <QuickCard title="Performance" desc="Track portfolio growth" route="/performance" />
           <QuickCard title="Activity" desc="View portfolio audit trail" route="/portfolio-activity" />
           <QuickCard title="Watchlist" desc="Track stocks and Coach G signals" route="/watchlist" />
-          <QuickCard title="Order Book" desc="Review open orders" route="/order-book" />
-          <QuickCard title="Trade History" desc="Review completed trades" route="/trade-history" />
         </View>
       </View>
 
@@ -485,7 +483,7 @@ export default function Coach() {
           setShowSimulator(true);
         }}
       >
-        <Text style={styles.primaryText}>Simulate Coach G Recommendations</Text>
+        <Text style={styles.primaryText}>Preview Advisory Scenario</Text>
       </Pressable>
 
       <View style={styles.card}>

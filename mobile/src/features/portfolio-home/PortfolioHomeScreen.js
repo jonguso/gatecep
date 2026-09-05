@@ -229,7 +229,7 @@ function CoachSummary({ largestSector, diversification }) {
   const message = largestSector
     ? `${largestSector.sector} represents ${number(largestSector.weight).toFixed(1)}% of your portfolio. Your current diversification is ${diversification.toLowerCase()}.`
     : "Add or synchronize REAL holdings to receive a portfolio explanation.";
-  return <Pressable style={styles.coachCard} onPress={() => router.push("/coach-insights")}><View style={styles.flex}><Text style={styles.coachLabel}>COACH G</Text><Text style={styles.coachText}>{message}</Text></View><Text style={styles.arrow}>›</Text></Pressable>;
+  return <Pressable style={styles.coachCard} onPress={() => router.push("/(tabs)/coach")}><View style={styles.flex}><Text style={styles.coachLabel}>COACH G</Text><Text style={styles.coachText}>{message}</Text></View><Text style={styles.arrow}>›</Text></Pressable>;
 }
 
 function QuickDestinations() {
@@ -244,7 +244,7 @@ function MoreDestinations() {
       <Tool label="Portfolio Activity" route="/portfolio-activity" /><Tool label="Portfolio Analytics" route="/unified-portfolio-analytics" /><Tool label="Sync & Reconcile" route="/portfolio-sync-center" />
     </CollapsibleSection>
     <CollapsibleSection title="Journey & Guidance" summary="Goals, Coach G, profile, and investor timeline">
-      <Tool label="Wealth Journey" route="/wealth-journey" /><Tool label="Coach G Insights" route="/coach-insights" /><Tool label="Investor Timeline" route="/investor-timeline" /><Tool label="My Profile" route="/my-profile" />
+      <Tool label="Wealth Journey" route="/wealth-journey" /><Tool label="Coach G Insights" route="/(tabs)/coach" /><Tool label="Investor Timeline" route="/investor-timeline" /><Tool label="My Profile" route="/my-profile" />
     </CollapsibleSection>
     <CollapsibleSection title="Actions" summary="Funds, trading, and separate Practice demo">
       <Tool label="Funds & Cash" route="/(tabs)/funds" /><Tool label="Trading" route="/(tabs)/trading" /><Tool label="Separate Practice Demo" route="/starter-plan" />

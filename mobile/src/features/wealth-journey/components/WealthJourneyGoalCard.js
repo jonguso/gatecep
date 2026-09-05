@@ -152,16 +152,6 @@ export default function WealthJourneyGoalCard({
         />
       </View>
 
-      {goal.narrative ? (
-        <Text
-          style={
-            styles.narrative
-          }
-        >
-          {goal.narrative}
-        </Text>
-      ) : null}
-
       {goal.nextAction ? (
         <View
           style={
@@ -408,17 +398,6 @@ const styles =
 
       marginTop:
         4
-    },
-
-    narrative: {
-      color:
-        "#cbd5e1",
-
-      lineHeight:
-        20,
-
-      marginTop:
-        12
     },
 
     next: {
