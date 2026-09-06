@@ -12,7 +12,12 @@
     "release:audit": "npm audit --omit=dev",
     "eas:login": "npx eas-cli@23.2.0 login",
     "eas:init": "npx eas-cli@23.2.0 init",
+    "eas:device:register:ios": "npx eas-cli@23.2.0 device:create",
     "build:preview:android": "npx eas-cli@23.2.0 build --platform android --profile preview",
+    "build:preview:ios": "npx eas-cli@23.2.0 build --platform ios --profile preview",
+    "build:testflight:ios": "npx eas-cli@23.2.0 build --platform ios --profile production",
+    "submit:testflight:ios": "npx eas-cli@23.2.0 submit --platform ios --profile production --latest",
+    "release:ios-preflight": "node scripts/check-ios-testflight-build.mjs",
     "build:production": "npx eas-cli@23.2.0 build --platform all --profile production"
   },
   "dependencies": {
@@ -21,6 +26,7 @@
     "axios": "~1.20.0",
     "babel-preset-expo": "~54.0.12",
     "expo": "~54.0.37",
+    "expo-asset": "~12.0.13",
     "expo-audio": "~1.1.1",
     "expo-clipboard": "~8.0.8",
     "expo-constants": "~18.0.14",

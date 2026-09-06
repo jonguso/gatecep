@@ -11,5 +11,6 @@ credentials.json
 google-service-account*.json
 *.mobileprovision
 *.p12
+*.p8
 *.zip
 npm-debug.log*

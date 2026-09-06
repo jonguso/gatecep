@@ -22,6 +22,9 @@ import {
 import {
   saveProfile
 } from "../src/utils/onboardingStorage";
+import {
+  restoreInvestorProfileFromCloud
+} from "../src/features/profile/api/investorProfileApi";
 
 
 function delay(milliseconds) {
@@ -122,6 +125,9 @@ export default function Index() {
           );
         }
 
+        const cloudProfileState =
+          await restoreInvestorProfileFromCloud();
+
         const context =
           await loadInvestorContext();
 
@@ -159,6 +165,29 @@ export default function Index() {
 
         const practicePortfolio =
           context?.practicePortfolio || null;
+
+        const hasCompletedProfile =
+          cloudProfileState?.status === "FOUND" ||
+          context?.profile?.onboardingCompleted === true;
+
+        if (hasCompletedProfile) {
+          router.replace("/(tabs)/dashboard");
+          return;
+        }
+
+        /*
+         * UNKNOWN is not evidence that the investor lacks a profile.
+         * Keep authenticated returning users out of onboarding during a
+         * temporary profile-service interruption.
+         */
+        if (cloudProfileState?.status === "UNKNOWN") {
+          console.warn(
+            "Investor profile verification deferred:",
+            cloudProfileState?.error
+          );
+          router.replace("/(tabs)/dashboard");
+          return;
+        }
 
         let firstName =
   context?.identity?.firstName ||
@@ -210,7 +239,7 @@ if (
 const hasName =
   Boolean(firstName);
 
-if (!hasName) {
+if (!hasName && cloudProfileState?.status === "MISSING") {
   router.replace("/onboarding/name");
   return;
 }

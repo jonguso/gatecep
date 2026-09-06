@@ -107,7 +107,13 @@ export default function PortfolioHomeScreen() {
   const diversification = sectorRows.length >= 5 ? "Good" : sectorRows.length >= 3 ? "Moderate" : "Concentrated";
   const firstName = String(user?.username || user?.name || user?.email || "Investor").split(/[\s@.]/)[0];
   const chartSize = Math.min(Math.max(width - 84, 220), 286);
-  const activePanelHeight = Math.min(430, Math.max(310, height * 0.38));
+  const compactPhoneHeight = height < 850;
+  const dashboardChromeHeight = marketData ? 455 : 365;
+  const noticeHeight = notice ? 86 : 0;
+  const activePanelHeight = Math.min(
+    520,
+    Math.max(300, height - dashboardChromeHeight - noticeHeight)
+  );
   const authenticatedAgain = notice?.status === "AUTH_REQUIRED" || notice?.status === "AUTH_EXPIRED";
 
   function selectAccount(account) {
@@ -147,13 +153,13 @@ export default function PortfolioHomeScreen() {
           />
         ) : null}
 
-        <View style={styles.hero}>
+        <View style={[styles.hero, compactPhoneHeight && styles.heroCompact]}>
           <Text style={styles.heroLabel}>{selectedAccount.type === "ALL" ? "REAL NET WORTH" : "ACCOUNT NET WORTH"}</Text>
-          <Text adjustsFontSizeToFit numberOfLines={1} style={styles.heroValue}>{loading ? "Loading…" : hasVerifiedData ? `KES ${money(summary.netWorth)}` : "Unavailable"}</Text>
+          <Text adjustsFontSizeToFit numberOfLines={1} style={[styles.heroValue, compactPhoneHeight && styles.heroValueCompact]}>{loading ? "Loading…" : hasVerifiedData ? `KES ${money(summary.netWorth)}` : "Unavailable"}</Text>
           <Text style={Number(summary.totalGain || 0) >= 0 ? styles.gain : styles.loss}>
             {hasVerifiedData ? `${Number(summary.totalGain || 0) >= 0 ? "▲" : "▼"} KES ${money(summary.totalGain)} (${number(summary.totalGainPct).toFixed(2)}%) total return` : "N/A — REAL data unavailable"}
           </Text>
-          <View style={styles.quickMetrics}>
+          <View style={[styles.quickMetrics, compactPhoneHeight && styles.quickMetricsCompact]}>
             <QuickMetric label="Cash" value={hasVerifiedData ? `KES ${compactMoney(summary.totalCash)}` : "N/A"} />
             <QuickMetric label="Holdings" value={hasVerifiedData ? String(summary.holdingsCount || 0) : "N/A"} />
             <QuickMetric label="Largest" value={hasVerifiedData ? largestSector?.sector || "N/A" : "N/A"} />
@@ -302,7 +308,7 @@ const styles = StyleSheet.create({
   header: { flexDirection: "row", alignItems: "center", gap: 12, minHeight: 56 }, iconButton: { width: 44, height: 44, borderRadius: 14, backgroundColor: "#1e293b", alignItems: "center", justifyContent: "center" }, iconText: { color: "#67e8f9", fontSize: 22, fontWeight: "900" }, bell: { color: "#fbbf24", fontSize: 17 }, headerCopy: { flex: 1 }, title: { color: "white", fontSize: 25, fontWeight: "900" }, welcome: { color: "#94a3b8", fontSize: 12, marginTop: 2 },
   accountSelector: { marginTop: 8, minHeight: 54, paddingHorizontal: 14, borderRadius: 16, borderColor: "#334155", borderWidth: 1, backgroundColor: "#0f172a", flexDirection: "row", alignItems: "center" }, accountCopy: { flex: 1 }, accountLabel: { color: "#64748b", fontSize: 9, fontWeight: "900" }, accountName: { color: "#f8fafc", fontWeight: "900", marginTop: 3 }, accountChevron: { color: "#67e8f9", fontSize: 22, fontWeight: "900" },
   signInButton: { backgroundColor: "#7f1d1d", borderRadius: 13, minHeight: 46, marginTop: 8, alignItems: "center", justifyContent: "center" }, signInText: { color: "white", fontWeight: "900" },
-  hero: { marginTop: 12, backgroundColor: "#1d0b38", borderColor: "#6b21a8", borderWidth: 1, borderRadius: 21, padding: 16 }, heroLabel: { color: "#d8b4fe", fontSize: 10, fontWeight: "900" }, heroValue: { color: "white", fontSize: 30, fontWeight: "900", marginTop: 4 }, gain: { color: "#86efac", fontWeight: "900", fontSize: 12, marginTop: 4 }, loss: { color: "#fca5a5", fontWeight: "900", fontSize: 12, marginTop: 4 }, quickMetrics: { flexDirection: "row", gap: 8, marginTop: 13 }, quickMetric: { flex: 1, minWidth: 0, backgroundColor: "#09051d", borderRadius: 12, padding: 10 }, quickLabel: { color: "#94a3b8", fontSize: 9 }, quickValue: { color: "white", fontWeight: "900", fontSize: 12, marginTop: 4 },
+  hero: { marginTop: 12, backgroundColor: "#1d0b38", borderColor: "#6b21a8", borderWidth: 1, borderRadius: 21, padding: 16 }, heroCompact: { paddingVertical: 11, paddingHorizontal: 14, borderRadius: 18 }, heroLabel: { color: "#d8b4fe", fontSize: 10, fontWeight: "900" }, heroValue: { color: "white", fontSize: 30, fontWeight: "900", marginTop: 4 }, heroValueCompact: { fontSize: 26, marginTop: 2 }, gain: { color: "#86efac", fontWeight: "900", fontSize: 12, marginTop: 4 }, loss: { color: "#fca5a5", fontWeight: "900", fontSize: 12, marginTop: 4 }, quickMetrics: { flexDirection: "row", gap: 8, marginTop: 13 }, quickMetricsCompact: { marginTop: 8 }, quickMetric: { flex: 1, minWidth: 0, backgroundColor: "#09051d", borderRadius: 12, padding: 10 }, quickLabel: { color: "#94a3b8", fontSize: 9 }, quickValue: { color: "white", fontWeight: "900", fontSize: 12, marginTop: 4 },
   tabs: { flexDirection: "row", gap: 6, marginTop: 12 }, tab: { flex: 1, minWidth: 0, minHeight: 44, borderRadius: 13, backgroundColor: "#1e293b", alignItems: "center", justifyContent: "center", paddingHorizontal: 4 }, tabActive: { backgroundColor: "#9333ea" }, tabText: { color: "#94a3b8", fontWeight: "900", fontSize: 11 }, tabTextActive: { color: "white", fontWeight: "900", fontSize: 11 },
   activePanel: { marginTop: 12, overflow: "hidden" }, activePanelContent: { paddingBottom: 8 },
   primaryCard: { marginTop: 12, backgroundColor: "#0f172a", borderColor: "#1e293b", borderWidth: 1, borderRadius: 20, padding: 15 }, cardHeader: { flexDirection: "row", alignItems: "center", gap: 12 }, cardTitle: { color: "#67e8f9", fontSize: 18, fontWeight: "900" }, cardHint: { color: "#94a3b8", fontSize: 11, marginTop: 4 }, sectorCount: { color: "#c084fc", fontSize: 11, fontWeight: "900" }, flex: { flex: 1 }, allocationMetrics: { flexDirection: "row", gap: 7, marginTop: 12 }, allocationMetric: { flex: 1, minWidth: 0, minHeight: 62, borderRadius: 13, borderColor: "#334155", borderWidth: 1, backgroundColor: "#020617", padding: 9, justifyContent: "center" }, allocationMetricLabel: { color: "#94a3b8", fontSize: 9 }, allocationMetricValue: { color: "white", fontSize: 11, fontWeight: "900", marginTop: 5 }, chart: { alignItems: "center", justifyContent: "center", marginVertical: 5 }, chartHint: { color: "#94a3b8", fontSize: 10, marginTop: -4, marginBottom: 5 },

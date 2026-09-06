@@ -126,6 +126,9 @@ export default function HoldingDetails() {
           <ContainedPanel
             title={`All Securities (${securities.length})`}
             subtitle="Broker position details • scroll holdings"
+            minHeight={380}
+            maxHeight={720}
+            heightRatio={0.62}
             testID="holdings-contained-panel"
           >
             {securities.map((security, index) => {
