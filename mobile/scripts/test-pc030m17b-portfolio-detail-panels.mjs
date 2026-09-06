@@ -10,7 +10,7 @@ assert.match(holdings, /testID="holdings-contained-panel"/);
 assert.match(holdings, /securities\.map/);
 
 assert.match(analytics, /height: windowHeight/);
-assert.match(analytics, /detailPanelHeight = Math\.min\(430, Math\.max\(310, windowHeight \* 0\.38\)\)/);
+assert.match(analytics, /detailPanelHeight = calculateResponsivePanelHeight\(windowHeight\)/);
 assert.match(analytics, /styles\.detailPanel/);
 assert.match(analytics, /style=\{styles\.detailPanelScroll\}/);
 assert.match(analytics, /nestedScrollEnabled/);

@@ -24,6 +24,7 @@ import {
 import {
   buildCoachGRiskAdvice
 } from "../src/features/risk/riskAdvisorService";
+import { calculateResponsivePanelHeight } from "../src/components/mobile/MobileUI";
 
 const PROFILE_ORDER = [
   RISK_PROFILE_TYPES.CONSERVATIVE,
@@ -96,7 +97,7 @@ export default function PortfolioRiskScreen() {
   const [stressTests, setStressTests] = useState(null);
   const [error, setError] = useState("");
   const [alertFilter, setAlertFilter] = useState("ALL");
-  const [scenarioFilter, setScenarioFilter] = useState("MARKET_SHOCK");
+  const [scenarioFilter, setScenarioFilter] = useState("ALL");
   const [activeSection, setActiveSection] = useState(null);
   const [selectedSector, setSelectedSector] = useState(null);
 
@@ -241,7 +242,7 @@ export default function PortfolioRiskScreen() {
   const nextSection = activeSectionIndex >= 0 && activeSectionIndex < RISK_SECTIONS.length - 1
     ? RISK_SECTIONS[activeSectionIndex + 1]
     : null;
-  const detailPanelHeight = Math.min(430, Math.max(310, windowHeight * 0.38));
+  const detailPanelHeight = calculateResponsivePanelHeight(windowHeight);
   const moveToSection = (sectionId) => {
     setActiveSection(sectionId);
     requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: 0, animated: false }));

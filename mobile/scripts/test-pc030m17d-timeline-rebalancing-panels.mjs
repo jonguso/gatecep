@@ -10,7 +10,7 @@ assert.match(timeline, /visibleEvents\.map/);
 assert.match(timeline, /scroll timeline/);
 
 assert.match(rebalancing, /useWindowDimensions/);
-assert.match(rebalancing, /detailPanelHeight = Math\.min\(430, Math\.max\(310, windowHeight \* 0\.38\)\)/);
+assert.match(rebalancing, /detailPanelHeight = calculateResponsivePanelHeight\(windowHeight\)/);
 assert.match(rebalancing, /styles\.focusedPanel/);
 assert.match(rebalancing, /nestedScrollEnabled/);
 assert.match(rebalancing, /showsVerticalScrollIndicator/);

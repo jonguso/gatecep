@@ -7,7 +7,7 @@ const activity = fs.readFileSync("app/portfolio-activity.js", "utf8");
 const wealth = fs.readFileSync("app/wealth-journey.js", "utf8");
 
 for (const [name, source] of [["Performance", performance], ["Portfolio Risk", risk]]) {
-  assert.match(source, /detailPanelHeight = Math\.min\(430, Math\.max\(310, windowHeight \* 0\.38\)\)/, `${name} responsive height`);
+  assert.match(source, /detailPanelHeight = calculateResponsivePanelHeight\(windowHeight\)/, `${name} responsive height`);
   assert.match(source, /style=\{styles\.detailPanelScroll\}/, `${name} detail scroll`);
   assert.match(source, /nestedScrollEnabled/, `${name} nested scroll`);
   assert.match(source, /showsVerticalScrollIndicator/, `${name} scroll indicator`);

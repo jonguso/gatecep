@@ -42,7 +42,7 @@ export default function InvestorTimeline() {
     filter,
     setFilter
   ] = useState(
-    "FOUNDATION"
+    "ALL"
   );
 
   useEffect(() => {

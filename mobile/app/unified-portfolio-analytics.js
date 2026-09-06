@@ -13,6 +13,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { buildUnifiedPortfolioAnalytics } from "../src/features/analytics/unifiedPortfolioAnalyticsService";
 import { buildPortfolioHealthScore } from "../src/features/analytics/portfolioHealthScoreService";
 import { buildExecutiveActionQueue } from "../src/features/analytics/executiveActionQueueService";
+import { calculateResponsivePanelHeight } from "../src/components/mobile/MobileUI";
 
 const ALERT_FILTERS = ["ALL", "CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"];
 const ACTION_FILTERS = [
@@ -48,8 +49,8 @@ export default function UnifiedPortfolioAnalyticsScreen() {
   const initialSection = ANALYTICS_SECTIONS.some((item) => item.id === params?.section)
     ? params.section
     : null;
-  const [alertFilter, setAlertFilter] = useState("CRITICAL");
-  const [actionFilter, setActionFilter] = useState("RISK");
+  const [alertFilter, setAlertFilter] = useState("ALL");
+  const [actionFilter, setActionFilter] = useState("ALL");
   const [activeSection, setActiveSection] = useState(initialSection);
   const scrollRef = useRef(null);
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
@@ -143,7 +144,7 @@ export default function UnifiedPortfolioAnalyticsScreen() {
   const nextSection = activeSectionIndex >= 0 && activeSectionIndex < ANALYTICS_SECTIONS.length - 1
     ? ANALYTICS_SECTIONS[activeSectionIndex + 1]
     : null;
-  const detailPanelHeight = Math.min(430, Math.max(310, windowHeight * 0.38));
+  const detailPanelHeight = calculateResponsivePanelHeight(windowHeight);
 
   function moveToSection(sectionId) {
     setActiveSection(sectionId);

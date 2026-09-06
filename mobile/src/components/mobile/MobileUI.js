@@ -9,6 +9,14 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+export function calculateResponsivePanelHeight(
+  viewportHeight,
+  { minHeight = 380, maxHeight = 720, heightRatio = 0.62 } = {}
+) {
+  const safeViewportHeight = Number.isFinite(viewportHeight) ? viewportHeight : 0;
+  return Math.min(maxHeight, Math.max(minHeight, safeViewportHeight * heightRatio));
+}
+
 export function MobileScreen({ children, footer = null, testID }) {
   const { width } = useWindowDimensions();
   const compact = width < 720;

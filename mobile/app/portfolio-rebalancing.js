@@ -40,6 +40,7 @@ import {
 import {
   buildCoachGRebalancingAdvice
 } from "../src/features/rebalancing/rebalanceAdvisorService";
+import { calculateResponsivePanelHeight } from "../src/components/mobile/MobileUI";
 
 const PROFILE_ORDER = [
   REBALANCE_PROFILE_TYPES.CONSERVATIVE,
@@ -243,7 +244,7 @@ export default function PortfolioRebalancingScreen() {
   const nextSection = activeSectionIndex >= 0 && activeSectionIndex < REBALANCE_SECTIONS.length - 1
     ? REBALANCE_SECTIONS[activeSectionIndex + 1]
     : null;
-  const detailPanelHeight = Math.min(430, Math.max(310, windowHeight * 0.38));
+  const detailPanelHeight = calculateResponsivePanelHeight(windowHeight);
 
   const moveToSection = (sectionId) => {
     setActiveSection(sectionId);
