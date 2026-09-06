@@ -251,8 +251,8 @@ export default function PortfolioRebalancingScreen() {
     requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: 0, animated: false }));
   };
 
-  const exitRebalancing = () => params?.returnTo === "analysis"
-    ? router.replace({ pathname: "/unified-portfolio-analytics", params: { section: "specialists" } })
+  const exitRebalancing = () => router.canGoBack?.()
+    ? router.back()
     : router.replace("/(tabs)/dashboard");
 
   async function handleApplyProfile(
@@ -375,14 +375,14 @@ export default function PortfolioRebalancingScreen() {
         Portfolio Rebalancing
       </Text>
 
-      <Pressable
-        style={styles.parentButton}
-        onPress={() => activeSection ? moveToSection(null) : exitRebalancing()}
-      >
-        <Text style={styles.parentButtonText}>
-          {activeSection ? "Rebalancing Overview" : params?.returnTo === "analysis" ? "Portfolio Analysis" : "Home"}
-        </Text>
-      </Pressable>
+      <View style={styles.headerActions}>
+        <Pressable style={styles.parentButton} onPress={() => activeSection ? moveToSection(null) : exitRebalancing()}>
+          <Text style={styles.parentButtonText}>{activeSection ? "Overview" : "‹ Back"}</Text>
+        </Pressable>
+        <Pressable style={styles.parentButton} onPress={() => router.replace("/(tabs)/dashboard")}>
+          <Text style={styles.parentButtonText}>Home</Text>
+        </Pressable>
+      </View>
 
       <Text
         style={
@@ -1474,7 +1474,7 @@ export default function PortfolioRebalancingScreen() {
         >
           {activeSection
             ? nextSection ? `Next: ${nextSection.title} ›` : "Finish: Rebalancing Overview"
-            : params?.returnTo === "analysis" ? "Back to Portfolio Analysis" : "Back to Home"}
+            : "Back to Previous Page"}
         </Text>
       </Pressable>
     </ScrollView>
@@ -3905,16 +3905,15 @@ const styles =
         "900"
     },
 
+    headerActions: { alignSelf: "flex-end", flexDirection: "row", gap: 6, marginTop: -48, marginBottom: 18 },
+
     parentButton: {
-      alignSelf: "flex-end",
       backgroundColor: "#1e293b",
       borderColor: "#334155",
       borderWidth: 1,
       borderRadius: 14,
-      paddingHorizontal: 16,
-      paddingVertical: 12,
-      marginTop: -48,
-      marginBottom: 18
+      paddingHorizontal: 10,
+      paddingVertical: 12
     },
 
     parentButtonText: {

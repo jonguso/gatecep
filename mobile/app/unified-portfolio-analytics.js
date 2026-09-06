@@ -49,8 +49,8 @@ export default function UnifiedPortfolioAnalyticsScreen() {
   const initialSection = ANALYTICS_SECTIONS.some((item) => item.id === params?.section)
     ? params.section
     : null;
-  const [alertFilter, setAlertFilter] = useState("ALL");
-  const [actionFilter, setActionFilter] = useState("ALL");
+  const [alertFilter, setAlertFilter] = useState("CRITICAL");
+  const [actionFilter, setActionFilter] = useState("RISK");
   const [activeSection, setActiveSection] = useState(initialSection);
   const scrollRef = useRef(null);
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
@@ -160,6 +160,11 @@ export default function UnifiedPortfolioAnalyticsScreen() {
     });
   }
 
+  function goBack() {
+    if (router.canGoBack?.()) router.back();
+    else router.replace("/(tabs)/dashboard");
+  }
+
   return (
     <ScrollView ref={scrollRef} style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.headerRow}>
@@ -170,12 +175,14 @@ export default function UnifiedPortfolioAnalyticsScreen() {
             ? ANALYTICS_SECTIONS.find((section) => section.id === activeSection)?.title
             : "Executive health, risk, performance, operations, alerts, and priorities."}</Text>
         </View>
-        <Pressable
-          style={styles.headerButton}
-          onPress={() => activeSection ? returnToAnalysis() : router.replace("/(tabs)/dashboard")}
-        >
-          <Text style={styles.headerButtonText}>{activeSection ? "Analysis Overview" : "Home"}</Text>
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable style={styles.headerButton} onPress={() => activeSection ? returnToAnalysis() : goBack()}>
+            <Text style={styles.headerButtonText}>{activeSection ? "Overview" : "‹ Back"}</Text>
+          </Pressable>
+          <Pressable style={styles.headerButton} onPress={() => router.replace("/(tabs)/dashboard")}>
+            <Text style={styles.headerButtonText}>Home</Text>
+          </Pressable>
+        </View>
       </View>
 
       {error ? (
@@ -547,9 +554,9 @@ export default function UnifiedPortfolioAnalyticsScreen() {
       ) : (
         <Pressable
           style={styles.secondaryButton}
-          onPress={() => router.replace("/(tabs)/dashboard")}
+          onPress={goBack}
         >
-          <Text style={styles.secondaryButtonText}>Back to Home</Text>
+          <Text style={styles.secondaryButtonText}>Back to Previous Page</Text>
         </Pressable>
       )}
     </ScrollView>
@@ -731,7 +738,7 @@ const styles = StyleSheet.create({
   },
   loadingText: { color: "#94a3b8", marginTop: 14 },
   headerRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
-  headerButton: { minHeight: 44, borderRadius: 14, backgroundColor: "#1e293b", borderColor: "#334155", borderWidth: 1, paddingHorizontal: 14, alignItems: "center", justifyContent: "center" },
+  headerActions: { flexDirection: "row", gap: 6 }, headerButton: { minHeight: 44, borderRadius: 14, backgroundColor: "#1e293b", borderColor: "#334155", borderWidth: 1, paddingHorizontal: 10, alignItems: "center", justifyContent: "center" },
   headerButtonText: { color: "#67e8f9", fontWeight: "900", fontSize: 12 },
   eyebrow: { color: "#22d3ee", fontWeight: "900" },
   title: { color: "white", fontSize: 31, fontWeight: "900", marginTop: 8 },

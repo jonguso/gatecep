@@ -19,6 +19,7 @@ export default function HoldingDetails() {
   const [loading, setLoading] = useState(true);
   const [hasVerifiedData, setHasVerifiedData] = useState(false);
   const [notice, setNotice] = useState(null);
+  const [selectedSecurity, setSelectedSecurity] = useState(null);
 
   useFocusEffect(useCallback(() => {
     load();
@@ -74,15 +75,15 @@ export default function HoldingDetails() {
           <Pressable
             accessibilityRole="button"
             style={styles.backIcon}
-            onPress={() => router.back()}
+            onPress={() => selectedSecurity ? setSelectedSecurity(null) : router.canGoBack?.() ? router.back() : router.replace("/(tabs)/dashboard")}
           >
             <Text style={styles.backIconText}>‹</Text>
           </Pressable>
           <View style={styles.headerCopy}>
-            <Text style={styles.title}>Holdings</Text>
-            <Text style={styles.subtitle}>Individual securities in your REAL portfolio</Text>
+            <Text style={styles.title}>{selectedSecurity ? selectedSecurity.security.symbol || "Holding" : "Holdings"}</Text>
+            <Text style={styles.subtitle}>{selectedSecurity ? "REAL holding details" : `${securities.length} individual securities in your REAL portfolio`}</Text>
           </View>
-          <Text style={styles.count}>{securities.length}</Text>
+          <Pressable style={styles.homeAction} onPress={() => router.replace("/(tabs)/dashboard")}><Text style={styles.homeActionText}>Home</Text></Pressable>
         </View>
 
         {notice ? (
@@ -122,66 +123,55 @@ export default function HoldingDetails() {
               <Text style={styles.primaryText}>Open Portfolio Sync</Text>
             </Pressable>
           </View>
+        ) : selectedSecurity ? (
+          <ContainedPanel
+            title={selectedSecurity.security.symbol || `Security ${selectedSecurity.index + 1}`}
+            subtitle={selectedSecurity.security.name || selectedSecurity.security.securityName || "Listed security"}
+            minHeight={380}
+            maxHeight={720}
+            heightRatio={0.62}
+            testID="holding-focused-detail-panel"
+          >
+            <HoldingDetailCard security={selectedSecurity.security} totalValue={summary.totalValue} />
+            <Pressable style={styles.listReturn} onPress={() => setSelectedSecurity(null)}><Text style={styles.listReturnText}>‹ Back to Holdings List</Text></Pressable>
+          </ContainedPanel>
         ) : (
           <ContainedPanel
             title={`All Securities (${securities.length})`}
-            subtitle="Broker position details • scroll holdings"
+            subtitle="Tap one holding to inspect its broker position details"
             minHeight={380}
             maxHeight={720}
             heightRatio={0.62}
             testID="holdings-contained-panel"
           >
-            {securities.map((security, index) => {
-              const symbol = security.symbol || `SECURITY-${index}`;
-              const gain = number(security.profitLoss);
-              const returnPct = number(security.profitLossPct);
-              const quantity = number(security.quantity);
-              const averagePrice = number(security.averageCost || security.averagePrice);
-              const investedValue = number(security.investedValue || security.costValue) || quantity * averagePrice;
-              const currentPrice = number(security.marketPrice || security.price || security.lastPrice);
-              const currentValue = number(security.marketValue || security.value) || quantity * currentPrice;
-              const sellableQuantity = number(security.settledQuantity ?? security.sellableQuantity ?? security.quantity);
-
-              return (
-                <View
-                  key={`${symbol}-${index}`}
-                  style={styles.security}
-                >
-                  <View style={styles.securityHeader}>
-                    <View style={styles.securityCopy}>
-                      <Text style={styles.symbol}>{symbol}</Text>
-                      <Text numberOfLines={1} style={styles.name}>{security.name || security.securityName || "Listed security"}</Text>
-                      <Text style={styles.sector}>{security.sector || "Other"}{security.broker ? ` • ${security.broker}` : ""}</Text>
-                    </View>
-                    <View style={styles.securityValue}>
-                      <Text style={styles.value}>KES {money(currentValue)}</Text>
-                      <Text style={gain >= 0 ? styles.positive : styles.negative}>{gain >= 0 ? "+" : ""}KES {money(gain)}</Text>
-                    </View>
-                  </View>
-
-                  <View style={styles.details}>
-                    <Detail label="Quantity" value={quantity.toLocaleString()} />
-                    <Detail label="Avg. Price" value={`KES ${money(averagePrice)}`} />
-                    <Detail label="Invested Value" value={`KES ${money(investedValue)}`} />
-                    <Detail label="LTP / Current Price" value={`KES ${money(currentPrice)}`} />
-                    <Detail label="Current Value" value={`KES ${money(currentValue)}`} />
-                    <Detail label="P&L Value" value={`${gain >= 0 ? "+" : ""}KES ${money(gain)}`} positive={gain >= 0} />
-                    <Detail label="P&L %" value={`${returnPct >= 0 ? "+" : ""}${returnPct.toFixed(2)}%`} positive={returnPct >= 0} />
-                    <Detail label="Sellable Qty" value={sellableQuantity.toLocaleString()} />
-                    <Detail label="Settlement" value={security.settlementStatus || "SETTLED"} />
-                  </View>
-                </View>
-              );
-            })}
+            {securities.map((security, index) => <HoldingListRow key={`${security.symbol || "SECURITY"}-${security.broker || "ALL"}-${index}`} security={security} totalValue={summary.totalValue} onPress={() => setSelectedSecurity({ security, index })} />)}
           </ContainedPanel>
         )}
-
-        <Pressable style={styles.homeButton} onPress={() => router.replace("/(tabs)/dashboard")}>
-          <Text style={styles.homeText}>Back to Home</Text>
-        </Pressable>
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+function HoldingListRow({ security, totalValue, onPress }) {
+  const gain = number(security.profitLoss);
+  const quantity = number(security.quantity);
+  const currentPrice = number(security.marketPrice || security.price || security.lastPrice);
+  const currentValue = number(security.marketValue || security.value) || quantity * currentPrice;
+  const weight = number(totalValue) > 0 ? currentValue / number(totalValue) * 100 : 0;
+  return <Pressable accessibilityRole="button" accessibilityLabel={`Open ${security.symbol || "holding"} details`} style={({ pressed }) => [styles.holdingListRow, pressed && styles.holdingListRowPressed]} onPress={onPress}><View style={styles.securityCopy}><Text style={styles.symbol}>{security.symbol || "N/A"}</Text><Text numberOfLines={1} style={styles.name}>{security.name || security.securityName || "Listed security"}</Text><Text style={styles.sector}>{security.sector || "Other"}{security.broker ? ` • ${security.broker}` : ""}</Text></View><View style={styles.securityValue}><Text style={styles.value}>KES {money(currentValue)}</Text><Text style={gain >= 0 ? styles.positive : styles.negative}>{gain >= 0 ? "+" : ""}KES {money(gain)}</Text><Text style={styles.weight}>{weight.toFixed(1)}% of portfolio</Text></View><Text style={styles.rowChevron}>›</Text></Pressable>;
+}
+
+function HoldingDetailCard({ security, totalValue }) {
+  const gain = number(security.profitLoss);
+  const returnPct = number(security.profitLossPct);
+  const quantity = number(security.quantity);
+  const averagePrice = number(security.averageCost || security.averagePrice);
+  const investedValue = number(security.investedValue || security.costValue) || quantity * averagePrice;
+  const currentPrice = number(security.marketPrice || security.price || security.lastPrice);
+  const currentValue = number(security.marketValue || security.value) || quantity * currentPrice;
+  const sellableQuantity = number(security.settledQuantity ?? security.sellableQuantity ?? security.quantity);
+  const weight = number(totalValue) > 0 ? currentValue / number(totalValue) * 100 : 0;
+  return <View style={styles.security}><View style={styles.securityHeader}><View style={styles.securityCopy}><Text style={styles.symbol}>{security.symbol || "N/A"}</Text><Text numberOfLines={2} style={styles.name}>{security.name || security.securityName || "Listed security"}</Text><Text style={styles.sector}>{security.sector || "Other"}{security.broker ? ` • ${security.broker}` : ""}</Text></View><View style={styles.securityValue}><Text style={styles.value}>KES {money(currentValue)}</Text><Text style={gain >= 0 ? styles.positive : styles.negative}>{gain >= 0 ? "+" : ""}KES {money(gain)}</Text></View></View><View style={styles.details}><Detail label="Portfolio Weight" value={`${weight.toFixed(2)}%`} /><Detail label="Quantity" value={quantity.toLocaleString()} /><Detail label="Avg. Price" value={`KES ${money(averagePrice)}`} /><Detail label="Invested Value" value={`KES ${money(investedValue)}`} /><Detail label="LTP / Current Price" value={`KES ${money(currentPrice)}`} /><Detail label="Current Value" value={`KES ${money(currentValue)}`} /><Detail label="P&L Value" value={`${gain >= 0 ? "+" : ""}KES ${money(gain)}`} positive={gain >= 0} /><Detail label="P&L %" value={`${returnPct >= 0 ? "+" : ""}${returnPct.toFixed(2)}%`} positive={returnPct >= 0} /><Detail label="Sellable Qty" value={sellableQuantity.toLocaleString()} /><Detail label="Settlement" value={security.settlementStatus || "SETTLED"} /></View></View>;
 }
 
 function Summary({ label, value, positive }) {
@@ -224,7 +214,7 @@ const styles = StyleSheet.create({
   headerCopy: { flex: 1 },
   title: { color: "white", fontSize: 26, fontWeight: "900" },
   subtitle: { color: "#94a3b8", fontSize: 11, marginTop: 3 },
-  count: { color: "#c084fc", fontWeight: "900", fontSize: 18 },
+  homeAction: { minHeight: 42, borderRadius: 13, borderWidth: 1, borderColor: "#334155", backgroundColor: "#1e293b", paddingHorizontal: 11, alignItems: "center", justifyContent: "center" }, homeActionText: { color: "#67e8f9", fontWeight: "900", fontSize: 11 },
   signIn: { minHeight: 48, marginTop: 10, borderRadius: 14, backgroundColor: "#7f1d1d", alignItems: "center", justifyContent: "center" },
   signInText: { color: "white", fontWeight: "900" },
   summary: { flexDirection: "row", gap: 8, marginTop: 12 },
@@ -241,6 +231,7 @@ const styles = StyleSheet.create({
   listTitle: { color: "#67e8f9", fontSize: 19, fontWeight: "900" },
   listHint: { color: "#94a3b8", fontSize: 11, marginTop: 4, marginBottom: 5 },
   security: { borderTopColor: "#334155", borderTopWidth: 1, paddingVertical: 15, paddingHorizontal: 3 },
+  holdingListRow: { minHeight: 78, flexDirection: "row", alignItems: "center", gap: 10, borderTopColor: "#334155", borderTopWidth: 1, paddingVertical: 11, paddingHorizontal: 3 }, holdingListRowPressed: { backgroundColor: "#1e293b" },
   securityHeader: { flexDirection: "row", alignItems: "center", gap: 12 },
   securityCopy: { flex: 1, minWidth: 0 },
   symbol: { color: "white", fontSize: 17, fontWeight: "900" },
@@ -250,10 +241,10 @@ const styles = StyleSheet.create({
   value: { color: "white", fontWeight: "900", fontSize: 12 },
   positive: { color: "#86efac", fontWeight: "900", fontSize: 11, marginTop: 4 },
   negative: { color: "#fca5a5", fontWeight: "900", fontSize: 11, marginTop: 4 },
+  weight: { color: "#94a3b8", fontSize: 9, marginTop: 4 }, rowChevron: { color: "#67e8f9", fontSize: 25, fontWeight: "900" },
   details: { marginTop: 12, flexDirection: "row", flexWrap: "wrap", gap: 8 },
   detail: { width: "31.5%", minWidth: 138, flexGrow: 1, minHeight: 58, borderRadius: 12, backgroundColor: "#020617", borderColor: "#1e293b", borderWidth: 1, padding: 10 },
   detailLabel: { color: "#94a3b8", fontSize: 9 },
   detailValue: { color: "white", fontWeight: "900", fontSize: 11, marginTop: 5 },
-  homeButton: { minHeight: 50, marginTop: 16, borderRadius: 15, backgroundColor: "#1e293b", alignItems: "center", justifyContent: "center" },
-  homeText: { color: "#67e8f9", fontWeight: "900" }
+  listReturn: { minHeight: 48, marginTop: 14, borderRadius: 14, backgroundColor: "#1e293b", alignItems: "center", justifyContent: "center" }, listReturnText: { color: "#67e8f9", fontWeight: "900" }
 });

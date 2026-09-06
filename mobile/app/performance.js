@@ -75,8 +75,8 @@ const [historicalSummary, setHistoricalSummary] = useState(null);
     setActiveSection(sectionId);
     requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: 0, animated: false }));
   };
-  const exitPerformance = () => params?.returnTo === "analysis"
-    ? router.replace({ pathname: "/unified-portfolio-analytics", params: { section: "specialists" } })
+  const exitPerformance = () => router.canGoBack?.()
+    ? router.back()
     : router.replace("/(tabs)/dashboard");
 
   useEffect(() => {
@@ -289,14 +289,14 @@ const [historicalSummary, setHistoricalSummary] = useState(null);
           </Text>
         </View>
 
-        <Pressable
-          style={styles.dashboardButton}
-          onPress={() => activeSection
-            ? moveToSection(null)
-            : exitPerformance()}
-        >
-          <Text style={styles.dashboardText}>{activeSection ? "Performance Overview" : params?.returnTo === "analysis" ? "Analysis" : "Home"}</Text>
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable style={styles.dashboardButton} onPress={() => activeSection ? moveToSection(null) : exitPerformance()}>
+            <Text style={styles.dashboardText}>{activeSection ? "Overview" : "‹ Back"}</Text>
+          </Pressable>
+          <Pressable style={styles.dashboardButton} onPress={() => router.replace("/(tabs)/dashboard")}>
+            <Text style={styles.dashboardText}>Home</Text>
+          </Pressable>
+        </View>
       </View>
 
       {!metrics.latest ? (
@@ -1652,7 +1652,7 @@ const [historicalSummary, setHistoricalSummary] = useState(null);
         <Text style={styles.backText}>
           {activeSection
             ? nextSection ? `Next: ${nextSection.title} ›` : "Finish: Performance Overview"
-            : params?.returnTo === "analysis" ? "Back to Portfolio Analysis" : "Back to Home"}
+            : "Back to Previous Page"}
         </Text>
       </Pressable>
     </ScrollView>
@@ -2872,6 +2872,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     flexWrap: "wrap"
   },
+  headerActions: { flexDirection: "row", gap: 6 },
   summaryItem: {
     width: "48%",
     minHeight: 76,
@@ -3045,7 +3046,7 @@ const styles = StyleSheet.create({
     borderColor: "#334155",
     borderWidth: 1,
     borderRadius: 12,
-    paddingHorizontal: 14,
+    paddingHorizontal: 10,
     paddingVertical: 9
   },
 

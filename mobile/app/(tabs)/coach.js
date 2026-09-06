@@ -379,7 +379,13 @@ export default function Coach() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Coach G Insights</Text>
+      <View style={styles.headerRow}>
+        <Text style={styles.title}>Coach G Insights</Text>
+        <View style={styles.headerActions}>
+          <Pressable style={styles.headerButton} onPress={() => router.canGoBack?.() ? router.back() : router.replace("/(tabs)/dashboard")}><Text style={styles.headerButtonText}>‹ Back</Text></Pressable>
+          <Pressable style={styles.headerButton} onPress={() => router.replace("/(tabs)/dashboard")}><Text style={styles.headerButtonText}>Home</Text></Pressable>
+        </View>
+      </View>
 
       <CoachGReconciliationCard compact={true} />
 
@@ -434,6 +440,8 @@ export default function Coach() {
           <QuickCard title="Portfolio Hub" desc="Open your current portfolio view" route="/portfolio-hub" />
           <QuickCard title="My Holdings" desc="View current positions" route="/holding-details" />
           <QuickCard title="Performance" desc="Track portfolio growth" route="/performance" />
+          <QuickCard title="Portfolio Risk" desc="Open detailed REAL portfolio risk evidence" route="/portfolio-risk" />
+          <QuickCard title="Rebalancing" desc="Review advisory-only rebalancing guidance" route="/portfolio-rebalancing" />
           <QuickCard title="Activity" desc="View portfolio audit trail" route="/portfolio-activity" />
           <QuickCard title="Watchlist" desc="Track stocks and Coach G signals" route="/watchlist" />
         </View>
@@ -826,7 +834,8 @@ function money(v) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#020617" },
   content: { padding: 20, paddingTop: 60, paddingBottom: 120 },
-  title: { fontSize: 34, fontWeight: "900", color: "white" },
+  headerRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 }, headerActions: { flexDirection: "row", gap: 6 }, headerButton: { minHeight: 42, borderRadius: 13, borderWidth: 1, borderColor: "#334155", backgroundColor: "#1e293b", paddingHorizontal: 10, alignItems: "center", justifyContent: "center" }, headerButtonText: { color: "#67e8f9", fontWeight: "900", fontSize: 11 },
+  title: { flex: 1, fontSize: 34, fontWeight: "900", color: "white" },
 
   card: {
     marginTop: 18,

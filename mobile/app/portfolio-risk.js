@@ -97,7 +97,7 @@ export default function PortfolioRiskScreen() {
   const [stressTests, setStressTests] = useState(null);
   const [error, setError] = useState("");
   const [alertFilter, setAlertFilter] = useState("ALL");
-  const [scenarioFilter, setScenarioFilter] = useState("ALL");
+  const [scenarioFilter, setScenarioFilter] = useState("MARKET_SHOCK");
   const [activeSection, setActiveSection] = useState(null);
   const [selectedSector, setSelectedSector] = useState(null);
 
@@ -247,8 +247,8 @@ export default function PortfolioRiskScreen() {
     setActiveSection(sectionId);
     requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: 0, animated: false }));
   };
-  const exitRisk = () => params?.returnTo === "analysis"
-    ? router.replace({ pathname: "/unified-portfolio-analytics", params: { section: "specialists" } })
+  const exitRisk = () => router.canGoBack?.()
+    ? router.back()
     : router.replace("/(tabs)/dashboard");
   const isCompact = windowWidth < 600;
 
@@ -262,18 +262,14 @@ export default function PortfolioRiskScreen() {
             Review current REAL portfolio risk, then open one focused detail.
           </Text>
         </View>
-        <Pressable
-          style={styles.headerButton}
-          onPress={() =>
-            activeSection
-              ? moveToSection(null)
-              : exitRisk()
-          }
-        >
-          <Text style={styles.headerButtonText}>
-            {activeSection ? "Risk Overview" : params?.returnTo === "analysis" ? "Analysis" : "Home"}
-          </Text>
-        </Pressable>
+        <View style={styles.headerActions}>
+          <Pressable style={styles.headerButton} onPress={() => activeSection ? moveToSection(null) : exitRisk()}>
+            <Text style={styles.headerButtonText}>{activeSection ? "Overview" : "‹ Back"}</Text>
+          </Pressable>
+          <Pressable style={styles.headerButton} onPress={() => router.replace("/(tabs)/dashboard")}>
+            <Text style={styles.headerButtonText}>Home</Text>
+          </Pressable>
+        </View>
       </View>
 
       {error ? (
@@ -930,7 +926,7 @@ export default function PortfolioRiskScreen() {
         <Text style={styles.secondaryButtonText}>
           {activeSection
             ? nextSection ? `Next: ${nextSection.title} ›` : "Finish: Risk Overview"
-            : params?.returnTo === "analysis" ? "Back to Portfolio Analysis" : "Back to Home"}
+            : "Back to Previous Page"}
         </Text>
       </Pressable>
     </ScrollView>
@@ -1393,6 +1389,7 @@ const styles = StyleSheet.create({
   pageHeaderText: {
     flex: 1
   },
+  headerActions: { flexDirection: "row", gap: 6 },
   headerButton: {
     minHeight: 44,
     borderRadius: 14,

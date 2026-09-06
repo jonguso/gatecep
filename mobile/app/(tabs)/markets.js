@@ -65,7 +65,7 @@ async function loadWatchlist() {
 
   const saved = raw
     ? JSON.parse(raw)
-    : ["SCOM", "EABL", "EQTY", "COOP"];
+    : ["SCOM", "EABL", "EQTY", "KCB"];
 
   setWatchlist(saved);
 }
