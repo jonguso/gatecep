@@ -89,7 +89,7 @@ export default function PortfolioRebalancingScreen() {
   const [
     recommendationFilter,
     setRecommendationFilter
-  ] = useState("ACTIONABLE");
+  ] = useState("ALL");
 
   const [activeSection, setActiveSection] = useState(null);
 
@@ -1747,7 +1747,11 @@ function DriftCard({
       />
 
       <Row
-        label="Value Difference"
+        label={
+          item?.mode === "ASSET_CLASS"
+            ? "Illustrative Gap"
+            : "Value Difference"
+        }
         value={`KES ${signedMoney(
           item.valueDifference
         )}`}

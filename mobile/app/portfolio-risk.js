@@ -97,7 +97,7 @@ export default function PortfolioRiskScreen() {
   const [stressTests, setStressTests] = useState(null);
   const [error, setError] = useState("");
   const [alertFilter, setAlertFilter] = useState("ALL");
-  const [scenarioFilter, setScenarioFilter] = useState("MARKET_SHOCK");
+  const [scenarioFilter, setScenarioFilter] = useState("ALL");
   const [activeSection, setActiveSection] = useState(null);
   const [selectedSector, setSelectedSector] = useState(null);
 
@@ -548,7 +548,7 @@ export default function PortfolioRiskScreen() {
                 ).toFixed(0)}% max`}
               />
               <Row
-                label="Cash"
+                label="Operational Cash"
                 value={`${Number(
                   profile?.limits?.minimumCashPercentage || 0
                 ).toFixed(0)}% min`}
@@ -1010,8 +1010,8 @@ function LimitGrid({ limits }) {
   const entries = [
     ["Single Holding Maximum", `${numberText(limits?.maximumSingleHoldingPercentage)}%`],
     ["Sector Maximum", `${numberText(limits?.maximumSectorPercentage)}%`],
-    ["Cash Minimum", `${numberText(limits?.minimumCashPercentage)}%`],
-    ["Equity Maximum", `${numberText(limits?.maximumEquityPercentage)}%`],
+    ["Required Broker Cash", `${numberText(limits?.minimumCashPercentage)}%`],
+    ["Equity Risk Cap", `${numberText(limits?.maximumEquityPercentage)}%`],
     ["Target Volatility", `${numberText(limits?.targetVolatilityPercentage)}%`],
     ["Drawdown Maximum", `${numberText(limits?.maximumDrawdownPercentage)}%`],
     ["Minimum Holdings", limits?.minimumHoldingsCount || 0],
@@ -1266,7 +1266,7 @@ function formatRiskLimitSummary(limits = {}) {
       limits?.maximumSingleHoldingPercentage || 0
     ).toFixed(0)}% maximum`,
     `Sector: ${Number(limits?.maximumSectorPercentage || 0).toFixed(0)}% maximum`,
-    `Cash: ${Number(limits?.minimumCashPercentage || 0).toFixed(0)}% minimum`,
+    `Broker cash: ${Number(limits?.minimumCashPercentage || 0).toFixed(0)}% required`,
     `Volatility: ${Number(
       limits?.targetVolatilityPercentage || 0
     ).toFixed(0)}% target`,

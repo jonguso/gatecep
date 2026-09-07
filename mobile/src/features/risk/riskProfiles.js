@@ -38,10 +38,10 @@ export const RISK_PROFILES = {
         30,
 
       minimumCashPercentage:
-        20,
+        0,
 
       maximumEquityPercentage:
-        70,
+        100,
 
       targetVolatilityPercentage:
         10,
@@ -88,10 +88,10 @@ export const RISK_PROFILES = {
         35,
 
       minimumCashPercentage:
-        15,
+        0,
 
       maximumEquityPercentage:
-        80,
+        100,
 
       targetVolatilityPercentage:
         14,
@@ -138,10 +138,10 @@ export const RISK_PROFILES = {
         40,
 
       minimumCashPercentage:
-        10,
+        0,
 
       maximumEquityPercentage:
-        90,
+        100,
 
       targetVolatilityPercentage:
         18,
@@ -188,10 +188,10 @@ export const RISK_PROFILES = {
         50,
 
       minimumCashPercentage:
-        5,
+        0,
 
       maximumEquityPercentage:
-        97,
+        100,
 
       targetVolatilityPercentage:
         24,
@@ -238,7 +238,7 @@ export const RISK_PROFILES = {
         60,
 
       minimumCashPercentage:
-        2,
+        0,
 
       maximumEquityPercentage:
         100,
@@ -288,10 +288,10 @@ export const RISK_PROFILES = {
         40,
 
       minimumCashPercentage:
-        10,
+        0,
 
       maximumEquityPercentage:
-        90,
+        100,
 
       targetVolatilityPercentage:
         18,

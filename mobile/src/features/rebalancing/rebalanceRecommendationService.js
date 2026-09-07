@@ -64,6 +64,20 @@ function isCashItem(
   );
 }
 
+function isAssetClassItem(item) {
+  return (
+    item?.mode ===
+    TARGET_ALLOCATION_MODES.ASSET_CLASS
+  );
+}
+
+function isDefensiveInvestmentItem(item) {
+  return (
+    normalizeKey(item?.key) ===
+    "DEFENSIVE_INVESTMENTS"
+  );
+}
+
 function buildRecommendationId({
   action,
   key
@@ -348,10 +362,16 @@ function buildIncreaseRecommendation({
       item
     );
 
+  const contributionOnly =
+    isAssetClassItem(item) &&
+    isDefensiveInvestmentItem(item);
+
   const action =
-    cashItem
-      ? "INCREASE_CASH"
-      : "BUY";
+    contributionOnly
+      ? "DIRECT_CONTRIBUTIONS"
+      : cashItem
+        ? "INCREASE_CASH"
+        : "BUY";
 
   const eligibility =
     applyMinimumTradeValue({
@@ -367,7 +387,7 @@ function buildIncreaseRecommendation({
     );
 
   const estimatedQuantity =
-    cashItem
+    cashItem || contributionOnly
       ? null
       : calculateEstimatedQuantity({
           estimatedValue,
@@ -378,7 +398,12 @@ function buildIncreaseRecommendation({
 
   let recommendation;
 
-  if (
+  if (contributionOnly) {
+    recommendation =
+      `Direct future contributions or dividends toward verified money-market or fixed-income investments. The illustrative gap is KES ${estimatedValue.toFixed(
+        2
+      )}; selling existing equities is not required.`;
+  } else if (
     cashItem
   ) {
     recommendation =
@@ -469,15 +494,15 @@ function buildIncreaseRecommendation({
       ),
 
     cashImpact:
-      cashItem
-        ? estimatedValue
+      cashItem || contributionOnly
+        ? 0
         : -estimatedValue,
 
     cashGenerated:
       0,
 
     cashRequired:
-      cashItem
+      cashItem || contributionOnly
         ? 0
         : estimatedValue,
 
@@ -485,7 +510,9 @@ function buildIncreaseRecommendation({
       eligibility.eligible,
 
     eligibilityReason:
-      eligibility.reason,
+      contributionOnly
+        ? "FUTURE_CONTRIBUTIONS"
+        : eligibility.reason,
 
     recommendation,
 
@@ -501,10 +528,80 @@ function buildIncreaseRecommendation({
   };
 }
 
+function buildAssetClassRedirectRecommendation({
+  item,
+  minimumTradeValue
+}) {
+  const estimatedValue =
+    roundMoney(
+      Math.max(
+        number(item?.valueDifference),
+        0
+      )
+    );
+  const eligibility =
+    applyMinimumTradeValue({
+      estimatedValue,
+      minimumTradeValue
+    });
+
+  return {
+    id: buildRecommendationId({
+      action: "REDIRECT_CONTRIBUTIONS",
+      key: item.key
+    }),
+    key: item.key,
+    label: item.label,
+    mode: item.mode,
+    action: "REDIRECT_CONTRIBUTIONS",
+    direction: "HOLD",
+    classification: item.classification,
+    priority: classifyPriority({
+      absoluteDrift: item.absoluteDrift,
+      estimatedValue
+    }),
+    currentPercentage: item.currentPercentage,
+    targetPercentage: item.targetPercentage,
+    driftPercentage: item.driftPercentage,
+    absoluteDrift: item.absoluteDrift,
+    currentValue: item.currentValue,
+    targetValue: item.targetValue,
+    estimatedValue,
+    estimatedQuantity: null,
+    marketPrice: 0,
+    currentQuantity: 0,
+    cashImpact: 0,
+    cashGenerated: 0,
+    cashRequired: 0,
+    eligible: eligibility.eligible,
+    eligibilityReason: "FUTURE_CONTRIBUTIONS",
+    recommendation:
+      `Keep existing ${item.label.toLowerCase()} holdings and direct future contributions or dividends toward underweight defensive investments. No sale is recommended solely to create idle cash.`,
+    metadata: {
+      ...(
+        item?.metadata &&
+        typeof item.metadata === "object"
+          ? item.metadata
+          : {}
+      )
+    }
+  };
+}
+
 function buildReduceRecommendation({
   item,
   minimumTradeValue
 }) {
+  if (
+    isAssetClassItem(item) &&
+    !isCashItem(item)
+  ) {
+    return buildAssetClassRedirectRecommendation({
+      item,
+      minimumTradeValue
+    });
+  }
+
   const estimatedValue =
     roundMoney(
       Math.max(
@@ -1386,7 +1483,7 @@ export function getRebalanceModeGuidance(
     case TARGET_ALLOCATION_MODES
       .ASSET_CLASS:
       return (
-        "Asset-class targets identify how much total value should remain in equity versus cash. They do not select individual securities."
+        "Asset-class targets compare equity with verified defensive investments such as money-market and fixed-income funds. Operational broker cash is excluded, and gaps should normally be addressed with future contributions rather than forced equity sales."
       );
 
     case TARGET_ALLOCATION_MODES

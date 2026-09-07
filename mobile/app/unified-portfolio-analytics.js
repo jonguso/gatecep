@@ -49,8 +49,8 @@ export default function UnifiedPortfolioAnalyticsScreen() {
   const initialSection = ANALYTICS_SECTIONS.some((item) => item.id === params?.section)
     ? params.section
     : null;
-  const [alertFilter, setAlertFilter] = useState("CRITICAL");
-  const [actionFilter, setActionFilter] = useState("RISK");
+  const [alertFilter, setAlertFilter] = useState("ALL");
+  const [actionFilter, setActionFilter] = useState("ALL");
   const [activeSection, setActiveSection] = useState(initialSection);
   const scrollRef = useRef(null);
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();

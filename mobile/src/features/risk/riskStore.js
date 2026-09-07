@@ -76,19 +76,25 @@ function normalizeRiskConfiguration(
       profileType
     );
 
+  const savedLimits =
+    configuration?.limits &&
+    typeof configuration.limits === "object"
+      ? configuration.limits
+      : {};
+
   const limits =
-    validateRiskLimits({
-      ...profile.limits,
-      ...(
-        configuration
-          ?.limits &&
-        typeof configuration
-          .limits ===
-          "object"
-          ? configuration.limits
-          : {}
-      )
-    });
+    validateRiskLimits(
+      profileType === RISK_PROFILE_TYPES.CUSTOM
+        ? {
+            ...profile.limits,
+            ...savedLimits,
+            minimumCashPercentage: 0
+          }
+        : {
+            ...savedLimits,
+            ...profile.limits
+          }
+    );
 
   return {
     id:

@@ -426,13 +426,17 @@ export async function buildPortfolioDriftAnalysis() {
             valueDifference,
 
             action:
-              classification ===
-                "OVERWEIGHT"
-                ? "REDUCE"
-                : classification ===
-                  "UNDERWEIGHT"
-                ? "INCREASE"
-                : "HOLD",
+              mode === TARGET_ALLOCATION_MODES.ASSET_CLASS &&
+              classification === "OVERWEIGHT"
+                ? "REDIRECT_FUTURE_CONTRIBUTIONS"
+                : mode === TARGET_ALLOCATION_MODES.ASSET_CLASS &&
+                    classification === "UNDERWEIGHT"
+                  ? "DIRECT_FUTURE_CONTRIBUTIONS"
+                  : classification === "OVERWEIGHT"
+                    ? "REDUCE"
+                    : classification === "UNDERWEIGHT"
+                      ? "INCREASE"
+                      : "HOLD",
 
             classification,
 
@@ -683,7 +687,21 @@ function buildCurrentAssetClassItems(
       ? allocation.assetClasses
       : [];
 
-  return assetClasses.map(
+  const strategicAssetClasses =
+    assetClasses.filter(
+      (item) =>
+        normalizeKey(item?.key) !==
+        "CASH"
+    );
+
+  const strategicValue =
+    strategicAssetClasses.reduce(
+      (sum, item) =>
+        sum + number(item?.value),
+      0
+    );
+
+  return strategicAssetClasses.map(
     (item) => ({
       key:
         normalizeKey(
@@ -701,9 +719,13 @@ function buildCurrentAssetClassItems(
         ),
 
       currentPercentage:
-        roundPercent(
-          item?.percentage
-        ),
+        strategicValue > 0
+          ? roundPercent(
+              (number(item?.value) /
+                strategicValue) *
+                100
+            )
+          : 0,
 
       metadata: {
         assetClass:

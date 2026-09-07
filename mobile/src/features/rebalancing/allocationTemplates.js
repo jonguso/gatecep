@@ -36,7 +36,7 @@ export const ALLOCATION_TEMPLATES = {
       "Conservative",
 
     description:
-      "Prioritizes liquidity and lower concentration while maintaining measured equity exposure.",
+      "Prioritizes defensive income investments and lower concentration while maintaining measured equity exposure.",
 
     mode:
       TARGET_ALLOCATION_MODES
@@ -56,10 +56,10 @@ export const ALLOCATION_TEMPLATES = {
 
       {
         key:
-          "CASH",
+          "DEFENSIVE_INVESTMENTS",
 
         label:
-          "Cash",
+          "Defensive Investments",
 
         percentage:
           35
@@ -79,7 +79,7 @@ export const ALLOCATION_TEMPLATES = {
       "Balanced",
 
     description:
-      "Balances long-term equity growth with a meaningful cash reserve.",
+      "Balances long-term equity growth with income-producing defensive investments.",
 
     mode:
       TARGET_ALLOCATION_MODES
@@ -99,10 +99,10 @@ export const ALLOCATION_TEMPLATES = {
 
       {
         key:
-          "CASH",
+          "DEFENSIVE_INVESTMENTS",
 
         label:
-          "Cash",
+          "Defensive Investments",
 
         percentage:
           15
@@ -122,7 +122,7 @@ export const ALLOCATION_TEMPLATES = {
       "Growth",
 
     description:
-      "Maintains high equity exposure with a smaller liquidity reserve.",
+      "Maintains high equity exposure with a smaller allocation to defensive investments.",
 
     mode:
       TARGET_ALLOCATION_MODES
@@ -142,10 +142,10 @@ export const ALLOCATION_TEMPLATES = {
 
       {
         key:
-          "CASH",
+          "DEFENSIVE_INVESTMENTS",
 
         label:
-          "Cash",
+          "Defensive Investments",
 
         percentage:
           5
@@ -165,7 +165,7 @@ export const ALLOCATION_TEMPLATES = {
       "Aggressive",
 
     description:
-      "Maximizes equity exposure while retaining only a minimal cash reserve.",
+      "Maximizes equity exposure while retaining a minimal defensive investment allocation.",
 
     mode:
       TARGET_ALLOCATION_MODES
@@ -185,10 +185,10 @@ export const ALLOCATION_TEMPLATES = {
 
       {
         key:
-          "CASH",
+          "DEFENSIVE_INVESTMENTS",
 
         label:
-          "Cash",
+          "Defensive Investments",
 
         percentage:
           2

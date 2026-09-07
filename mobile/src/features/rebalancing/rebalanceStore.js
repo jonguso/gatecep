@@ -227,9 +227,8 @@ function normalizeRebalanceTarget(
       .ASSET_CLASS;
 
   const suppliedTargets =
-    Array.isArray(
-      target?.targets
-    )
+    profileType === REBALANCE_PROFILE_TYPES.CUSTOM &&
+    Array.isArray(target?.targets)
       ? target.targets
       : null;
 
@@ -731,6 +730,7 @@ export async function saveCustomSectorTarget({
 
 export async function saveCustomAssetClassTarget({
   equityPercentage,
+  defensiveInvestmentPercentage,
   cashPercentage,
   tolerancePercentage = 3,
   minimumTradeValue = 0,
@@ -746,7 +746,7 @@ export async function saveCustomAssetClassTarget({
       "Custom Asset Class Allocation",
 
     description:
-      "User-defined target allocation between equity and cash.",
+      "User-defined strategic allocation between equity and defensive investments. Operational broker cash is excluded.",
 
     mode:
       TARGET_ALLOCATION_MODES
@@ -771,16 +771,17 @@ export async function saveCustomAssetClassTarget({
 
       {
         key:
-          "CASH",
+          "DEFENSIVE_INVESTMENTS",
 
         assetClass:
-          "CASH",
+          "DEFENSIVE_INVESTMENTS",
 
         label:
-          "Cash",
+          "Defensive Investments",
 
         percentage:
           number(
+            defensiveInvestmentPercentage ??
             cashPercentage
           )
       }
