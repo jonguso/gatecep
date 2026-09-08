@@ -13,6 +13,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { loadUnifiedPortfolioRuntime } from "../src/portfolio/unifiedPortfolioApi";
 import { calculatePortfolioSummary } from "../src/shared/portfolio/engine";
 import { ContainedPanel, StatusBanner } from "../src/components/mobile/MobileUI";
+import InvestorJourneyNavigation from "../src/components/mobile/InvestorJourneyNavigation";
 
 export default function HoldingDetails() {
   const [holdings, setHoldings] = useState([]);
@@ -147,6 +148,7 @@ export default function HoldingDetails() {
             {securities.map((security, index) => <HoldingListRow key={`${security.symbol || "SECURITY"}-${security.broker || "ALL"}-${index}`} security={security} totalValue={summary.totalValue} onPress={() => setSelectedSecurity({ security, index })} />)}
           </ContainedPanel>
         )}
+        {!selectedSecurity ? <InvestorJourneyNavigation stage="holdings" onRefresh={load} refreshing={loading} nextLabel="Continue to Goals" /> : null}
       </ScrollView>
     </SafeAreaView>
   );

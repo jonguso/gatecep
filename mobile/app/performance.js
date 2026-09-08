@@ -28,6 +28,7 @@ import {
   buildPerformanceBenchmarkGoalIntelligence
 } from "../src/features/performance/performanceBenchmarkGoalIntelligenceService";
 import { calculateResponsivePanelHeight } from "../src/components/mobile/MobileUI";
+import InvestorJourneyNavigation from "../src/components/mobile/InvestorJourneyNavigation";
 
 const PERFORMANCE_SECTIONS = [
   { id: "timeline", title: "Portfolio Value Timeline", summary: "Inspect genuine net-worth, holdings, and cash observations." },
@@ -1643,7 +1644,7 @@ const [historicalSummary, setHistoricalSummary] = useState(null);
         </>
       )}
 
-      <Pressable
+      {activeSection ? <Pressable
         style={styles.backButton}
         onPress={() => activeSection
           ? moveToSection(nextSection?.id || null)
@@ -1654,7 +1655,7 @@ const [historicalSummary, setHistoricalSummary] = useState(null);
             ? nextSection ? `Next: ${nextSection.title} ›` : "Finish: Performance Overview"
             : "Back to Previous Page"}
         </Text>
-      </Pressable>
+      </Pressable> : <InvestorJourneyNavigation stage="performance" onRefresh={() => load()} nextLabel="Continue to Portfolio Risk" />}
     </ScrollView>
   );
 }

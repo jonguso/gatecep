@@ -25,6 +25,7 @@ import {
   buildCoachGRiskAdvice
 } from "../src/features/risk/riskAdvisorService";
 import { calculateResponsivePanelHeight } from "../src/components/mobile/MobileUI";
+import InvestorJourneyNavigation from "../src/components/mobile/InvestorJourneyNavigation";
 
 const PROFILE_ORDER = [
   RISK_PROFILE_TYPES.CONSERVATIVE,
@@ -901,21 +902,7 @@ export default function PortfolioRiskScreen() {
         </Text>
       </View>
 
-      {!activeSection ? (
-        <Pressable
-          disabled={refreshing}
-          style={[styles.primaryButton, refreshing && styles.disabled]}
-          onPress={() => loadData({ showFullLoader: false })}
-        >
-          {refreshing ? (
-            <ActivityIndicator color="white" />
-          ) : (
-            <Text style={styles.primaryButtonText}>Refresh Risk Analytics</Text>
-          )}
-        </Pressable>
-      ) : null}
-
-      <Pressable
+      {activeSection ? <Pressable
         style={styles.secondaryButton}
         onPress={() =>
           activeSection
@@ -928,7 +915,7 @@ export default function PortfolioRiskScreen() {
             ? nextSection ? `Next: ${nextSection.title} ›` : "Finish: Risk Overview"
             : "Back to Previous Page"}
         </Text>
-      </Pressable>
+      </Pressable> : <InvestorJourneyNavigation stage="risk" onRefresh={() => loadData({ showFullLoader: false })} refreshing={refreshing} nextLabel="Continue to Holdings" />}
     </ScrollView>
   );
 }

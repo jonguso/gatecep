@@ -23,6 +23,7 @@ import {
 
 import CoachGReconciliationCard from "../../src/features/wealth-journey/components/CoachGReconciliationCard";
 import { loadCanonicalRealTransactionHistory } from "../../src/features/wealth-journey/canonicalRealBehaviorHistoryService";
+import InvestorJourneyNavigation from "../../src/components/mobile/InvestorJourneyNavigation";
 
 export default function Coach() {
   const [portfolio, setPortfolio] = useState([]);
@@ -390,6 +391,19 @@ export default function Coach() {
       <CoachGReconciliationCard compact={true} />
 
       <View style={styles.card}>
+        <Text style={styles.section}>Explore Your Portfolio</Text>
+        <Text style={styles.body}>Start with the complete analysis, then open a focused detail only when you need it.</Text>
+        <View style={styles.quickGrid}>
+          <QuickCard step="1" title="Portfolio Analysis" desc="Review the consolidated portfolio health and priorities" route="/unified-portfolio-analytics" />
+          <QuickCard step="2" title="Performance" desc="Track genuine portfolio history and goal progress" route="/performance" />
+          <QuickCard step="3" title="Portfolio Risk" desc="Understand concentration, diversification, and stress evidence" route="/portfolio-risk" />
+          <QuickCard step="4" title="Holdings Analysis" desc="Open the concise securities list and focused details" route="/holding-details" />
+          <QuickCard step="5" title="Goals & Wealth Journey" desc="Review goals, progress, and Coach G check-ins" route="/wealth-journey" />
+          <QuickCard step="6" title="Activity Evidence" desc="Inspect the verified portfolio audit trail" route="/portfolio-activity" />
+        </View>
+      </View>
+
+      <View style={styles.card}>
         <Text style={styles.section}>Coach G Portfolio Review</Text>
 
         <Text style={styles.metric2}>
@@ -419,32 +433,6 @@ export default function Coach() {
           <Text style={styles.body}>No major watchlist items detected.</Text>
         )}
 
-        <Text style={styles.section}>Recommendations</Text>
-        {portfolioReview.recommendations.map((item) => (
-          <View key={item.title} style={styles.recommendationRow}>
-            <Text style={styles.planTitle}>{item.title}</Text>
-            <Text style={styles.body}>{item.detail}</Text>
-            {item.symbols?.length ? (
-              <Text style={styles.link}>Ideas: {item.symbols.join(", ")}</Text>
-            ) : null}
-          </View>
-        ))}
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.section}>Analysis Center</Text>
-
-        <View style={styles.quickGrid}>
-          <QuickCard title="Wealth Journey" desc="Review goals, progress, and Coach G check-ins" route="/wealth-journey" />
-          <QuickCard title="Practice Recommendation Lab" desc="Run clearly separated simulations without changing your REAL portfolio" route="/coach-insights" />
-          <QuickCard title="Portfolio Hub" desc="Open your current portfolio view" route="/portfolio-hub" />
-          <QuickCard title="My Holdings" desc="View current positions" route="/holding-details" />
-          <QuickCard title="Performance" desc="Track portfolio growth" route="/performance" />
-          <QuickCard title="Portfolio Risk" desc="Open detailed REAL portfolio risk evidence" route="/portfolio-risk" />
-          <QuickCard title="Rebalancing" desc="Review advisory-only rebalancing guidance" route="/portfolio-rebalancing" />
-          <QuickCard title="Activity" desc="View portfolio audit trail" route="/portfolio-activity" />
-          <QuickCard title="Watchlist" desc="Track stocks and Coach G signals" route="/watchlist" />
-        </View>
       </View>
 
       <View style={styles.card}>
@@ -468,77 +456,18 @@ export default function Coach() {
         ))}
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.section}>Latest Saved Strategy</Text>
+      <InvestorJourneyNavigation stage="coach" nextLabel="Start: Portfolio Analysis" />
 
-        {latestStrategy ? (
-          <>
-            <Text style={styles.body}>Goal: {latestStrategy.goal}</Text>
-            <Text style={styles.body}>Scenario: {latestStrategy.scenario}</Text>
-            <Text style={styles.body}>Amount: KES {money(latestStrategy.amount)}</Text>
-          </>
-        ) : (
-          <Text style={styles.body}>
-            No saved strategy yet. Run a simulation and save it to your profile.
-          </Text>
-        )}
-      </View>
-
-      <Pressable
-        style={styles.primary}
-        onPress={() => {
-          simulate();
-          setShowSimulator(true);
-        }}
-      >
-        <Text style={styles.primaryText}>Preview Advisory Scenario</Text>
-      </Pressable>
-
-      <View style={styles.card}>
-        <Text style={styles.section}>What To Avoid</Text>
-        <Text style={styles.body}>
-          Avoid adding more exposure to {largestSector} unless it supports your goal and risk level.
-        </Text>
-      </View>
-
-      <SimulatorModal
-        visible={showSimulator}
-        onClose={() => setShowSimulator(false)}
-        goal={goal}
-        setGoal={setGoal}
-        scenario={scenario}
-        setScenario={setScenario}
-        amount={amount}
-        setAmount={setAmount}
-        intensity={intensity}
-        setIntensity={setIntensity}
-        goalOpen={goalOpen}
-        setGoalOpen={setGoalOpen}
-        scenarioOpen={scenarioOpen}
-        setScenarioOpen={setScenarioOpen}
-        simulate={simulate}
-        sectorPlan={sectorPlan}
-        projectedValue={value + Number(amount || 0)}
-        saveRecommendation={saveRecommendation}
-        setSelectedSector={setSelectedSector}
-        showResults={showResults}
-        setShowResults={setShowResults}
-      />
-
-      <SectorDetailsModal
-        sector={selectedSector}
-        onClose={() => setSelectedSector(null)}
-        buildSectorDetails={buildSectorDetails}
-      />
     </ScrollView>
   );
 }
 
-function QuickCard({ title, desc, route }) {
+function QuickCard({ step, title, desc, route }) {
   return (
     <Pressable style={styles.quickCard} onPress={() => router.push(route)}>
-      <Text style={styles.quickTitle}>{title}</Text>
-      <Text style={styles.quickDesc}>{desc}</Text>
+      <View style={styles.quickStep}><Text style={styles.quickStepText}>{step}</Text></View>
+      <View style={{ flex: 1 }}><Text style={styles.quickTitle}>{title}</Text><Text style={styles.quickDesc}>{desc}</Text></View>
+      <Text style={styles.quickArrow}>›</Text>
     </Pressable>
   );
 }
@@ -867,10 +796,16 @@ const styles = StyleSheet.create({
     borderColor: "#1e293b",
     borderWidth: 1,
     borderRadius: 16,
-    padding: 16,
+    padding: 14,
     minHeight: 96,
-    justifyContent: "center"
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10
   },
+
+  quickStep: { width: 28, height: 28, borderRadius: 14, borderWidth: 1, borderColor: "#22d3ee", alignItems: "center", justifyContent: "center" },
+  quickStepText: { color: "#67e8f9", fontWeight: "900" },
+  quickArrow: { color: "#c084fc", fontSize: 22, fontWeight: "900" },
 
   quickTitle: {
     color: "#67e8f9",
@@ -884,6 +819,12 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     fontSize: 12
   },
+
+  recommendationsHandoff: { marginTop: 18, minHeight: 82, borderRadius: 18, borderWidth: 1, borderColor: "#6b21a8", backgroundColor: "#1d0b38", paddingHorizontal: 16, paddingVertical: 14, flexDirection: "row", alignItems: "center" },
+  recommendationsEyebrow: { color: "#f59e0b", fontSize: 9, fontWeight: "900" },
+  recommendationsTitle: { color: "white", fontSize: 16, fontWeight: "900", marginTop: 3 },
+  recommendationsText: { color: "#cbd5e1", fontSize: 11, lineHeight: 16, marginTop: 4 },
+  recommendationsArrow: { color: "#c084fc", fontSize: 28, fontWeight: "900", marginLeft: 12 },
 
   primary: {
     marginTop: 20,

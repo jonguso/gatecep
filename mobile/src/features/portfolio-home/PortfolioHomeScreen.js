@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from "react";
 import {
   Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -175,8 +176,7 @@ export default function PortfolioHomeScreen() {
           {sectorPageCount > 1 ? <View style={styles.sectorPager}><Pressable disabled={currentSectorPage === 0} style={[styles.pagerButton, currentSectorPage === 0 && styles.pagerButtonDisabled]} onPress={() => setSectorPage((page) => Math.max(0, page - 1))}><Text style={styles.pagerText}>‹ Previous</Text></Pressable><Text style={styles.pageStatus}>{currentSectorPage + 1} of {sectorPageCount}</Text><Pressable disabled={currentSectorPage >= sectorPageCount - 1} style={[styles.pagerButton, currentSectorPage >= sectorPageCount - 1 && styles.pagerButtonDisabled]} onPress={() => setSectorPage((page) => Math.min(sectorPageCount - 1, page + 1))}><Text style={styles.pagerText}>Next ›</Text></Pressable></View> : null}
         </View>
 
-        <InvestorJourney />
-        <PortfolioDestinations holdingsCount={summary.holdingsCount || 0} />
+        <CoachInsightsHandoff />
 
         <AccountModal visible={accountModalOpen} accounts={accounts} selected={selectedAccount} onSelect={selectAccount} onClose={() => setAccountModalOpen(false)} />
         <PriceStatusModal visible={priceModalOpen} marketData={marketData} onClose={() => setPriceModalOpen(false)} />
@@ -206,15 +206,9 @@ function buildSectorRows(holdings, totalValue) {
 
 function QuickMetric({ label, value }) { return <View style={styles.quickMetric}><Text style={styles.quickLabel}>{label}</Text><Text numberOfLines={1} style={styles.quickValue}>{value}</Text></View>; }
 
-function InvestorJourney() {
-  return <View style={styles.journey}><Text style={styles.journeyTitle}>Understand Your Portfolio</Text><Text style={styles.journeyHint}>Move from verified facts to explanation and then guidance.</Text><JourneyStep number="1" title="Portfolio Analysis" detail="Analyze portfolio numbers and performance." route="/unified-portfolio-analytics" accent="#22d3ee" /><JourneyStep number="2" title="Coach G Insights" detail="Understand risk and why the portfolio behaves this way." route="/(tabs)/coach" accent="#8b5cf6" /><JourneyStep number="3" title="Coach G Recommendations" detail="Review advisory-only rebalancing guidance." route="/portfolio-rebalancing" accent="#f59e0b" /></View>;
+function CoachInsightsHandoff() {
+  return <Pressable accessibilityRole="button" style={styles.coachHandoff} onPress={() => router.push("/(tabs)/coach")}><View style={styles.flex}><Text style={styles.coachHandoffEyebrow}>NEXT</Text><Text style={styles.coachHandoffTitle}>Understand this portfolio with Coach G</Text><Text style={styles.coachHandoffText}>Open analysis, performance, risk, holdings, goals, and evidence in one guided place.</Text></View><Text style={styles.coachHandoffArrow}>›</Text></Pressable>;
 }
-
-function JourneyStep({ number: stepNumber, title, detail, route, accent }) { return <Pressable style={styles.journeyStep} onPress={() => router.push(route)}><View style={[styles.stepNumber, { borderColor: accent }]}><Text style={[styles.stepNumberText, { color: accent }]}>{stepNumber}</Text></View><View style={styles.flex}><Text style={styles.journeyStepTitle}>{title}</Text><Text style={styles.journeyStepDetail}>{detail}</Text></View><Text style={styles.arrow}>›</Text></Pressable>; }
-
-function PortfolioDestinations({ holdingsCount }) { return <View style={styles.portfolioDestinations}><Text style={styles.destinationHeading}>Portfolio Details</Text><View style={styles.destinationGrid}><Destination label={`Holdings (${holdingsCount})`} route="/holding-details" /><Destination label="Activity" route="/portfolio-activity" /><Destination label="Goals" route="/wealth-journey" /><Destination label="Sync" route="/portfolio-sync-center" /></View></View>; }
-
-function Destination({ label, route }) { return <Pressable style={styles.destination} onPress={() => router.push(route)}><Text style={styles.destinationText}>{label}</Text><Text style={styles.destinationArrow}>›</Text></Pressable>; }
 
 function HoldingRow({ holding }) {
   const gain = number(holding.profitLoss);
@@ -233,13 +227,23 @@ function SectorRow({ sector, color, onPress }) {
 }
 
 function SectorDonut({ data, total, size, onSelect }) {
+  if (Platform.OS === "web") {
+    return <WebSectorDonut data={data} total={total} size={size} onSelect={onSelect} />;
+  }
+
   const center = size / 2;
   const outer = size * 0.39;
   const inner = size * 0.245;
   let angle = -90;
   function handleChartPress(event) {
-    const x = number(event?.nativeEvent?.locationX);
-    const y = number(event?.nativeEvent?.locationY);
+    const x = number(
+      event?.nativeEvent?.locationX ??
+      event?.nativeEvent?.offsetX
+    );
+    const y = number(
+      event?.nativeEvent?.locationY ??
+      event?.nativeEvent?.offsetY
+    );
     const distance = Math.hypot(x - center, y - center);
     if (distance < inner || distance > outer) return;
     const degrees = Math.atan2(y - center, x - center) * 180 / Math.PI;
@@ -251,7 +255,69 @@ function SectorDonut({ data, total, size, onSelect }) {
     });
     if (selected) onSelect(selected);
   }
-  return <View style={styles.chart}><Svg accessibilityRole="button" accessibilityLabel="Sector allocation chart. Tap a colored sector to view its securities" testID="portfolio-sector-donut" width={size} height={size} onPress={handleChartPress}><G>{data.map((sector, index) => { const start = angle; const sweep = total > 0 ? sector.totalValue / total * 360 : 0; const end = start + sweep; const path = describeArc(center, center, outer, inner, start, end); const labelPoint = polar(center, center, outer + size * 0.055, start + sweep / 2); angle = end; return <G key={sector.sector}><Path pointerEvents="none" d={path} fill={COLORS[index % COLORS.length]} stroke="#020617" strokeWidth={2} /><SvgText pointerEvents="none" x={labelPoint.x} y={labelPoint.y + 3} fill="#f8fafc" fontSize="9" fontWeight="900" textAnchor="middle">{number(sector.weight).toFixed(1)}%</SvgText></G>; })}<SvgText pointerEvents="none" x={center} y={center - 13} fill="#94a3b8" fontSize="10" textAnchor="middle">Total Value</SvgText><SvgText pointerEvents="none" x={center} y={center + 2} fill="#94a3b8" fontSize="9" textAnchor="middle">KES</SvgText><SvgText pointerEvents="none" x={center} y={center + 22} fill="#f8fafc" fontSize="14" fontWeight="900" textAnchor="middle">{money(total)}</SvgText></G></Svg><Text style={styles.chartHint}>Tap a colored sector or its row to view securities</Text></View>;
+  return <View style={styles.chart}><View style={[styles.chartCanvas, { width: size, height: size }]}><Svg accessibilityRole="button" accessibilityLabel="Sector allocation chart. Tap a colored sector to view its securities" testID="portfolio-sector-donut" width="100%" height="100%" viewBox={`0 0 ${size} ${size}`} preserveAspectRatio="xMidYMid meet" style={styles.chartSvg} onPress={handleChartPress}><G>{data.map((sector, index) => { const start = angle; const sweep = total > 0 ? sector.totalValue / total * 360 : 0; const end = start + sweep; const path = describeArc(center, center, outer, inner, start, end); const labelPoint = polar(center, center, outer + size * 0.055, start + sweep / 2); angle = end; return <G key={sector.sector}><Path pointerEvents="none" d={path} fill={COLORS[index % COLORS.length]} stroke="#020617" strokeWidth={2} /><SvgText pointerEvents="none" x={labelPoint.x} y={labelPoint.y + 3} fill="#f8fafc" fontSize="9" fontWeight="900" textAnchor="middle">{number(sector.weight).toFixed(1)}%</SvgText></G>; })}<SvgText pointerEvents="none" x={center} y={center - 13} fill="#94a3b8" fontSize="10" textAnchor="middle">Total Value</SvgText><SvgText pointerEvents="none" x={center} y={center + 2} fill="#94a3b8" fontSize="9" textAnchor="middle">KES</SvgText><SvgText pointerEvents="none" x={center} y={center + 22} fill="#f8fafc" fontSize="14" fontWeight="900" textAnchor="middle">{money(total)}</SvgText></G></Svg></View><Text style={styles.chartHint}>Tap a colored sector or its row to view securities</Text></View>;
+}
+
+function WebSectorDonut({ data, total, size, onSelect }) {
+  const center = size / 2;
+  const outer = size * 0.39;
+  const inner = size * 0.245;
+  let angle = -90;
+  const element = React.createElement;
+  const segments = data.map((sector, index) => {
+    const start = angle;
+    const sweep = total > 0 ? number(sector.totalValue) / total * 360 : 0;
+    const end = start + sweep;
+    angle = end;
+    return {
+      sector,
+      color: COLORS[index % COLORS.length],
+      path: describeArc(center, center, outer, inner, start, end),
+      labelPoint: polar(center, center, outer + size * 0.055, start + sweep / 2)
+    };
+  });
+
+  function handleClick(event) {
+    const bounds = event?.currentTarget?.getBoundingClientRect?.();
+    if (!bounds?.width || !bounds?.height) return;
+    const x = ((number(event?.clientX) - bounds.left) / bounds.width) * size;
+    const y = ((number(event?.clientY) - bounds.top) / bounds.height) * size;
+    const distance = Math.hypot(x - center, y - center);
+    if (distance < inner || distance > outer) return;
+    const degrees = Math.atan2(y - center, x - center) * 180 / Math.PI;
+    const position = (degrees + 180 + 360) % 360;
+    let cumulative = 0;
+    const selected = data.find((sector) => {
+      cumulative += total > 0 ? number(sector.totalValue) / total * 360 : 0;
+      return position <= cumulative;
+    });
+    if (selected) onSelect(selected);
+  }
+
+  const svgChildren = [];
+  segments.forEach(({ sector, color, path, labelPoint }, index) => {
+    svgChildren.push(element("path", { key: "path-" + index, d: path, fill: color, stroke: "#020617", strokeWidth: 2, pointerEvents: "none" }));
+    svgChildren.push(element("text", { key: "label-" + index, x: labelPoint.x, y: labelPoint.y + 3, fill: "#f8fafc", fontSize: 9, fontWeight: 900, textAnchor: "middle", pointerEvents: "none" }, number(sector.weight).toFixed(1) + "%"));
+  });
+  svgChildren.push(
+    element("text", { key: "title", x: center, y: center - 13, fill: "#94a3b8", fontSize: 10, textAnchor: "middle", pointerEvents: "none" }, "Total Value"),
+    element("text", { key: "currency", x: center, y: center + 2, fill: "#94a3b8", fontSize: 9, textAnchor: "middle", pointerEvents: "none" }, "KES"),
+    element("text", { key: "value", x: center, y: center + 22, fill: "#f8fafc", fontSize: 14, fontWeight: 900, textAnchor: "middle", pointerEvents: "none" }, money(total))
+  );
+
+  const svg = element("svg", {
+    role: "button",
+    "aria-label": "Sector allocation chart. Click a colored sector to view its securities",
+    "data-testid": "portfolio-sector-donut-web",
+    width: size,
+    height: size,
+    viewBox: "0 0 " + size + " " + size,
+    preserveAspectRatio: "xMidYMid meet",
+    onClick: handleClick,
+    style: { display: "block", width: "100%", height: "100%", background: "transparent", cursor: "pointer" }
+  }, ...svgChildren);
+
+  return <View style={styles.chart}><View style={[styles.chartCanvas, { width: size, height: size }]}>{svg}</View><Text style={styles.chartHint}>Click a colored sector or its row to view securities</Text></View>;
 }
 
 function AccountModal({ visible, accounts, selected, onSelect, onClose }) {
@@ -287,9 +353,9 @@ const styles = StyleSheet.create({
   utilityRow: { flexDirection: "row", gap: 8, marginTop: 8 }, accountSelector: { flex: 1.65, minWidth: 0, minHeight: 54, paddingHorizontal: 13, borderRadius: 16, borderColor: "#334155", borderWidth: 1, backgroundColor: "#0f172a", flexDirection: "row", alignItems: "center" }, accountCopy: { flex: 1, minWidth: 0 }, accountLabel: { color: "#64748b", fontSize: 9, fontWeight: "900" }, accountName: { color: "#f8fafc", fontWeight: "900", marginTop: 3 }, accountChevron: { color: "#67e8f9", fontSize: 22, fontWeight: "900" }, priceButton: { flex: 1, minWidth: 0, minHeight: 54, borderRadius: 16, borderWidth: 1, paddingHorizontal: 11, justifyContent: "center" }, priceButtonLive: { backgroundColor: "#052e2b", borderColor: "#0f766e" }, priceButtonVerified: { backgroundColor: "#23180b", borderColor: "#92400e" }, priceButtonLabel: { color: "#94a3b8", fontSize: 9, fontWeight: "900" }, priceButtonValue: { color: "#f8fafc", fontSize: 12, fontWeight: "900", marginTop: 3 },
   signInButton: { backgroundColor: "#7f1d1d", borderRadius: 13, minHeight: 46, marginTop: 8, alignItems: "center", justifyContent: "center" }, signInText: { color: "white", fontWeight: "900" },
   hero: { marginTop: 8, backgroundColor: "#1d0b38", borderColor: "#6b21a8", borderWidth: 1, borderRadius: 18, paddingVertical: 10, paddingHorizontal: 13 }, heroCompact: { paddingVertical: 8, paddingHorizontal: 12, borderRadius: 16 }, heroLabel: { color: "#d8b4fe", fontSize: 9, fontWeight: "900" }, heroValue: { color: "white", fontSize: 25, fontWeight: "900", marginTop: 2 }, heroValueCompact: { fontSize: 23, marginTop: 1 }, gain: { color: "#86efac", fontWeight: "900", fontSize: 11, marginTop: 2 }, loss: { color: "#fca5a5", fontWeight: "900", fontSize: 11, marginTop: 2 }, quickMetrics: { flexDirection: "row", gap: 6, marginTop: 7 }, quickMetricsCompact: { marginTop: 6 }, quickMetric: { flex: 1, minWidth: 0, backgroundColor: "#09051d", borderRadius: 10, paddingVertical: 6, paddingHorizontal: 8 }, quickLabel: { color: "#94a3b8", fontSize: 8 }, quickValue: { color: "white", fontWeight: "900", fontSize: 11, marginTop: 2 },
-  primaryCard: { marginTop: 10, backgroundColor: "#0f172a", borderColor: "#1e293b", borderWidth: 1, borderRadius: 20, padding: 15 }, cardHeader: { flexDirection: "row", alignItems: "center", gap: 10 }, cardTitle: { color: "#67e8f9", fontSize: 18, fontWeight: "900" }, cardHint: { color: "#94a3b8", fontSize: 11, marginTop: 4 }, largestSectorBadge: { maxWidth: "42%", borderRadius: 11, borderWidth: 1, borderColor: "#6b21a8", backgroundColor: "#1d0b38", paddingHorizontal: 9, paddingVertical: 7 }, largestSectorLabel: { color: "#94a3b8", fontSize: 7, fontWeight: "900" }, largestSectorValue: { color: "#d8b4fe", fontSize: 10, fontWeight: "900", marginTop: 2 }, flex: { flex: 1 }, chart: { alignItems: "center", justifyContent: "center", marginVertical: 2 }, chartHint: { color: "#94a3b8", fontSize: 9, marginTop: -3, marginBottom: 3 },
+  primaryCard: { marginTop: 10, backgroundColor: "#0f172a", borderColor: "#1e293b", borderWidth: 1, borderRadius: 20, padding: 15 }, cardHeader: { flexDirection: "row", alignItems: "center", gap: 10 }, cardTitle: { color: "#67e8f9", fontSize: 18, fontWeight: "900" }, cardHint: { color: "#94a3b8", fontSize: 11, marginTop: 4 }, largestSectorBadge: { maxWidth: "42%", borderRadius: 11, borderWidth: 1, borderColor: "#6b21a8", backgroundColor: "#1d0b38", paddingHorizontal: 9, paddingVertical: 7 }, largestSectorLabel: { color: "#94a3b8", fontSize: 7, fontWeight: "900" }, largestSectorValue: { color: "#d8b4fe", fontSize: 10, fontWeight: "900", marginTop: 2 }, flex: { flex: 1 }, chart: { alignItems: "center", justifyContent: "center", marginVertical: 2 }, chartCanvas: { flexGrow: 0, flexShrink: 0, overflow: "visible", backgroundColor: "transparent" }, chartSvg: { backgroundColor: "transparent" }, chartHint: { color: "#94a3b8", fontSize: 9, marginTop: -3, marginBottom: 3 },
   sectorRow: { minHeight: 58, flexDirection: "row", alignItems: "center", gap: 7, borderTopColor: "#1e293b", borderTopWidth: 1, paddingHorizontal: 4 }, sectorRowPressed: { backgroundColor: "#1e293b" }, dot: { width: 10, height: 10, borderRadius: 5 }, sectorDirection: { width: 13, fontWeight: "900", textAlign: "center" }, sectorUp: { color: "#86efac", fontWeight: "900", fontSize: 10 }, sectorDown: { color: "#fca5a5", fontWeight: "900", fontSize: 10 }, sectorFlat: { color: "#94a3b8", fontWeight: "900", fontSize: 10 }, sectorName: { color: "#e2e8f0", fontWeight: "800", flex: 1 }, sectorNumbers: { alignItems: "flex-end", minWidth: 64 }, sectorValue: { color: "white", fontWeight: "900", fontSize: 10 }, sectorWeight: { color: "#e2e8f0", fontWeight: "900", fontSize: 10, width: 43, textAlign: "right" }, sectorArrow: { color: "#67e8f9", fontWeight: "900", fontSize: 22 }, sectorPager: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 10 }, pagerButton: { flex: 1, minHeight: 42, borderRadius: 12, backgroundColor: "#1e293b", alignItems: "center", justifyContent: "center" }, pagerButtonDisabled: { opacity: 0.35 }, pagerText: { color: "#67e8f9", fontWeight: "900", fontSize: 11 }, pageStatus: { color: "#94a3b8", fontWeight: "800", fontSize: 10 },
-  arrow: { color: "#c084fc", fontSize: 24, fontWeight: "900", marginLeft: 8 }, journey: { marginTop: 12, backgroundColor: "#0f172a", borderColor: "#1e293b", borderWidth: 1, borderRadius: 20, padding: 15 }, journeyTitle: { color: "#67e8f9", fontSize: 18, fontWeight: "900" }, journeyHint: { color: "#94a3b8", fontSize: 11, marginTop: 4, marginBottom: 4 }, journeyStep: { minHeight: 66, flexDirection: "row", alignItems: "center", borderTopColor: "#1e293b", borderTopWidth: 1, marginTop: 8, paddingTop: 8 }, stepNumber: { width: 32, height: 32, borderRadius: 16, borderWidth: 2, alignItems: "center", justifyContent: "center", marginRight: 10 }, stepNumberText: { fontWeight: "900" }, journeyStepTitle: { color: "white", fontWeight: "900" }, journeyStepDetail: { color: "#94a3b8", fontSize: 10, marginTop: 3, lineHeight: 14 }, portfolioDestinations: { marginTop: 12 }, destinationHeading: { color: "#e2e8f0", fontWeight: "900", marginBottom: 8 }, destinationGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 }, destination: { width: "48%", flexGrow: 1, backgroundColor: "#1e293b", minHeight: 48, borderRadius: 14, paddingHorizontal: 12, flexDirection: "row", alignItems: "center" }, destinationText: { color: "white", fontWeight: "900", fontSize: 12, flex: 1 }, destinationArrow: { color: "#67e8f9", fontSize: 19 },
+  arrow: { color: "#c084fc", fontSize: 24, fontWeight: "900", marginLeft: 8 }, coachHandoff: { marginTop: 12, minHeight: 82, borderRadius: 18, borderWidth: 1, borderColor: "#164e63", backgroundColor: "#062033", paddingHorizontal: 15, paddingVertical: 13, flexDirection: "row", alignItems: "center" }, coachHandoffEyebrow: { color: "#67e8f9", fontSize: 9, fontWeight: "900" }, coachHandoffTitle: { color: "white", fontSize: 15, fontWeight: "900", marginTop: 3 }, coachHandoffText: { color: "#94a3b8", fontSize: 10, lineHeight: 14, marginTop: 4 }, coachHandoffArrow: { color: "#c084fc", fontSize: 28, fontWeight: "900", marginLeft: 12 },
   holdingRow: { minHeight: 64, flexDirection: "row", alignItems: "center", borderBottomColor: "#1e293b", borderBottomWidth: 1, paddingVertical: 9 }, symbol: { color: "white", fontWeight: "900", fontSize: 16 }, holdingMeta: { color: "#94a3b8", fontSize: 11, marginTop: 4 }, alignRight: { alignItems: "flex-end" }, holdingValue: { color: "white", fontWeight: "900", fontSize: 12 }, gainSmall: { color: "#86efac", fontWeight: "900", fontSize: 11, marginTop: 4 }, lossSmall: { color: "#fca5a5", fontWeight: "900", fontSize: 11, marginTop: 4 },
   overlay: { flex: 1, backgroundColor: "rgba(2,6,23,.82)", justifyContent: "center", padding: 20 }, modal: { backgroundColor: "#0f172a", borderColor: "#334155", borderWidth: 1, borderRadius: 20, padding: 16 }, modalTitle: { color: "white", fontSize: 19, fontWeight: "900" }, modalOption: { minHeight: 50, justifyContent: "center", borderTopColor: "#1e293b", borderTopWidth: 1 }, modalOptionText: { color: "#f8fafc", fontWeight: "800" }, priceDetails: { marginTop: 14, gap: 8 }, priceDetail: { backgroundColor: "#020617", borderRadius: 12, padding: 11 }, priceDetailLabel: { color: "#94a3b8", fontSize: 9, fontWeight: "800" }, priceDetailValue: { color: "#f8fafc", fontWeight: "900", marginTop: 4 }, priceExplanation: { color: "#cbd5e1", lineHeight: 19, marginTop: 14 }, modalDone: { minHeight: 46, borderRadius: 13, backgroundColor: "#0891b2", alignItems: "center", justifyContent: "center", marginTop: 16 }, modalDoneText: { color: "white", fontWeight: "900" }, sectorModal: { backgroundColor: "#0f172a", borderColor: "#334155", borderWidth: 1, borderRadius: 22, padding: 16, maxHeight: "80%" }, closeButton: { width: 42, height: 42, backgroundColor: "#1e293b", borderRadius: 13, alignItems: "center", justifyContent: "center" }, closeText: { color: "white", fontSize: 25 }
 });

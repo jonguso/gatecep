@@ -156,12 +156,11 @@ export default function PortfolioActivity() {
       ) : null}
       </ContainedPanel>
 
-      <Pressable
-        style={styles.backButton}
-        onPress={() => router.replace("/(tabs)/dashboard")}
-      >
-        <Text style={styles.backText}>Back to Dashboard</Text>
-      </Pressable>
+      <View style={styles.activityActions}>
+        <Pressable style={styles.backButton} onPress={() => router.replace("/(tabs)/coach")}><Text style={styles.backText}>‹ Back to Coach Insights</Text></Pressable>
+        <Pressable style={styles.backButton} onPress={() => router.replace("/(tabs)/dashboard")}><Text style={styles.backText}>Home</Text></Pressable>
+        <Pressable style={styles.backButton} onPress={load}><Text style={styles.backText}>Refresh Evidence</Text></Pressable>
+      </View>
     </ScrollView>
   );
 }
@@ -273,6 +272,7 @@ const styles = StyleSheet.create({
   white: { color: "white", fontWeight: "900", marginTop: 6 },
   green: { color: "#86efac", fontWeight: "900", marginTop: 6 },
   red: { color: "#fca5a5", fontWeight: "900", marginTop: 6 },
+  activityActions: { marginTop: 16, gap: 8 },
   backButton: {
     marginTop: 20,
     backgroundColor: "#1e293b",

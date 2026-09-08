@@ -14,6 +14,7 @@ import { buildUnifiedPortfolioAnalytics } from "../src/features/analytics/unifie
 import { buildPortfolioHealthScore } from "../src/features/analytics/portfolioHealthScoreService";
 import { buildExecutiveActionQueue } from "../src/features/analytics/executiveActionQueueService";
 import { calculateResponsivePanelHeight } from "../src/components/mobile/MobileUI";
+import InvestorJourneyNavigation from "../src/components/mobile/InvestorJourneyNavigation";
 
 const ALERT_FILTERS = ["ALL", "CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"];
 const ACTION_FILTERS = [
@@ -34,8 +35,7 @@ const ANALYTICS_SECTIONS = [
   { id: "actions", title: "Executive Actions", summary: "Inspect ranked advisory priorities and estimated financial impact." },
   { id: "alerts", title: "Portfolio Alerts", summary: "Review unified risk, performance, and rebalancing alerts." },
   { id: "holdings", title: "Holdings Analytics", summary: "Inspect security allocation, contribution, return, and risk status." },
-  { id: "operations", title: "Broker & Operations", summary: "Review broker, reconciliation, dividends, income, and rebalance status." },
-  { id: "specialists", title: "Specialist Analysis", summary: "Open Risk, Performance, Rebalancing, or the canonical Home." }
+  { id: "operations", title: "Broker & Operations", summary: "Review broker, reconciliation, dividends, income, and rebalance status." }
 ];
 
 export default function UnifiedPortfolioAnalyticsScreen() {
@@ -476,47 +476,6 @@ export default function UnifiedPortfolioAnalyticsScreen() {
         </View>
       </Section>
 
-      <Section
-        style={activeSection !== "specialists" && styles.hidden}
-        title="Specialist Analysis"
-        description="Open the detailed engines behind the executive portfolio view."
-      >
-        <View style={styles.specialistGrid}>
-          <Pressable
-            style={styles.specialistButton}
-            onPress={() =>
-              router.push({ pathname: "/portfolio-risk", params: { returnTo: "analysis" } })
-            }
-          >
-            <Text style={styles.specialistButtonText}>
-              Risk Analytics
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.specialistButton}
-            onPress={() =>
-              router.push({ pathname: "/performance", params: { returnTo: "analysis" } })
-            }
-          >
-            <Text style={styles.specialistButtonText}>
-              Performance
-            </Text>
-          </Pressable>
-
-          <Pressable
-            style={styles.specialistButton}
-            onPress={() =>
-              router.push({ pathname: "/portfolio-rebalancing", params: { returnTo: "analysis" } })
-            }
-          >
-            <Text style={styles.specialistButtonText}>
-              Rebalancing
-            </Text>
-          </Pressable>
-
-        </View>
-      </Section>
       </ScrollView>
       </View>
       ) : null}
@@ -530,18 +489,6 @@ export default function UnifiedPortfolioAnalyticsScreen() {
         </Text>
       </View>
 
-      <Pressable
-        disabled={refreshing}
-        style={[styles.primaryButton, activeSection && styles.hidden, refreshing && styles.disabled]}
-        onPress={() => loadData({ fullLoader: false })}
-      >
-        {refreshing ? (
-          <ActivityIndicator color="white" />
-        ) : (
-          <Text style={styles.primaryButtonText}>Refresh Unified Analytics</Text>
-        )}
-      </Pressable>
-
       {activeSection ? (
         <Pressable
           style={styles.journeyNextButton}
@@ -551,14 +498,7 @@ export default function UnifiedPortfolioAnalyticsScreen() {
             {nextSection ? `Next: ${nextSection.title} ›` : "Finish: Analysis Overview ›"}
           </Text>
         </Pressable>
-      ) : (
-        <Pressable
-          style={styles.secondaryButton}
-          onPress={goBack}
-        >
-          <Text style={styles.secondaryButtonText}>Back to Previous Page</Text>
-        </Pressable>
-      )}
+      ) : <InvestorJourneyNavigation stage="analysis" onRefresh={() => loadData({ fullLoader: false })} refreshing={refreshing} nextLabel="Continue to Performance" />}
     </ScrollView>
   );
 }

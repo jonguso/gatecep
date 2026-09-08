@@ -177,6 +177,10 @@ async function handleReadAll() {
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Alerts</Text>
 
+        <Pressable style={styles.primaryButton} onPress={() => router.push("/(tabs)/news")}>
+          <Text style={styles.primaryText}>Open Portfolio-Aware News Alerts</Text>
+        </Pressable>
+
         {notifications.length ? (
           notifications.map((item) => (
             <Pressable

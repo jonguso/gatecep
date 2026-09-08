@@ -16,9 +16,9 @@ assert.match(home, /visibleSectorRows/);
 assert.match(home, /currentSectorPage \+ 1\} of \{sectorPageCount/);
 assert.doesNotMatch(home, /const TABS = \["Allocation", "Holdings", "More"\]/);
 assert.doesNotMatch(home, /AllocationMetric/);
-assert.match(home, /title="Portfolio Analysis"/);
-assert.match(home, /title="Coach G Insights"/);
-assert.match(home, /title="Coach G Recommendations"/);
+assert.match(home, /function CoachInsightsHandoff/);
+assert.match(home, /router\.push\("\/\(tabs\)\/coach"\)/);
+assert.doesNotMatch(home, /title="Portfolio Analysis"/);
 
 for (const [name, source] of [["Analysis", analysis], ["Performance", performance], ["Risk", risk], ["Rebalancing", rebalance], ["Coach G Insights", coach]]) {
   assert.match(source, /router\.canGoBack\?\.\(\)/, `${name} must prefer navigation history`);
@@ -26,11 +26,13 @@ for (const [name, source] of [["Analysis", analysis], ["Performance", performanc
   assert.match(source, /router\.replace\("\/\(tabs\)\/dashboard"\)/, `${name} must retain an explicit Home action/fallback`);
 }
 
+assert.match(coach, /title="Portfolio Analysis"/);
+assert.match(coach, /title="Performance"/);
 assert.match(coach, /title="Portfolio Risk"/);
-assert.match(coach, /title="Rebalancing"/);
+assert.match(coach, /InvestorJourneyNavigation stage="coach"/);
+assert.match(coach, /nextLabel="Start: Portfolio Analysis"/);
 
 console.log("PASS — allocation displays every sector across five-row pages without duplicate summary metrics.");
-console.log("PASS — Home presents the facts → analysis → insights → recommendations browsing order.");
+console.log("PASS — Home presents verified facts followed by one Coach Insights handoff.");
 console.log("PASS — Back returns through navigation history while Home remains explicitly available at the top.");
-console.log("PASS — Performance, Risk, and advisory Rebalancing remain discoverable in their logical stages.");
-
+console.log("PASS — Analysis, Performance, Risk, and Coach G Recommendations remain discoverable in their logical stages.");

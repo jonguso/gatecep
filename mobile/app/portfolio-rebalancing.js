@@ -22,6 +22,7 @@ import {
   router,
   useLocalSearchParams
 } from "expo-router";
+import InvestorJourneyNavigation from "../src/components/mobile/InvestorJourneyNavigation";
 
 import {
   applyRebalanceTemplate,
@@ -50,7 +51,7 @@ const PROFILE_ORDER = [
 ];
 
 const REBALANCE_SECTIONS = [
-  { id: "health", title: "Portfolio Health", description: "Review alignment, diversification, liquidity, funding, and Coach G guidance." },
+  { id: "health", title: "Portfolio Health", description: "Review goal alignment, diversification, liquidity, funding, and Coach G guidance." },
   { id: "target", title: "Target Profile", description: "Inspect or change the saved asset-class target and tolerance." },
   { id: "allocation", title: "Allocation & Drift", description: "Compare current and target allocation and inspect material drift." },
   { id: "funding", title: "Funding Readiness", description: "Review the cash available to support the recommendation set." },
@@ -372,7 +373,7 @@ export default function PortfolioRebalancingScreen() {
           styles.title
         }
       >
-        Portfolio Rebalancing
+        Coach G Recommendations
       </Text>
 
       <View style={styles.headerActions}>
@@ -391,7 +392,7 @@ export default function PortfolioRebalancingScreen() {
       >
         {activeSection
           ? REBALANCE_SECTIONS.find((section) => section.id === activeSection)?.title
-          : "Compare the current portfolio against a saved target allocation and review non-executing rebalancing guidance."}
+          : "Review prioritized, advisory-only portfolio actions and follow-up without changing holdings or cash."}
       </Text>
 
       {error ? (
@@ -547,7 +548,7 @@ export default function PortfolioRebalancingScreen() {
 
       {!activeSection ? (
         <View style={styles.detailMenu}>
-          <Text style={styles.sectionTitle}>Rebalancing Details</Text>
+          <Text style={styles.sectionTitle}>Recommendation Details</Text>
           <Text style={styles.sectionDescription}>Choose one area. Each opens as a focused mobile step.</Text>
           {REBALANCE_SECTIONS.map((section) => (
             <Pressable
@@ -567,7 +568,7 @@ export default function PortfolioRebalancingScreen() {
         <View style={styles.detailNavigation}>
           <Pressable onPress={() => moveToSection(previousSection?.id || null)}>
             <Text style={styles.detailNavigationText}>
-              {previousSection ? `‹ Previous: ${previousSection.title}` : "‹ Rebalancing Overview"}
+              {previousSection ? `‹ Previous: ${previousSection.title}` : "‹ Recommendations Overview"}
             </Text>
           </Pressable>
           <Text style={styles.detailPosition}>{activeSectionIndex + 1} of {REBALANCE_SECTIONS.length}</Text>
@@ -1421,6 +1422,24 @@ export default function PortfolioRebalancingScreen() {
       </View>
       ) : null}
 
+      {params?.scenario === "goal-aware" ? (
+        <View style={[styles.goalScenarioCard, activeSection && styles.hidden]}>
+          <Text style={styles.goalScenarioEyebrow}>GOAL-AWARE SCENARIO • ADVISORY ONLY</Text>
+          <Text style={styles.goalScenarioTitle}>{parameter(params.goalName) || "Financial Goal"}</Text>
+          <Text style={styles.goalScenarioText}>Target KES {money(parameter(params.targetAmount))} by {parameter(params.targetDate)}. The simulated monthly contribution is KES {money(parameter(params.monthlyContribution))}.</Text>
+          <View style={styles.goalScenarioGrid}>
+            <GoalScenarioMetric label="Projected value" value={`KES ${money(parameter(params.projectedValue))}`} />
+            <GoalScenarioMetric label="Goal shortfall" value={`KES ${money(parameter(params.goalGap))}`} danger={number(parameter(params.goalGap)) > 0} />
+            <GoalScenarioMetric label="Required monthly" value={`KES ${money(parameter(params.requiredMonthlyContribution))}`} />
+            <GoalScenarioMetric label="Defensive/MMF gap" value={`KES ${money(parameter(params.defensiveGap))}`} />
+          </View>
+          <Text style={styles.goalScenarioText}>Coach G treats the goal shortfall and the {number(parameter(params.defensiveTarget)).toFixed(1)}% defensive-allocation gap separately. Future contributions should fund the verified MMF/fixed-income gap and then redirect equity funding toward underweight sectors.</Text>
+          {parameter(params.largestSector) ? <Text style={styles.goalScenarioText}>Largest sector: {parameter(params.largestSector)} {number(parameter(params.largestCurrent)).toFixed(1)}% → {number(parameter(params.largestSimulated)).toFixed(1)}% in this simulation.</Text> : null}
+          <Text style={styles.goalScenarioSafeguard}>No holdings, goals, contributions, cash, Investor DNA, or trades were changed.</Text>
+          <Pressable style={styles.parentButton} onPress={() => router.replace("/goal-scenario-planner")}><Text style={styles.parentButtonText}>Adjust Scenario</Text></Pressable>
+        </View>
+      ) : null}
+
       <View
         style={activeSection ? styles.protectionCard : styles.hidden}
       >
@@ -1444,22 +1463,7 @@ export default function PortfolioRebalancingScreen() {
         </Text>
       </View>
 
-      <Pressable
-        style={activeSection ? styles.hidden : styles.secondaryButton}
-        onPress={
-          loadData
-        }
-      >
-        <Text
-          style={
-            styles.secondaryButtonText
-          }
-        >
-          Refresh Rebalancing Analysis
-        </Text>
-      </Pressable>
-
-      <Pressable
+      {activeSection ? <Pressable
         style={
           styles.secondaryButton
         }
@@ -1473,10 +1477,10 @@ export default function PortfolioRebalancingScreen() {
           }
         >
           {activeSection
-            ? nextSection ? `Next: ${nextSection.title} ›` : "Finish: Rebalancing Overview"
+            ? nextSection ? `Next: ${nextSection.title} ›` : "Finish: Recommendations Overview"
             : "Back to Previous Page"}
         </Text>
-      </Pressable>
+      </Pressable> : <InvestorJourneyNavigation stage="recommendations" onRefresh={loadData} refreshing={loading} nextLabel="Finish: Home" />}
     </ScrollView>
   );
 }
@@ -2384,6 +2388,24 @@ function money(
   );
 }
 
+function parameter(value) {
+  return Array.isArray(value) ? value[0] : value;
+}
+
+function number(value) {
+  const parsed = Number(value || 0);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function GoalScenarioMetric({ label, value, danger = false }) {
+  return (
+    <View style={styles.goalScenarioMetric}>
+      <Text style={styles.goalScenarioMetricLabel}>{label}</Text>
+      <Text style={danger ? styles.goalScenarioMetricDanger : styles.goalScenarioMetricValue}>{value}</Text>
+    </View>
+  );
+}
+
 function showMessage(
   title,
   message
@@ -2569,6 +2591,17 @@ const styles =
       marginBottom:
         20
     },
+
+    goalScenarioCard: { backgroundColor: "#071b2b", borderColor: "#0891b2", borderWidth: 1, borderRadius: 18, padding: 16, marginBottom: 16, gap: 10 },
+    goalScenarioEyebrow: { color: "#67e8f9", fontSize: 11, fontWeight: "900" },
+    goalScenarioTitle: { color: "white", fontSize: 20, fontWeight: "900" },
+    goalScenarioText: { color: "#cbd5e1", lineHeight: 20 },
+    goalScenarioGrid: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+    goalScenarioMetric: { width: "48%", borderRadius: 12, backgroundColor: "#020617", padding: 11, gap: 4 },
+    goalScenarioMetricLabel: { color: "#94a3b8", fontSize: 11 },
+    goalScenarioMetricValue: { color: "white", fontWeight: "900" },
+    goalScenarioMetricDanger: { color: "#fca5a5", fontWeight: "900" },
+    goalScenarioSafeguard: { color: "#86efac", fontWeight: "800", lineHeight: 20 },
 
     coachCard: {
       backgroundColor:

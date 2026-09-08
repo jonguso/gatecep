@@ -25,6 +25,7 @@ import {
 
 import CoachGReconciliationCard from "../src/features/wealth-journey/components/CoachGReconciliationCard";
 import { ContainedPanel } from "../src/components/mobile/MobileUI";
+import InvestorJourneyNavigation from "../src/components/mobile/InvestorJourneyNavigation";
 
 /*
  * ============================================================
@@ -451,42 +452,7 @@ export default function WealthJourneyScreen() {
         </Text>
       </View>
 
-      <Pressable
-        style={
-          styles.refreshButton
-        }
-        onPress={() =>
-          loadJourney({
-            forceProviderReset:
-              true
-          })
-        }
-      >
-        <Text
-          style={
-            styles.refreshText
-          }
-        >
-          Refresh My Journey
-        </Text>
-      </Pressable>
-
-      <Pressable
-        style={
-          styles.homeButton
-        }
-        onPress={() =>
-          router.replace("/(tabs)/dashboard")
-        }
-      >
-        <Text
-          style={
-            styles.homeText
-          }
-        >
-          Return to My Journey
-        </Text>
-      </Pressable>
+      <InvestorJourneyNavigation stage="goals" onRefresh={() => loadJourney({ forceProviderReset: true })} nextLabel="Continue to Goal Recovery Simulation" />
     </ScrollView>
   );
 }
