@@ -52,7 +52,9 @@ export default function Alerts() {
     setAlerts(next);
     await saveAlerts(next);
 
-    if (item.route) {
+    if (item.payload) {
+      router.push({ pathname: "/investor-alert-review", params: { alert: JSON.stringify(item.payload) } });
+    } else if (item.route) {
       router.push(item.route);
     }
   }

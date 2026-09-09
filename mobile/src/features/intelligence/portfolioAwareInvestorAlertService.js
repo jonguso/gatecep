@@ -47,6 +47,47 @@ function isVerified(evidence = {}) {
     || (evidence.verified === true && trust !== "REPORTED");
 }
 
+function targetForSector(sectorTargets = {}, sector) {
+  const entry = Object.entries(sectorTargets || {}).find(([key]) => normalize(key) === normalize(sector));
+  return number(entry?.[1]);
+}
+
+const MONTHS = "January|February|March|April|May|June|July|August|September|October|November|December";
+
+function reportedDividendClues(evidence = {}) {
+  const text = `${evidence.title || ""} ${evidence.detail || evidence.description || ""}`;
+  const year = String(evidence.date || evidence.publishedAt || evidence.announcementDate || new Date().toISOString()).slice(0, 4);
+  const dateAfter = (phrase) => {
+    const match = text.match(new RegExp(`${phrase}[^.]{0,90}?(${MONTHS})\\s+(\\d{1,2})(?:,?\\s+(\\d{4}))?`, "i"));
+    if (!match) return null;
+    const parsed = new Date(`${match[1]} ${match[2]}, ${match[3] || year} 12:00:00`);
+    return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString().slice(0, 10);
+  };
+  const rateMatch = text.match(/(?:dividend(?:\s+of)?|distribution(?:\s+of)?)\s*(?:KES|KSH|SH)?\s*([0-9]+(?:\.[0-9]+)?)/i);
+  return {
+    dividendPerShare: rateMatch ? number(rateMatch[1]) : null,
+    recordDate: dateAfter("(?:register|record|book[ -]?closure)"),
+    paymentDate: dateAfter("(?:pay|payment|payable)"),
+    status: "REPORTED_AWAITING_VERIFICATION"
+  };
+}
+
+function dividendEvidenceReview({ evidence, verified, dividendPerShare, dates, reportedClues = {} }) {
+  const known = [];
+  const missing = [];
+  if (verified) known.push("official or verified announcement");
+  else missing.push("official issuer, NSE, registrar or custodian confirmation");
+  if (dividendPerShare > 0) known.push(`dividend rate of KES ${dividendPerShare.toFixed(2)} per share`);
+  else missing.push("dividend per share");
+  if (dates.exDate) known.push(`ex-dividend date ${dates.exDate}`);
+  else missing.push("ex-dividend date");
+  if (evidence.recordDate || evidence.bookClosureDate) known.push("record or book-closure date");
+  else missing.push(reportedClues.recordDate ? "official verification of the reported record/register date" : "record or book-closure date");
+  if (evidence.paymentDate) known.push("payment date");
+  else missing.push(reportedClues.paymentDate ? "official verification of the reported payment date" : "payment date");
+  return { known, missing };
+}
+
 function dateState(evidence = {}, asOfDate) {
   const today = new Date(`${asOfDate}T12:00:00`);
   const exDateValue = evidence.exDate || (normalize(evidence.type) === "EX_DATE" ? evidence.date : null);
@@ -68,13 +109,20 @@ export function buildPortfolioAwareInvestorAlert({ evidence = {}, holdings = [],
   const sector = evidence.sector || matched[0]?.sector || null;
   const sectorValue = portfolio.filter((holding) => sector && normalize(holding.sector) === normalize(sector)).reduce((sum, holding) => sum + holdingValue(holding), 0);
   const sectorWeight = totalValue > 0 ? sectorValue / totalValue * 100 : 0;
-  const target = number(sectorTargets?.[sector]);
+  const target = targetForSector(sectorTargets, sector);
   const underweight = Boolean(sector && target > 0 && sectorWeight < target);
   const verified = isVerified(evidence);
   const dividend = isDividendEvidence(evidence);
   const dates = dateState(evidence, asOfDate);
   const dividendPerShare = number(evidence.dividendPerShare ?? evidence.cashConsideration);
   const estimatedGrossDividend = dividendPerShare > 0 && quantity > 0 ? quantity * dividendPerShare : null;
+  const reportedClues = dividend ? reportedDividendClues(evidence) : null;
+  const evidenceReview = dividend
+    ? dividendEvidenceReview({ evidence, verified, dividendPerShare, dates, reportedClues })
+    : { known: verified ? ["official or verified announcement"] : [], missing: verified ? [] : ["official or verified confirmation"] };
+  if (dividend && matched.length && !evidenceReview.missing.includes("broker or custodian holding evidence for the eligibility date")) {
+    evidenceReview.missing.push("broker or custodian holding evidence for the eligibility date");
+  }
 
   let action = ACTIONS.NO_ACTION;
   let confidence = verified ? 70 : 25;
@@ -110,11 +158,31 @@ export function buildPortfolioAwareInvestorAlert({ evidence = {}, holdings = [],
     rationale += ` ${sector} is below its illustrative ${target.toFixed(1)}% target, but valuation evidence is still required before buying.`;
   }
 
+  const incomeOptions = [];
+  if (dividend && matched.length) {
+    if (target > 0 && underweight) {
+      incomeOptions.push(`Compare reinvestment into ${sector} with the saved ${target.toFixed(1)}% sector target; valuation must still support adding.`);
+    } else if (target > 0) {
+      incomeOptions.push(`${sector} is already at or above its saved target, so do not automatically reinvest the dividend into the same sector.`);
+    } else {
+      incomeOptions.push("Compare the dividend against your saved sector targets before reinvesting; no sector target was available to this review.");
+    }
+    incomeOptions.push("Consider directing some or all of the income toward a verified underweight sector rather than increasing an existing concentration.");
+    incomeOptions.push("If the defensive-investment target remains underweight, compare a verified money-market fund or fixed-income option.");
+    incomeOptions.push(`Only consider adding ${symbols[0] || "the same security"} after checking its current valuation and the normal price adjustment around the ex-dividend date.`);
+  }
+
+  const coachMessage = dividend && matched.length
+    ? estimatedGrossDividend !== null
+      ? `You already own ${quantity.toLocaleString()} share${quantity === 1 ? "" : "s"}. At the stated rate, that could produce about KES ${money(estimatedGrossDividend).toLocaleString()} gross before tax, but I still need to confirm your entitlement. We can then compare reinvesting it, strengthening an underweight sector, or adding to defensive investments without changing your REAL portfolio.`
+      : `I can see that you own ${quantity.toLocaleString()} share${quantity === 1 ? "" : "s"}, so this dividend may matter to you. I cannot estimate the income responsibly until the dividend per share and eligibility dates are confirmed. Once they are, we can compare sensible uses of the income without changing your REAL portfolio.`
+    : rationale;
+
   return {
     id: `PAIA-${evidence.id || symbols.join("-") || "EVIDENCE"}`,
     evidenceId: evidence.id || null,
     action,
-    label: LABELS[action],
+    label: action === ACTIONS.INSUFFICIENT_EVIDENCE && dividend ? "Let’s Verify the Dividend Details" : LABELS[action],
     severity: action === ACTIONS.CONSIDER_REDUCING ? "HIGH" : action === ACTIONS.INSUFFICIENT_EVIDENCE ? "INFO" : "MEDIUM",
     confidence,
     symbol: symbols[0] || null,
@@ -126,6 +194,10 @@ export function buildPortfolioAwareInvestorAlert({ evidence = {}, holdings = [],
     publishedAt: evidence.date || evidence.publishedAt || evidence.announcementDate || null,
     portfolioImpact: { held: matched.length > 0, quantity, exposureValue: money(exposureValue), portfolioWeight: money(weight), sector, sectorWeight: money(sectorWeight), targetSectorWeight: target || null, underweight },
     dividendImpact: { relevant: dividend, phase: dates.phase, exDate: dates.exDate, dividendPerShare: dividendPerShare || null, estimatedGrossDividend: estimatedGrossDividend === null ? null : money(estimatedGrossDividend), eligibilityConfirmed: false },
+    evidenceReview,
+    reportedClues,
+    coachMessage,
+    incomeOptions,
     rationale,
     safeguards: {
       advisoryOnly: true,

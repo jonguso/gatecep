@@ -14,6 +14,7 @@ import {
   markNotificationRead,
   markAllNotificationsRead
 } from "../src/features/intelligence/api/intelligenceApi";
+import { loadAlerts, saveAlerts } from "../src/services/alerts/alertStore";
 
 export default function IntelligenceCenter() {
   const [loading, setLoading] = useState(true);
@@ -37,11 +38,18 @@ export default function IntelligenceCenter() {
 
       setToken(authToken);
 
-      const intelligenceResult = await getIntelligenceHome(authToken);
+      const [remoteResult, localResult] = await Promise.allSettled([
+        getIntelligenceHome(authToken),
+        loadAlerts()
+      ]);
+      const intelligenceResult = remoteResult.status === "fulfilled" ? remoteResult.value : null;
+      const remoteItems = intelligenceResult?.notifications?.items || [];
+      const localItems = localResult.status === "fulfilled" ? localResult.value.map((item) => ({ ...item, id: `local:${item.id}`, localId: item.id, isLocal: true })) : [];
+      const merged = [...localItems, ...remoteItems];
 
 	setCoach(intelligenceResult);
-	setNotifications(intelligenceResult?.notifications?.items || []);
-	setSummary(intelligenceResult?.notifications?.summary || null);
+	setNotifications(merged);
+	setSummary(summarizeNotifications(merged));
 
     } catch (error) {
       console.log("Intelligence Center error:", error.message);
@@ -53,7 +61,13 @@ export default function IntelligenceCenter() {
   async function handleRead(item) {
     try {
       if (!item?.id || item.read) return;
-      await markNotificationRead(token, item.id);
+      if (item.isLocal) {
+        const local = await loadAlerts();
+        await saveAlerts(local.map((alert) => alert.id === item.localId ? { ...alert, read: true } : alert));
+      } else {
+        await markNotificationRead(token, item.id);
+      }
+      openNotification(item);
       await load();
     } catch (error) {
       console.log("Read notification error:", error.message);
@@ -62,13 +76,22 @@ export default function IntelligenceCenter() {
 
 async function handleReadAll() {
   try {
-    if (!token) return;
-    await markAllNotificationsRead(token);
+    const local = await loadAlerts();
+    await saveAlerts(local.map((item) => ({ ...item, read: true })));
+    if (token) await markAllNotificationsRead(token).catch(() => null);
     await load();
   } catch (error) {
     console.log("Mark all read error:", error.message);
   }
 }
+
+  function openNotification(item) {
+    if (item?.payload) {
+      router.push({ pathname: "/investor-alert-review", params: { alert: JSON.stringify(item.payload) } });
+    } else if (item?.route) {
+      router.push(item.route);
+    }
+  }
 
   if (loading) {
     return (
@@ -225,6 +248,15 @@ function money(value) {
   return Number(value || 0).toLocaleString("en-KE", {
     maximumFractionDigits: 0
   });
+}
+
+function summarizeNotifications(items = []) {
+  return {
+    total: items.length,
+    unread: items.filter((item) => !item.read).length,
+    high: items.filter((item) => String(item.severity || "").toUpperCase() === "HIGH").length,
+    low: items.filter((item) => ["LOW", "INFO"].includes(String(item.severity || "").toUpperCase())).length
+  };
 }
 
 function MiniStat({ label, value }) {

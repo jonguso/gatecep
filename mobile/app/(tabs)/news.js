@@ -10,6 +10,8 @@ import { NEWS_TABS, buildVerifiedNews, getNewsForTab, getNewsSummary } from "../
 import { ContainedPanel } from "../../src/components/mobile/MobileUI";
 import { loadUnifiedPortfolioRuntime } from "../../src/portfolio/unifiedPortfolioApi";
 import { buildPortfolioAwareInvestorAlerts } from "../../src/features/intelligence/portfolioAwareInvestorAlertService";
+import { loadRebalanceTarget } from "../../src/features/rebalancing/rebalanceStore";
+import { savePortfolioAwareAlerts } from "../../src/services/alerts/alertStore";
 
 export default function News() {
   const { accessToken } = useAuth();
@@ -17,6 +19,7 @@ export default function News() {
   const [actions, setActions] = useState([]);
   const [externalNews, setExternalNews] = useState([]);
   const [holdings, setHoldings] = useState([]);
+  const [sectorTargets, setSectorTargets] = useState({});
   const [newsStatus, setNewsStatus] = useState({ loading: true, error: "", provider: "", sources: [] });
   const market = useMarketData();
 
@@ -34,10 +37,11 @@ export default function News() {
 
   useEffect(() => {
     let active = true;
-    Promise.allSettled([loadCorporateActions(), loadUnifiedPortfolioRuntime({ broker: "ALL" })]).then(([actionResult, portfolioResult]) => {
+    Promise.allSettled([loadCorporateActions(), loadUnifiedPortfolioRuntime({ broker: "ALL" }), loadRebalanceTarget()]).then(([actionResult, portfolioResult, targetResult]) => {
       if (!active) return;
       setActions(actionResult.status === "fulfilled" && Array.isArray(actionResult.value) ? actionResult.value : []);
       setHoldings(portfolioResult.status === "fulfilled" && Array.isArray(portfolioResult.value?.holdings) ? portfolioResult.value.holdings : []);
+      setSectorTargets(targetResult.status === "fulfilled" ? sectorTargetMap(targetResult.value) : {});
     });
     return () => { active = false; };
   }, []);
@@ -45,7 +49,8 @@ export default function News() {
   useEffect(() => { if (accessToken) refreshNews(); }, [accessToken, refreshNews]);
 
   const all = useMemo(() => buildVerifiedNews({ quotes: market.rows, actions, generatedAt: market.lastUpdated, provider: market.provider, externalNews }), [market.rows, market.lastUpdated, market.provider, actions, externalNews]);
-  const personalizedAlerts = useMemo(() => buildPortfolioAwareInvestorAlerts({ evidence: all, holdings }).filter((alert) => alert.portfolioImpact.held || alert.dividendImpact.relevant || alert.action !== "NO_ACTION"), [all, holdings]);
+  const personalizedAlerts = useMemo(() => buildPortfolioAwareInvestorAlerts({ evidence: all, holdings, sectorTargets }).filter((alert) => alert.portfolioImpact.held || alert.dividendImpact.relevant || alert.action !== "NO_ACTION"), [all, holdings, sectorTargets]);
+  useEffect(() => { if (!newsStatus.loading) savePortfolioAwareAlerts(personalizedAlerts).catch(() => {}); }, [personalizedAlerts, newsStatus.loading]);
   const rows = useMemo(() => tab === "For You" ? personalizedAlerts : getNewsForTab(all, tab), [all, personalizedAlerts, tab]);
   const summary = useMemo(() => getNewsSummary(all), [all]);
 
@@ -76,13 +81,14 @@ export default function News() {
         <Text style={s.newsTitle}>{item.symbol ? `${item.symbol} · ` : ""}{item.title}</Text>
         <Text style={s.source}>{item.source}</Text>
         <Text style={s.body}>{item.detail}</Text>
-        <View style={s.itemActions}><Pressable onPress={() => router.push({ pathname: "/investor-alert-review", params: { alert: JSON.stringify(buildPortfolioAwareInvestorAlerts({ evidence: [item], holdings })[0]) } })}><Text style={s.open}>Review portfolio impact ›</Text></Pressable>{item.url ? <Pressable onPress={() => Linking.openURL(item.url)}><Text style={s.open}>Original source ↗</Text></Pressable> : null}</View>
+        <View style={s.itemActions}><Pressable onPress={() => router.push({ pathname: "/investor-alert-review", params: { alert: JSON.stringify(buildPortfolioAwareInvestorAlerts({ evidence: [item], holdings, sectorTargets })[0]) } })}><Text style={s.open}>Review portfolio impact ›</Text></Pressable>{item.url ? <Pressable onPress={() => Linking.openURL(item.url)}><Text style={s.open}>Original source ↗</Text></Pressable> : null}</View>
       </View>)}
     </ContainedPanel>
   </ScrollView>;
 }
 
 function Metric({ label, value }) { return <View style={s.metric}><Text style={s.metricLabel}>{label}</Text><Text style={s.metricValue}>{value}</Text></View>; }
+function sectorTargetMap(target) { return Object.fromEntries((target?.targets || []).filter((item) => item?.sector).map((item) => [item.sector, Number(item.percentage) || 0])); }
 
 const s = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#020617" }, content: { padding: 22, paddingTop: 70, paddingBottom: 120 }, title: { color: "white", fontSize: 32, fontWeight: "900" }, subtitle: { color: "#94a3b8", marginTop: 8, lineHeight: 22 }, status: { marginTop: 18, padding: 16, borderRadius: 20, backgroundColor: "rgba(6,182,212,.10)", borderColor: "rgba(6,182,212,.4)", borderWidth: 1 }, statusTop: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10 }, statusTitle: { color: "#67e8f9", fontWeight: "900", fontSize: 17, flex: 1 }, refresh: { backgroundColor: "#155e75", borderRadius: 12, paddingHorizontal: 12, paddingVertical: 9 }, refreshText: { color: "#67e8f9", fontWeight: "900" }, body: { color: "#cbd5e1", marginTop: 7, lineHeight: 20 }, tabs: { marginTop: 20, flexDirection: "row", flexWrap: "wrap", gap: 8 }, tab: { paddingHorizontal: 14, paddingVertical: 10, borderRadius: 14, backgroundColor: "#1e293b" }, active: { backgroundColor: "#9333ea" }, tabText: { color: "#94a3b8", fontWeight: "900" }, activeText: { color: "white", fontWeight: "900" }, summary: { marginTop: 18, flexDirection: "row", flexWrap: "wrap", gap: 10 }, metric: { width: "47%", backgroundColor: "#0f172a", borderRadius: 16, padding: 14 }, metricLabel: { color: "#94a3b8", fontSize: 12 }, metricValue: { color: "white", fontWeight: "900", marginTop: 4 }, card: { marginTop: 18, backgroundColor: "#0f172a", borderRadius: 20, padding: 16 }, cardTitle: { color: "#67e8f9", fontWeight: "900", fontSize: 18 }, row: { paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: "#1e293b" }, top: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 10 }, badge: { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 5, maxWidth: "72%" }, official: { backgroundColor: "#065f46" }, high: { backgroundColor: "#991b1b" }, reported: { backgroundColor: "#334155" }, badgeText: { color: "white", fontSize: 11, fontWeight: "900" }, date: { color: "#94a3b8", fontSize: 12 }, newsTitle: { color: "white", fontWeight: "900", marginTop: 8, lineHeight: 21 }, source: { color: "#67e8f9", marginTop: 6, fontSize: 12 }, open: { color: "#a78bfa", fontWeight: "900", marginTop: 9, fontSize: 12 }, itemActions: { flexDirection: "row", flexWrap: "wrap", gap: 18 }

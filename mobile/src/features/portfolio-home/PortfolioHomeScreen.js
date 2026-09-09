@@ -25,6 +25,7 @@ import {
   derivePortfolioAccounts,
   mergePortfolioAccounts
 } from "./portfolioAccountCatalogService";
+import { unreadAlertCount } from "../../services/alerts/alertStore";
 
 const COLORS = ["#22d3ee", "#8b5cf6", "#10b981", "#f59e0b", "#ef4444", "#3b82f6", "#ec4899"];
 const SECTORS_PER_PAGE = 5;
@@ -45,9 +46,11 @@ export default function PortfolioHomeScreen() {
   const [sectorPage, setSectorPage] = useState(0);
   const [notice, setNotice] = useState(null);
   const [marketData, setMarketData] = useState(null);
+  const [unreadAlerts, setUnreadAlerts] = useState(0);
 
   useFocusEffect(useCallback(() => {
     loadHome(selectedAccount);
+    unreadAlertCount().then(setUnreadAlerts).catch(() => setUnreadAlerts(0));
     if (!isNseMarketSessionOpen()) return undefined;
     const refreshTimer = setInterval(() => loadHome(selectedAccount), 60 * 1000);
     return () => clearInterval(refreshTimer);
@@ -130,7 +133,7 @@ export default function PortfolioHomeScreen() {
             <Text style={styles.title}>Portfolio</Text>
             <Text style={styles.welcome}>Good {greeting()}, {firstName}</Text>
           </View>
-          <Pressable style={styles.iconButton} onPress={() => router.push("/intelligence-center")}><Text style={styles.bell}>●</Text></Pressable>
+          <Pressable accessibilityLabel={`${unreadAlerts} unread Coach G alerts`} style={styles.iconButton} onPress={() => router.push("/intelligence-center")}><Text style={styles.bell}>{unreadAlerts > 0 ? unreadAlerts > 99 ? "99+" : unreadAlerts : "●"}</Text></Pressable>
         </View>
 
         <View style={styles.utilityRow}>
