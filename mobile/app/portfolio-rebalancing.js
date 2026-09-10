@@ -1480,7 +1480,7 @@ export default function PortfolioRebalancingScreen() {
             ? nextSection ? `Next: ${nextSection.title} ›` : "Finish: Recommendations Overview"
             : "Back to Previous Page"}
         </Text>
-      </Pressable> : <InvestorJourneyNavigation stage="recommendations" onRefresh={loadData} refreshing={loading} nextLabel="Finish: Home" />}
+      </Pressable> : <InvestorJourneyNavigation stage="recommendations" onRefresh={loadData} refreshing={loading} nextLabel="Continue to Decision Lab" onNext={() => router.replace({ pathname: "/(tabs)/trading", params: { decisionSource: "COACH_G_RECOVERY", goalName: parameter(params.goalName) || "", targetAmount: parameter(params.targetAmount) || "", targetDate: parameter(params.targetDate) || "", monthlyContribution: parameter(params.monthlyContribution) || "", projectedValue: parameter(params.projectedValue) || "", goalGap: parameter(params.goalGap) || "", requiredMonthlyContribution: parameter(params.requiredMonthlyContribution) || "", defensiveGap: parameter(params.defensiveGap) || "", largestSector: parameter(params.largestSector) || "", largestCurrent: parameter(params.largestCurrent) || "", largestSimulated: parameter(params.largestSimulated) || "" } })} />}
     </ScrollView>
   );
 }

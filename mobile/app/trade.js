@@ -27,8 +27,12 @@ import { buildHistoricalSecurityLotLedger } from "../src/features/trading/histor
 import { loadUnifiedPortfolioRuntime } from "../src/portfolio/unifiedPortfolioApi";
 import { addBrokerActionPlanOrder } from "../src/services/trade/brokerActionPlanStore";
 import { loadBrokerLotHistoryEvidence } from "../src/features/trading/brokerLotHistoryEvidenceService";
+import { buildProjectedImpactReview } from "../src/features/trading/coachGProjectedImpactService";
+import { loadRealCurrentInvestorWealthJourney } from "../src/features/wealth-journey/realWealthJourneyRuntime";
+import { buildGoalRiskStressImpact, extractVerifiedGoalEvidence } from "../src/features/trading/coachGGoalRiskStressImpactService";
 import { canonicalSecuritySymbol } from "../src/features/trading/securityIdentityService";
 
+import { deriveApproximateScenarioQuantity } from "../src/features/trading/decisionAmountQuantityService";
 const PRACTICE_FEE_POLICY = {
   commissionRatePct: 1.2,
   otherChargesRatePct: 0.2,
@@ -44,7 +48,21 @@ const BROKER_EVIDENCED_FEE_POLICY = {
 };
 
 export default function Trade() {
-  const { symbol: requestedSymbol, mode, side: requestedSide /* PC-030M20AQ2 requestedSide */} = useLocalSearchParams();
+  const { symbol: requestedSymbol, mode, side: requestedSide /* PC-030M20AQ2 requestedSide */, decisionAmount: requestedDecisionAmount, decisionLab: decisionLabParam } = useLocalSearchParams();
+
+  // PC-030M20AT2A route-contract correction
+  const decisionAmountParam = Number(
+    Array.isArray(requestedDecisionAmount)
+      ? requestedDecisionAmount[0]
+      : requestedDecisionAmount || 0
+  );
+  const decisionLabHandoff =
+    String(
+      Array.isArray(decisionLabParam)
+        ? decisionLabParam[0]
+        : decisionLabParam || ""
+    ) === "1";
+
   const averageCostMode = String(mode || "").toUpperCase() === "AVERAGE_COST";
 
   const market = useMarketData();
@@ -69,6 +87,7 @@ export default function Trade() {
   }, [requestedSide]);
 
   const [quantity, setQuantity] = useState("0");
+  const [quantityManuallyEdited, setQuantityManuallyEdited] = useState(false);
   const [limitPrice, setLimitPrice] = useState("");
   const [confirmedTrade, setConfirmedTrade] = useState(null);
   const [activeExecution, setActiveExecution] = useState(null);
@@ -77,6 +96,9 @@ export default function Trade() {
   const [saleCostMethod, setSaleCostMethod] = useState("FIFO");
   const [removedLotAveragePrice, setRemovedLotAveragePrice] = useState("");
   const [scenarioExtraCharges, setScenarioExtraCharges] = useState("0");
+  const [projectedImpactOpen, setProjectedImpactOpen] = useState(false); // PC-030M20AR8 projected impact modal
+  const [goalEvidence, setGoalEvidence] = useState({ available: false, reason: "NOT_LOADED" }); // PC-030M20AS
+  const [stressLossPercent, setStressLossPercent] = useState(20); // PC-030M20AS deterministic stress
 
   useEffect(() => {
     load();
@@ -109,14 +131,63 @@ export default function Trade() {
     setConfirmedTrade(null);
   }, [stocks, requestedSymbol]);
 
+  useEffect(() => {
+    if (!decisionLabHandoff) return;
+    if (!(decisionAmountParam > 0)) return;
+    if (quantityManuallyEdited) return;
+
+    const currentScenarioPrice = Number(
+      selectedStock?.price ||
+      selectedStock?.lastPrice ||
+      selectedStock?.currentPrice ||
+      0
+    );
+
+    if (!(currentScenarioPrice > 0)) return;
+
+    const derived = deriveApproximateScenarioQuantity({
+      side,
+      decisionAmount: decisionAmountParam,
+      currentPrice: currentScenarioPrice,
+      availableQuantity: Number(
+        existingHolding?.quantity ||
+        existingHolding?.shares ||
+        0
+      ),
+      percentChargeRate:
+        side === "BUY"
+          ? (Number(BROKER_EVIDENCED_FEE_POLICY.commissionRatePct || 0) +
+             Number(BROKER_EVIDENCED_FEE_POLICY.otherChargesRatePct || 0)) / 100
+          : 0,
+      fixedCharges: Number(scenarioExtraCharges || 0),
+      existingQuantityText: ""
+    });
+
+    if (derived.available && derived.quantity > 0) {
+      setQuantity(String(derived.quantity));
+      setConfirmedTrade(null);
+    }
+  }, [
+    decisionLabHandoff,
+    decisionAmountParam,
+    side,
+    selectedStock?.symbol,
+    selectedStock?.price,
+    existingHolding?.quantity,
+    existingHolding?.shares,
+    scenarioExtraCharges,
+    quantityManuallyEdited
+  ]);
+
   async function load() {
     const practiceRaw = await userGetItem("practicePortfolio");
     const practice = practiceRaw ? JSON.parse(practiceRaw) : {};
 
-    const [execution, realPortfolio, lotHistory] = await Promise.all([
+    const [execution, realPortfolio, lotHistory, wealthJourney] = await Promise.all([
       loadBasketExecution(),
       loadUnifiedPortfolioRuntime({ broker: "ALL" }).catch(() => null),
-      loadBrokerLotHistoryEvidence().catch(() => ({ records: [] }))
+      loadBrokerLotHistoryEvidence().catch(() => ({ records: [] })),
+      loadRealCurrentInvestorWealthJourney().catch(() => null)
     ]);
 
     setPortfolio(Array.isArray(practice?.holdings) ? practice.holdings : []);
@@ -127,6 +198,7 @@ export default function Trade() {
     setRealTransactions(
       Array.isArray(lotHistory?.records) ? lotHistory.records : []
     );
+    setGoalEvidence(extractVerifiedGoalEvidence(wealthJourney || {}));
 
     if (!averageCostMode && execution?.orders?.length) {
       setActiveExecution(execution);
@@ -353,6 +425,29 @@ export default function Trade() {
     removedLotAveragePrice,
     activeFeePolicy
   ]);
+
+
+  const projectedImpact = useMemo(() =>
+    buildProjectedImpactReview({
+      holdings: averageCostMode ? realHoldings : portfolio,
+      selectedStock,
+      side,
+      estimate,
+      existingHolding,
+      averageGuard,
+      availableCash: cash
+    }),
+  [averageCostMode, realHoldings, portfolio, selectedStock, side, estimate, existingHolding, averageGuard, cash]);
+
+  // PC-030M20AS goal+risk stress — scenario + verified goal evidence only.
+  const goalRiskImpact = useMemo(() =>
+    buildGoalRiskStressImpact({
+      holdings: averageCostMode ? realHoldings : portfolio,
+      projectedImpact,
+      goalEvidence,
+      stressLossPercent
+    }),
+  [averageCostMode, realHoldings, portfolio, projectedImpact, goalEvidence, stressLossPercent]);
 
   async function addToBrokerActionPlan() {
     if (!averageGuard?.available) {
@@ -1167,6 +1262,7 @@ export default function Trade() {
         <TextInput
           value={quantity}
           onChangeText={(value) => {
+            setQuantityManuallyEdited(true);
             setQuantity(value);
             setConfirmedTrade(null);
           }}
@@ -1175,6 +1271,17 @@ export default function Trade() {
           placeholderTextColor="#64748b"
           style={styles.input}
         />
+        {decisionLabHandoff &&
+        decisionAmountParam > 0 &&
+        Number(quantity) > 0 &&
+        Number(selectedStock?.price || 0) > 0 ? (
+          <Text style={styles.small}>
+            Approx. {Number(quantity).toLocaleString()} shares from KES{" "}
+            {decisionAmountParam.toLocaleString()} at KES{" "}
+            {Number(selectedStock.price).toFixed(2)}.
+            {" "}Editable; scenario estimate only.
+          </Text>
+        ) : null}
 
         <Text style={styles.label}>Limit Price</Text>
         <TextInput
@@ -1354,6 +1461,15 @@ export default function Trade() {
           }
         />
       </View>
+
+      {averageCostMode ? (
+        <Pressable
+          style={styles.impactReviewButton}
+          onPress={() => setProjectedImpactOpen(true)}
+        >
+          <Text style={styles.primaryText}>View Projected Impact</Text>
+        </Pressable>
+      ) : null}
 
       {averageGuard ? (
         <View
@@ -1565,6 +1681,114 @@ export default function Trade() {
           )}
         </View>
       ) : null}
+
+      <Modal
+        visible={projectedImpactOpen}
+        transparent
+        animationType="slide"
+        onRequestClose={() => setProjectedImpactOpen(false)}
+      >
+        <View style={styles.impactModalBackdrop}>
+          <View style={styles.impactModalCard}>
+            <ScrollView contentContainerStyle={{ paddingBottom: 18 }}>
+              <Text style={styles.impactEyebrow}>COACH G — PROJECTED IMPACT</Text>
+              <Text style={styles.cardTitle}>Current vs Projected</Text>
+              <Text style={styles.small}>Advisory scenario only. REAL portfolio evidence has not changed.</Text>
+
+              {!projectedImpact?.available ? (
+                <View style={styles.impactNotice}>
+                  <Text style={styles.body}>{projectedImpact?.evidenceMessage || "Projected impact is unavailable until the scenario has valid security, quantity and price evidence."}</Text>
+                </View>
+              ) : (
+                <>
+                  <View style={styles.impactHeaderRow}>
+                    <Text style={styles.impactMetricLabel}>Metric</Text>
+                    <Text style={styles.impactMetricValue}>Current</Text>
+                    <Text style={styles.impactMetricValue}>Projected</Text>
+                  </View>
+                  {[["Quantity", projectedImpact.current.quantity, projectedImpact.projected.quantity],
+                    ["Weighted Average Price", projectedImpact.current.weightedAveragePrice == null ? "N/A" : `KES ${money(projectedImpact.current.weightedAveragePrice)}`, projectedImpact.projected.weightedAveragePrice == null ? "N/A" : `KES ${money(projectedImpact.projected.weightedAveragePrice)}`],
+                    ["Portfolio Weight", `${projectedImpact.current.portfolioWeightPct.toFixed(2)}%`, `${projectedImpact.projected.portfolioWeightPct.toFixed(2)}%`],
+                    [`${projectedImpact.sector} Exposure`, `${projectedImpact.current.sectorExposurePct.toFixed(2)}%`, `${projectedImpact.projected.sectorExposurePct.toFixed(2)}%`],
+                    ["Available Cash", `KES ${money(projectedImpact.current.availableCash)}`, `KES ${money(projectedImpact.projected.availableCash)}`]
+                  ].map(([label, current, projected]) => (
+                    <View key={label} style={styles.impactRow}>
+                      <Text style={styles.impactMetricLabel}>{label}</Text>
+                      <Text style={styles.impactMetricValue}>{current}</Text>
+                      <Text style={styles.impactMetricValue}>{projected}</Text>
+                    </View>
+                  ))}
+
+                  {side === "SELL" ? (
+                    <View style={styles.impactNotice}>
+                      <Text style={styles.small}>Projected Cost Basis Released: KES {money(projectedImpact.projected.costBasisReleased)}</Text>
+                      <Text style={styles.small}>Projected Realized Gain / Loss: KES {money(projectedImpact.projected.realizedGainLoss)}</Text>
+                    </View>
+                  ) : null}
+
+                  {/* PC-030M20AR10 Coach G projected interpretation */}
+                  <View style={styles.impactCoachCard}>
+                    <Text style={styles.impactCoachLabel}>COACH G — WHAT THIS MEANS</Text>
+                    <Text style={styles.cardTitle}>{projectedImpact.interpretation?.headline}</Text>
+                    <Text style={styles.body}>{projectedImpact.interpretation?.summary}</Text>
+                    <Text style={styles.impactQuestion}>{projectedImpact.interpretation?.question}</Text>
+                    {(projectedImpact.interpretation?.evidenceBoundaries || []).map((boundary, index) => (
+                      <Text key={`impact-boundary-${index}`} style={styles.small}>• {boundary}</Text>
+                    ))}
+                  {/* PC-030M20AS goal+risk stress */}
+                  <View style={styles.impactCoachCard}>
+                    <Text style={styles.impactCoachLabel}>COACH G — GOAL + RISK STRESS</Text>
+                    <Text style={styles.cardTitle}>What if the projected portfolio falls?</Text>
+                    <Text style={styles.small}>Deterministic stress only — no probability or return forecast is being invented.</Text>
+
+                    <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12, marginBottom: 12 }}>
+                      {[10, 20, 30, 40, 50].map((loss) => (
+                        <Pressable key={`stress-${loss}`} onPress={() => setStressLossPercent(loss)} style={[styles.secondary, { paddingVertical: 8, paddingHorizontal: 10, marginTop: 0 }, stressLossPercent === loss ? { borderWidth: 2 } : null]}>
+                          <Text style={styles.secondaryText}>-{loss}%</Text>
+                        </Pressable>
+                      ))}
+                    </View>
+
+                    {goalRiskImpact?.available ? (
+                      <>
+                        <Text style={styles.body}>Scenario Risk: {goalRiskImpact.risk?.classification || "N/A"}</Text>
+                        <Text style={styles.small}>Holdings stress: -{goalRiskImpact.selectedStressLossPercent}% • Required recovery on stressed holdings: {goalRiskImpact.risk?.recoveryPercent == null ? "N/A" : `${goalRiskImpact.risk.recoveryPercent}%`}</Text>
+                        <Text style={styles.small}>Modeled net worth drawdown: {goalRiskImpact.modeledNetWorthDrawdownPercent.toFixed(2)}% • Projected liquidity: {goalRiskImpact.projectedCashPercent.toFixed(2)}%</Text>
+                        {(goalRiskImpact.risk?.reasons || []).map((reason, index) => (
+                          <Text key={`risk-reason-${index}`} style={styles.small}>• {reason}</Text>
+                        ))}
+
+                        <View style={styles.impactNotice}>
+                          {goalRiskImpact.goal?.available ? (
+                            <>
+                              <Text style={styles.body}>{goalRiskImpact.goal.goalName}</Text>
+                              <Text style={styles.small}>Goal progress: {goalRiskImpact.goal.currentProgressPercent.toFixed(2)}% → {goalRiskImpact.goal.projectedProgressPercent.toFixed(2)}%</Text>
+                              <Text style={styles.small}>Under -{goalRiskImpact.selectedStressLossPercent}% holdings stress: {goalRiskImpact.goal.stressedProgressPercent.toFixed(2)}%</Text>
+                              <Text style={styles.small}>Projected remaining amount: KES {money(goalRiskImpact.goal.projectedRemainingAmount)}</Text>
+                              <Text style={styles.small}>{goalRiskImpact.goal.message}</Text>
+                            </>
+                          ) : (
+                            <Text style={styles.small}>{goalRiskImpact.goal?.message || "Verified saved goal evidence is unavailable."}</Text>
+                          )}
+                        </View>
+
+                        <Text style={styles.small}>Risk label describes this modeled scenario, not your permanent Investor DNA risk profile.</Text>
+                      </>
+                    ) : (
+                      <Text style={styles.small}>{goalRiskImpact?.message || "Complete projected-impact evidence before running stress."}</Text>
+                    )}
+                  </View>
+                  </View>
+                </>
+              )}
+
+              <Pressable style={styles.primary} onPress={() => setProjectedImpactOpen(false)}>
+                <Text style={styles.primaryText}>Back to Scenario</Text>
+              </Pressable>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       {!averageCostMode ? (
         <Pressable
@@ -1854,6 +2078,92 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 22,
     padding: 18
+  },
+  impactReviewButton: {
+    marginHorizontal: 18,
+    marginTop: 10,
+    marginBottom: 8,
+    paddingVertical: 15,
+    borderRadius: 14,
+    alignItems: "center",
+    backgroundColor: "#1f9bbf"
+  },
+  impactModalBackdrop: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.72)",
+    justifyContent: "center",
+    padding: 18
+  },
+  impactModalCard: {
+    maxHeight: "88%",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#2fb7dc",
+    backgroundColor: "#0b1728",
+    padding: 18
+  },
+  impactEyebrow: {
+    color: "#59dcff",
+    fontWeight: "800",
+    fontSize: 12,
+    letterSpacing: 0.6,
+    marginBottom: 8
+  },
+  impactHeaderRow: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomColor: "#334155",
+    paddingVertical: 10,
+    marginTop: 12
+  },
+  impactRow: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomColor: "#243247",
+    paddingVertical: 12
+  },
+  impactMetricLabel: {
+    flex: 1.45,
+    color: "#dbeafe",
+    fontSize: 13
+  },
+  impactMetricValue: {
+    flex: 1,
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: "700",
+    textAlign: "right"
+  },
+  impactNotice: {
+    marginTop: 12,
+    marginBottom: 12,
+    padding: 12,
+    borderRadius: 12,
+    backgroundColor: "#132641"
+  },
+  impactCoachCard: {
+    marginTop: 14,
+    marginBottom: 12,
+    padding: 14,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#334155",
+    backgroundColor: "#101f34"
+  },
+  impactCoachLabel: {
+    color: "#59dcff",
+    fontWeight: "800",
+    fontSize: 11,
+    letterSpacing: 0.5,
+    marginBottom: 7
+  },
+  impactQuestion: {
+    color: "#ffffff",
+    fontWeight: "700",
+    fontSize: 14,
+    lineHeight: 20,
+    marginTop: 12,
+    marginBottom: 10
   },
   averageGuardWarning: {
     borderColor: "#b45309",
