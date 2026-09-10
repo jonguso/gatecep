@@ -34,6 +34,7 @@ export default function InvestorAlertReview() {
     <View style={s.safeguard}><Text style={s.safeguardTitle}>Advisory-only safeguard</Text><Text style={s.body}>{alert.safeguards?.disclaimer || "Coach G provides portfolio-aware educational guidance, not personalized licensed financial advice. This message does not place a trade. Verify the announcement, market price, eligibility dates and your circumstances before acting."}</Text></View>
 
     <Pressable style={s.primary} onPress={() => router.push("/goal-scenario-planner")}><Text style={s.primaryText}>Review Portfolio Scenario</Text></Pressable>
+    {alert.symbol ? <Pressable style={s.button} onPress={() => router.push({ pathname: "/trade", params: { symbol: alert.symbol, mode: "AVERAGE_COST" } })}><Text style={s.buttonText}>Simulate Weighted Average Before Adding</Text></Pressable> : null}
     {alert.symbol ? <Pressable style={s.button} onPress={() => router.push(`/security/${alert.symbol}`)}><Text style={s.buttonText}>Review {alert.symbol} Evidence</Text></Pressable> : null}
     <Pressable style={s.button} onPress={() => router.replace("/(tabs)/news")}><Text style={s.buttonText}>Back to News</Text></Pressable>
   </ScrollView>;

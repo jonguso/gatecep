@@ -20,6 +20,7 @@ import {
 } from "../src/security/importFileSecurity";
 import { userSetItem } from "../src/auth/userStorage";
 import { buildSyncStatus } from "../src/portfolio/syncStatus";
+import { rebuildCanonicalPortfolioLedger } from "../src/features/trading/canonicalPortfolioLedgerService";
 import { partitionBrokerExecutionEvidence } from "../src/features/broker-sync/brokerExecutionEvidencePolicy";
 import { ContainedPanel } from "../src/components/mobile/MobileUI";
 import { extractBrokerPdf } from "../src/services/brokers/brokerPdfExtractionApi";
@@ -253,7 +254,8 @@ export default function TransactionImport() {
       broker: findValue(["Broker", "Broker Name", "Dealer"]),
       fees: cleanNumber(findValue(["Total Fees", "Fees", "Brokerage and Fees", "Charges"])),
       settlementStatus: findValue(["Settlement Status"]),
-      settlementDate: findValue(["Settlement Date"])
+      settlementDate: findValue(["Settlement Date"]),
+      status: findValue(["Order Status", "Status", "Execution Status", "Trade Status"]) || "UNKNOWN"
     };
   }
 
@@ -306,6 +308,7 @@ export default function TransactionImport() {
     })
   );
 
+  await rebuildCanonicalPortfolioLedger();
   await buildSyncStatus();
 
   Alert.alert("Evidence Reviewed", `${verified.length} verified broker executions saved; ${unverified.length} incomplete records remain UNVERIFIED.`);

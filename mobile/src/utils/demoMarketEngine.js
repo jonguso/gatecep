@@ -1,7 +1,7 @@
 const BASE_PRICES = {
   SCOM: 30.6,
   KCB: 45,
-  EQTY: 48,
+  EQT: 48,
   COOP: 16,
   EABL: 248,
   BAT: 520,

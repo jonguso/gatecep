@@ -1,5 +1,6 @@
 import { API_URL } from "../../config/apiConfig";
 import { userGetItem, userSetItem } from "../auth/userStorage";
+import { canonicalSecuritySymbol } from "../../features/trading/securityIdentityService";
 
 const CACHE_KEY = "canonicalNseQuoteSnapshot";
 const MIN_REFRESH_MS = 45 * 1000;
@@ -10,10 +11,15 @@ let inFlight = null;
 let memorySnapshot = null;
 
 const clean = (value) => String(value ?? "").trim();
-const symbol = (value) => {
-  const normalized = clean(value).toUpperCase().replace(/\.NR$/i, "");
-  return ({ EQT: "EQTY", IM: "IMH" })[normalized] || normalized;
-};
+const symbol = (value) =>
+  canonicalSecuritySymbol(
+    clean(value).toUpperCase().replace(/\.NR$/i, "")
+  );
+
+export function nseProviderSymbol(value) {
+  const canonical = symbol(value);
+  return ({ EQT: "EQTY", IM: "IMH" })[canonical] || canonical;
+}
 const number = (value) => {
   const parsed = Number(String(value ?? "").replace(/,/g, ""));
   return Number.isFinite(parsed) ? parsed : null;

@@ -8,7 +8,7 @@ export function buildDashboardHome() {
     marketPulse: {
       topGainer: "SCOM",
       topLoser: "KPLC",
-      mostActive: "EQTY",
+      mostActive: "EQT",
       foreignActivity: "Net Buy"
     },
 

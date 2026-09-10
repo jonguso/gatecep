@@ -1,0 +1,165 @@
+import { reconstructFifoAcquisitionLots } from "./weightedAverageBuyGuardService.js";
+import { isCompletedLotExecution, loadBrokerLotHistoryEvidence } from "./brokerLotHistoryEvidenceService.js";
+import { canonicalSecuritySymbol } from "./securityIdentityService.js";
+
+const n = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
+const EPSILON = 0.000001;
+
+function dateKey(value) {
+  const direct = new Date(value || 0).getTime();
+  if (Number.isFinite(direct)) return direct;
+  const match = String(value || "").match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/);
+  if (!match) return 0;
+  const month = ["JAN", "FEB", "MAR", "APR", "MAY", "JUN", "JUL", "AUG", "SEP", "OCT", "NOV", "DEC"].indexOf(match[2].toUpperCase());
+  return month >= 0 ? Date.UTC(Number(match[3]), month, Number(match[1])) : 0;
+}
+
+function sideOf(row = {}) {
+  const side = String(row.side || row.type || "").trim().toUpperCase();
+  if (side === "B" || side.includes("BUY")) return "BUY";
+  if (side === "S" || side.includes("SELL")) return "SELL";
+  return side;
+}
+
+export function buildHistoricalSecurityLotLedger({ transactions = [], symbol, currentQuantity = null, currentAveragePrice = null, costBasisMethod = "FIFO" } = {}) {
+  const target = canonicalSecuritySymbol(symbol);
+  const rows = (Array.isArray(transactions) ? transactions : [])
+    .map((row) => ({ ...row, rawSymbol: row.rawSymbol || row.symbol || null, symbol: canonicalSecuritySymbol(row.canonicalSymbol || row.symbol), canonicalSymbol: canonicalSecuritySymbol(row.canonicalSymbol || row.symbol) }))
+    .filter((row) => canonicalSecuritySymbol(row.canonicalSymbol || row.symbol) === target)
+    .filter(isCompletedLotExecution)
+    .sort((a, b) => dateKey(a.executionDate || a.date || a.createdAt) - dateKey(b.executionDate || b.date || b.createdAt));
+
+  const acquisitions = [];
+  const historicalSales = [];
+  const openQueue = [];
+  const issues = [];
+
+  rows.forEach((row) => {
+    const side = sideOf(row);
+    const quantity = n(row.quantity || row.filledQuantity || row.tradedQuantity);
+    const price = n(row.price || row.averagePrice || row.executionPrice);
+    const date = row.executionDate || row.date || row.createdAt || null;
+    const brokerReference = row.brokerReference || row.orderNo || row.id || null;
+
+    if (side === "BUY") {
+      const fees = n(row.fees || row.totalFees || row.charges);
+      const lot = {
+        brokerReference,
+        acquisitionDate: date,
+        originalQuantity: quantity,
+        historicallyConsumedQuantity: 0,
+        remainingQuantity: quantity,
+        originalUnitPrice: price,
+        unitCost: (quantity * price + fees) / quantity,
+        feesKnown: fees > 0,
+        status: "OPEN"
+      };
+      acquisitions.push(lot);
+      openQueue.push(lot);
+      return;
+    }
+
+    if (side === "SELL") {
+      let remaining = quantity;
+      const consumedLots = [];
+      for (const lot of openQueue) {
+        if (remaining <= EPSILON) break;
+        if (lot.remainingQuantity <= EPSILON) continue;
+        const consumed = Math.min(remaining, lot.remainingQuantity);
+        lot.historicallyConsumedQuantity += consumed;
+        lot.remainingQuantity -= consumed;
+        lot.status = lot.remainingQuantity <= EPSILON ? "CLOSED" : "PARTIAL";
+        consumedLots.push({
+          brokerReference: lot.brokerReference,
+          acquisitionDate: lot.acquisitionDate,
+          quantity: consumed,
+          originalUnitPrice: lot.originalUnitPrice,
+          unitCost: lot.unitCost
+        });
+        remaining -= consumed;
+      }
+      const unmatchedQuantity = remaining > EPSILON ? remaining : 0;
+      if (unmatchedQuantity > 0) {
+        issues.push({
+          code: "UNMATCHED_HISTORICAL_SALE",
+          saleBrokerReference: brokerReference,
+          saleDate: date,
+          saleQuantity: quantity,
+          unmatchedQuantity
+        });
+      }
+      historicalSales.push({
+        brokerReference,
+        saleDate: date,
+        quantity,
+        price,
+        consumedLots,
+        unmatchedQuantity
+      });
+    }
+  });
+
+  const rawOpenLots = acquisitions
+    .filter((lot) => lot.remainingQuantity > EPSILON)
+    .map((lot) => ({
+      quantity: lot.remainingQuantity,
+      unitCost: lot.unitCost,
+      originalUnitPrice: lot.originalUnitPrice,
+      feesKnown: lot.feesKnown,
+      date: lot.acquisitionDate,
+      brokerReference: lot.brokerReference
+    }));
+
+  const hasBrokerPosition = currentQuantity !== null && currentQuantity !== undefined;
+  const fifo = hasBrokerPosition
+    ? reconstructFifoAcquisitionLots({ transactions: rows, symbol: target, currentQuantity, currentAveragePrice })
+    : null;
+  const openLots = fifo?.available ? fifo.lots : rawOpenLots;
+  const ledgerQuantity = rawOpenLots.reduce((sum, lot) => sum + n(lot.quantity), 0);
+  const quantityMatches = !hasBrokerPosition || Math.abs(ledgerQuantity - n(currentQuantity)) <= EPSILON;
+  const available = rows.length > 0 && issues.length === 0 && quantityMatches;
+
+  return {
+    symbol: target,
+    costBasisMethod: String(costBasisMethod || "FIFO").toUpperCase(),
+    source: "VERIFIED_BROKER_TRANSACTION_HISTORY",
+    analyticalOnly: true,
+    mutatesRealPortfolio: false,
+    mutatesPracticePortfolio: false,
+    available,
+    status: !rows.length
+      ? "TRANSACTION_HISTORY_REQUIRED"
+      : issues.length
+      ? "HISTORICAL_LEDGER_GAP"
+      : !quantityMatches
+      ? "LOT_QUANTITY_MISMATCH"
+      : "HISTORICAL_LOT_LEDGER_RECONCILED",
+    acquisitions,
+    historicalSales,
+    openLots,
+    reconstructedQuantity: ledgerQuantity,
+    reconciliation: {
+      brokerQuantity: hasBrokerPosition ? n(currentQuantity) : null,
+      ledgerQuantity,
+      quantityMatches
+    },
+    calibration: fifo ? {
+      status: fifo.status,
+      calibratedToBrokerAverage: fifo.calibratedToBrokerAverage,
+      calibrationFactor: fifo.calibrationFactor,
+      reconstructedAverage: fifo.reconstructedAverage
+    } : null,
+    issues
+  };
+}
+
+export async function loadHistoricalSecurityLotLedger({ symbol, currentQuantity = null, currentAveragePrice = null, costBasisMethod = "FIFO" } = {}) {
+  const evidence = await loadBrokerLotHistoryEvidence();
+  return buildHistoricalSecurityLotLedger({
+    transactions: evidence.records,
+    symbol,
+    currentQuantity,
+    currentAveragePrice,
+    costBasisMethod
+  });
+}

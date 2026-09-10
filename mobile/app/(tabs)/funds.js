@@ -45,6 +45,9 @@ import {
   requireVerifiedBrokerCashEvidence
 } from "../../src/features/broker-sync/brokerCashEvidencePolicy";
 
+import { normalizeBrokerCashStatementEvents } from "../../src/features/trading/cashLedgerEvidenceService";
+import { rebuildCanonicalPortfolioLedger } from "../../src/features/trading/canonicalPortfolioLedgerService";
+
 export default function Funds() {
   const params = useLocalSearchParams();
   const reconciliationMode =
@@ -53,6 +56,7 @@ export default function Funds() {
   const [broker, setBroker] = useState("AIB");
   const [status, setStatus] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
+  const [statementRows, setStatementRows] = useState([]);
   const [statementIdentity, setStatementIdentity] = useState(null);
   const [statementEffectiveDate, setStatementEffectiveDate] = useState(null);
   const [connectedRealBroker, setConnectedRealBroker] = useState(false);
@@ -97,6 +101,7 @@ export default function Funds() {
 
       const parsed = await parseStatementFile(file);
       const rows = parsed.rows;
+      setStatementRows(rows);
 
       if (!rows.length) {
         throw new Error("No rows found in statement file.");
@@ -332,6 +337,13 @@ export default function Funds() {
       }
 
       await userSetItem("availableCash", String(amount));
+      if (selectedFile && statementRows.length) {
+        const cashEvents = normalizeBrokerCashStatementEvents(statementRows, {
+          fileName: selectedFile.name,
+          broker
+        });
+        await userSetItem("canonicalCashEvidenceEvents", JSON.stringify(cashEvents));
+      }
       await userSetItem("cashStatementUploaded", "true");
       await userSetItem("statementSummary", JSON.stringify(summary));
 
@@ -374,6 +386,8 @@ const token =
       if (!response.ok || data.ok === false) {
         throw new Error(data.error || "Unable to update backend cash");
       }
+
+      await rebuildCanonicalPortfolioLedger();
 
       await refreshCanonicalRealPortfolioSnapshot({
         reason: "CASH_STATEMENT_UPDATE"

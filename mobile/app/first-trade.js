@@ -36,7 +36,7 @@ const STOCKS = [
     reason: "Large banking exposure with regional presence."
   },
   {
-    symbol: "EQTY",
+    symbol: "EQT",
     name: "Equity Group",
     sector: "Banking",
     price: 48,

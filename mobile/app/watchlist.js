@@ -29,7 +29,7 @@ export default function WatchlistManager() {
 
   async function load() {
     const raw = await userGetItem(WATCHLIST_KEY);
-    const saved = raw ? JSON.parse(raw) : ["SCOM", "EABL", "EQTY", "COOP"];
+    const saved = raw ? JSON.parse(raw) : ["SCOM", "EABL", "EQT", "COOP"];
     setSelected(Array.isArray(saved) ? saved : []);
   }
 

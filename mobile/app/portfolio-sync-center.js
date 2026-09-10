@@ -8,6 +8,7 @@ import { loadBrokerMirror } from "../src/features/broker-sync/brokerSyncService"
 import { adoptVerifiedBrokerSnapshot, loadAuthoritativeBrokerSnapshotPreview } from "../src/features/broker-sync/brokerAuthoritativeSnapshotService";
 import { loadBrokerAccounts } from "../src/services/brokers/brokerAccountStore";
 import { hasConnectedRealBrokerAccount } from "../src/features/broker-sync/brokerCashEvidencePolicy";
+import { loadBrokerLotHistoryEvidence } from "../src/features/trading/brokerLotHistoryEvidenceService";
 import ActiveUserBanner from "../src/components/ActiveUserBanner";
 import {
   CollapsibleSection,
@@ -24,7 +25,7 @@ import {
 const STEPS = ["Verify", "Confirm", "Complete"];
 
 export default function PortfolioSyncCenter() {
-  const [state, setState] = useState({ loading: true, saving: false, error: "", holdingsCount: 0, portfolioValue: 0, cash: 0, source: "", mirror: null, preview: null, connectedRealBroker: false });
+  const [state, setState] = useState({ loading: true, saving: false, error: "", holdingsCount: 0, portfolioValue: 0, cash: 0, source: "", mirror: null, preview: null, connectedRealBroker: false, lotHistory: null });
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [activePanel, setActivePanel] = useState("evidence");
 
@@ -32,12 +33,13 @@ export default function PortfolioSyncCenter() {
 
   async function load() {
     try {
-      const [portfolio, cashRaw, mirror, preview, brokerAccounts] = await Promise.all([
+      const [portfolio, cashRaw, mirror, preview, brokerAccounts, lotHistory] = await Promise.all([
         loadUnifiedPortfolio(),
         userGetItem("availableCash"),
         loadBrokerMirror(),
         loadAuthoritativeBrokerSnapshotPreview(),
-        loadBrokerAccounts()
+        loadBrokerAccounts(),
+        loadBrokerLotHistoryEvidence()
       ]);
       const holdings = portfolio?.holdings || [];
       setState({
@@ -49,7 +51,8 @@ export default function PortfolioSyncCenter() {
         source: portfolio?.priceSource || portfolio?.source || "",
         mirror,
         preview,
-        connectedRealBroker: hasConnectedRealBrokerAccount(brokerAccounts)
+        connectedRealBroker: hasConnectedRealBrokerAccount(brokerAccounts),
+        lotHistory
       });
     } catch (error) {
       setState((current) => ({ ...current, loading: false, error: error?.message || "Unable to load the REAL synchronization state." }));
@@ -58,11 +61,13 @@ export default function PortfolioSyncCenter() {
 
   const valuationReady = Boolean(state.mirror);
   const cashEvidenceReady = state.mirror?.cashEvidenceAvailable === true;
-  const evidenceReady = valuationReady && cashEvidenceReady;
+  const transactionHistoryReady = state.lotHistory?.ready === true;
+  const evidenceReady = valuationReady && cashEvidenceReady && transactionHistoryReady;
 
   function continueJourney() {
     if (!valuationReady) return router.push("/import-portfolio?mode=RECONCILE");
     if (!cashEvidenceReady) return router.push("/(tabs)/funds?mode=RECONCILE");
+    if (!transactionHistoryReady) return router.push("/transactions-upload?mode=RECONCILE");
     confirmReplacement();
   }
 
@@ -87,6 +92,8 @@ export default function PortfolioSyncCenter() {
     ? "Upload Portfolio Valuation"
     : !cashEvidenceReady
     ? "Upload Cash / Ledger Evidence"
+    : !transactionHistoryReady
+    ? "Upload Transaction History"
     : state.saving ? "Applying Broker Snapshot…" : "Confirm Broker Snapshot";
 
   return (
@@ -124,8 +131,8 @@ export default function PortfolioSyncCenter() {
         tone={evidenceReady ? "success" : "warning"}
         title={evidenceReady ? "Broker evidence complete" : "Broker evidence required"}
         message={evidenceReady
-          ? "Identity, portfolio valuation, and cash statement are verified. Confirm once to replace the REAL record."
-          : "Both the current portfolio valuation and cash/ledger statement are required."}
+          ? "Portfolio valuation, cash statement, and transaction history are available. Confirm once to replace the REAL record."
+          : "Current portfolio valuation, cash/ledger statement, and completed transaction history are required."}
       />
 
       <View style={styles.panelTabs}>
@@ -136,7 +143,7 @@ export default function PortfolioSyncCenter() {
         ))}
       </View>
 
-      {activePanel === "evidence" ? <ContainedPanel title="Required Broker Evidence" subtitle="Complete both records before confirmation" testID="real-sync-evidence-panel">
+      {activePanel === "evidence" ? <ContainedPanel title="Required Broker Evidence" subtitle="Complete all three records before confirmation" testID="real-sync-evidence-panel">
         <EvidenceRow
           label="Portfolio Valuation"
           ready={valuationReady}
@@ -151,6 +158,13 @@ export default function PortfolioSyncCenter() {
           actionLabel={cashEvidenceReady ? "Replace" : "Upload"}
           disabled={!valuationReady}
           onPress={() => router.push("/(tabs)/funds?mode=RECONCILE")}
+        />
+        <EvidenceRow
+          label="Transaction / Lot History"
+          ready={transactionHistoryReady}
+          value={transactionHistoryReady ? `${state.lotHistory.completedCount} completed executions • ${state.lotHistory.symbols.length} securities` : "Required for FIFO lots, realized results, and post-sale WAP"}
+          actionLabel={transactionHistoryReady ? "Replace" : "Upload"}
+          onPress={() => router.push("/transactions-upload?mode=RECONCILE")}
         />
       </ContainedPanel> : null}
 
@@ -170,7 +184,6 @@ export default function PortfolioSyncCenter() {
             <ActionButton label="Manual Initial Portfolio" onPress={() => router.push("/manual-portfolio-entry")} />
           </>
         )}
-        <ActionButton label="Upload Transaction History" onPress={() => router.push("/transactions-upload")} />
       </ContainedPanel> : null}
 
       {activePanel === "preview" ? <ContainedPanel title="Authoritative Replacement Preview" subtitle="No change occurs until explicit confirmation" emptyMessage="Complete verified valuation and cash evidence to create a replacement preview." testID="real-sync-preview-panel">
@@ -226,6 +239,7 @@ function EvidenceRow({ label, ready, value, actionLabel, onPress, disabled = fal
     <View style={styles.evidenceRow}>
       <View style={styles.evidenceText}>
         <Text style={styles.evidenceLabel}>{label}</Text>
+        {value ? <Text style={styles.evidenceValue}>{value}</Text> : null}
         <Text style={ready ? styles.ready : styles.required}>{ready ? "READY" : "REQUIRED"}</Text>
       </View>
       <Pressable style={[styles.smallButton, disabled && styles.disabled]} disabled={disabled} onPress={onPress}>

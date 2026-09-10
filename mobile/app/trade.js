@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Alert,
+  Modal,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -18,19 +19,64 @@ import {
   saveBasketExecution,
   updateExecutionOrder
 } from "../src/trade/basketExecutionStore";
+import {
+  analyzeAverageCostSale,
+  analyzeWeightedAverageBuy
+} from "../src/features/trading/weightedAverageBuyGuardService";
+import { buildHistoricalSecurityLotLedger } from "../src/features/trading/historicalSecurityLotLedgerService";
+import { loadUnifiedPortfolioRuntime } from "../src/portfolio/unifiedPortfolioApi";
+import { addBrokerActionPlanOrder } from "../src/services/trade/brokerActionPlanStore";
+import { loadBrokerLotHistoryEvidence } from "../src/features/trading/brokerLotHistoryEvidenceService";
+import { canonicalSecuritySymbol } from "../src/features/trading/securityIdentityService";
+
+const PRACTICE_FEE_POLICY = {
+  commissionRatePct: 1.2,
+  otherChargesRatePct: 0.2,
+  minimumCommission: 0,
+  fixedCharges: 0
+};
+
+const BROKER_EVIDENCED_FEE_POLICY = {
+  commissionRatePct: 1.3,
+  otherChargesRatePct: 0.34,
+  minimumCommission: 0,
+  fixedCharges: 0
+};
 
 export default function Trade() {
-  const { symbol: requestedSymbol } = useLocalSearchParams();
+  const { symbol: requestedSymbol, mode, side: requestedSide /* PC-030M20AQ2 requestedSide */} = useLocalSearchParams();
+  const averageCostMode = String(mode || "").toUpperCase() === "AVERAGE_COST";
+
   const market = useMarketData();
   const stocks = market.rows;
+
   const [portfolio, setPortfolio] = useState([]);
+  const [realHoldings, setRealHoldings] = useState([]);
   const [cash, setCash] = useState(0);
-  const [selectedStock, setSelectedStock] = useState({ symbol: "", name: "", sector: "NSE", price: 0 });
+  const [selectedStock, setSelectedStock] = useState({
+    symbol: "",
+    name: "",
+    sector: "NSE",
+    price: 0
+  });
   const [side, setSide] = useState("BUY");
+
+  React.useEffect(() => {
+    const normalizedRequestedSide = String(requestedSide || "").toUpperCase();
+    if (normalizedRequestedSide === "BUY" || normalizedRequestedSide === "SELL") {
+      setSide(normalizedRequestedSide);
+    }
+  }, [requestedSide]);
+
   const [quantity, setQuantity] = useState("0");
   const [limitPrice, setLimitPrice] = useState("");
   const [confirmedTrade, setConfirmedTrade] = useState(null);
   const [activeExecution, setActiveExecution] = useState(null);
+  const [securityPickerOpen, setSecurityPickerOpen] = useState(false);
+  const [realTransactions, setRealTransactions] = useState([]);
+  const [saleCostMethod, setSaleCostMethod] = useState("FIFO");
+  const [removedLotAveragePrice, setRemovedLotAveragePrice] = useState("");
+  const [scenarioExtraCharges, setScenarioExtraCharges] = useState("0");
 
   useEffect(() => {
     load();
@@ -38,10 +84,27 @@ export default function Trade() {
 
   useEffect(() => {
     if (!stocks.length) return;
-    const target = String(requestedSymbol || selectedStock?.symbol || "").trim().toUpperCase();
-    const verified = stocks.find((item) => String(item.symbol).toUpperCase() === target) || (!target ? stocks[0] : null);
+
+    const target = canonicalSecuritySymbol(
+      requestedSymbol || selectedStock?.symbol || ""
+    );
+
+    const verified =
+      stocks.find(
+        (item) => canonicalSecuritySymbol(item.symbol) === target
+      ) || (!target ? stocks[0] : null);
+
     if (!verified) return;
-    setSelectedStock(verified);
+
+    setSelectedStock({
+      ...verified,
+      providerSymbol:
+        verified.providerSymbol ||
+        (canonicalSecuritySymbol(verified.symbol) !== String(verified.symbol || "").toUpperCase()
+          ? verified.symbol
+          : undefined),
+      symbol: canonicalSecuritySymbol(verified.symbol)
+    });
     setLimitPrice(String(verified.price));
     setConfirmedTrade(null);
   }, [stocks, requestedSymbol]);
@@ -49,12 +112,23 @@ export default function Trade() {
   async function load() {
     const practiceRaw = await userGetItem("practicePortfolio");
     const practice = practiceRaw ? JSON.parse(practiceRaw) : {};
-    const execution = await loadBasketExecution();
+
+    const [execution, realPortfolio, lotHistory] = await Promise.all([
+      loadBasketExecution(),
+      loadUnifiedPortfolioRuntime({ broker: "ALL" }).catch(() => null),
+      loadBrokerLotHistoryEvidence().catch(() => ({ records: [] }))
+    ]);
 
     setPortfolio(Array.isArray(practice?.holdings) ? practice.holdings : []);
     setCash(Number(practice?.availableCash || 0));
+    setRealHoldings(
+      Array.isArray(realPortfolio?.holdings) ? realPortfolio.holdings : []
+    );
+    setRealTransactions(
+      Array.isArray(lotHistory?.records) ? lotHistory.records : []
+    );
 
-    if (execution?.orders?.length) {
+    if (!averageCostMode && execution?.orders?.length) {
       setActiveExecution(execution);
 
       const nextOrder =
@@ -91,10 +165,13 @@ export default function Trade() {
 
     const normalized = normalizeBasketOrder(order);
 
+    const normalizedSymbol = canonicalSecuritySymbol(normalized.symbol);
     const stock =
-      stocks.find((item) => item.symbol === normalized.symbol) || {
-        symbol: normalized.symbol,
-        name: normalized.name || normalized.symbol,
+      stocks.find(
+        (item) => canonicalSecuritySymbol(item.symbol) === normalizedSymbol
+      ) || {
+        symbol: normalizedSymbol,
+        name: normalized.name || normalizedSymbol,
         sector: normalized.sector || "NSE",
         price: normalized.price,
         reason: normalized.reason || "Coach G basket order"
@@ -108,19 +185,215 @@ export default function Trade() {
   }
 
   function selectStock(stock) {
-    setSelectedStock(stock);
+    const canonical = canonicalSecuritySymbol(stock?.symbol);
+    setSelectedStock({
+      ...stock,
+      providerSymbol:
+        stock?.providerSymbol ||
+        (canonical !== String(stock?.symbol || "").toUpperCase() ? stock.symbol : undefined),
+      symbol: canonical
+    });
     setLimitPrice(String(stock.price));
     setConfirmedTrade(null);
+    setSecurityPickerOpen(false);
   }
+
+  const activeFeePolicy = useMemo(
+    () =>
+      averageCostMode
+        ? {
+            ...BROKER_EVIDENCED_FEE_POLICY,
+            fixedCharges: Number(scenarioExtraCharges || 0)
+          }
+        : PRACTICE_FEE_POLICY,
+    [averageCostMode, scenarioExtraCharges]
+  );
 
   const estimate = useMemo(() => {
     return buildEstimate({
       side,
       quantity: Number(quantity || 0),
       price: Number(limitPrice || selectedStock.price || 0),
-      cash
+      cash,
+      feePolicy: activeFeePolicy
     });
-  }, [quantity, limitPrice, selectedStock, side, cash]);
+  }, [
+    quantity,
+    limitPrice,
+    selectedStock,
+    side,
+    cash,
+    activeFeePolicy
+  ]);
+
+  const practiceHolding = useMemo(
+    () =>
+      portfolio.find(
+        (item) =>
+          canonicalSecuritySymbol(item.symbol) ===
+          canonicalSecuritySymbol(selectedStock.symbol)
+      ) || null,
+    [portfolio, selectedStock.symbol]
+  );
+
+  const realHolding = useMemo(
+    () =>
+      realHoldings.find(
+        (item) =>
+          canonicalSecuritySymbol(item.symbol) ===
+          canonicalSecuritySymbol(selectedStock.symbol)
+      ) || null,
+    [realHoldings, selectedStock.symbol]
+  );
+
+  const existingHolding =
+    practiceHolding || (averageCostMode ? realHolding : null);
+
+  const holdingSource = practiceHolding
+    ? "PRACTICE"
+    : existingHolding
+    ? "REAL READ-ONLY"
+    : "NOT HELD";
+
+  const fifoEvidence = useMemo(
+    () =>
+      existingHolding
+        ? buildHistoricalSecurityLotLedger({
+            transactions: realTransactions,
+            symbol: selectedStock.symbol,
+            currentQuantity: existingHolding.quantity,
+            currentAveragePrice:
+              existingHolding.averagePrice ?? existingHolding.averageCost,
+            costBasisMethod: "FIFO"
+          })
+        : null,
+    [realTransactions, selectedStock.symbol, existingHolding]
+  );
+
+  useEffect(() => {
+    if (!fifoEvidence || selectedStock?.symbol !== "JUB") return;
+
+    const acquisitions = Array.isArray(fifoEvidence?.acquisitions)
+      ? fifoEvidence.acquisitions
+      : [];
+
+    const historicalSales = Array.isArray(fifoEvidence?.historicalSales)
+      ? fifoEvidence.historicalSales
+      : [];
+
+    const issues = Array.isArray(fifoEvidence?.issues)
+      ? fifoEvidence.issues
+      : [];
+
+    console.log("M20AG JUB RECONCILIATION", {
+      brokerQty: Number(existingHolding?.quantity || 0),
+      ledgerQty: Number(fifoEvidence?.reconstructedQuantity || 0),
+      difference:
+        Number(fifoEvidence?.reconstructedQuantity || 0) -
+        Number(existingHolding?.quantity || 0),
+      status: fifoEvidence?.status || "UNKNOWN",
+      available: fifoEvidence?.available === true,
+      issues,
+      buyCount: acquisitions.length,
+      sellCount: historicalSales.length,
+      buys: acquisitions.map((lot) => ({
+        date: lot?.acquisitionDate || null,
+        ref: lot?.brokerReference || null,
+        originalQty: Number(lot?.originalQuantity || 0),
+        consumedQty: Number(lot?.historicallyConsumedQuantity || 0),
+        remainingQty: Number(lot?.remainingQuantity || 0),
+        status: lot?.status || null
+      })),
+      sells: historicalSales.map((sale) => ({
+        date: sale?.saleDate || null,
+        ref: sale?.saleBrokerReference || null,
+        qty: Number(sale?.saleQuantity || 0),
+        consumedLots: Array.isArray(sale?.consumedLots)
+          ? sale.consumedLots
+          : []
+      }))
+    });
+  }, [
+    fifoEvidence,
+    selectedStock?.symbol,
+    existingHolding?.quantity
+  ]);
+
+  const averageGuard = useMemo(() => {
+    if (!existingHolding) return null;
+
+    const input = {
+      holding: existingHolding,
+      proposedQuantity: Number(quantity || 0),
+      proposedPrice: Number(limitPrice || selectedStock.price || 0),
+      feePolicy: activeFeePolicy,
+      estimatedCharges: estimate.totalFees
+    };
+
+    return side === "SELL"
+      ? analyzeAverageCostSale({
+          ...input,
+          costBasisMethod: saleCostMethod,
+          acquisitionLots:
+            fifoEvidence?.available && Array.isArray(fifoEvidence?.openLots)
+              ? fifoEvidence.openLots
+              : [],
+          removedLotAveragePrice
+        })
+      : analyzeWeightedAverageBuy(input);
+  }, [
+    side,
+    existingHolding,
+    quantity,
+    limitPrice,
+    selectedStock.price,
+    estimate.totalFees,
+    saleCostMethod,
+    fifoEvidence,
+    removedLotAveragePrice,
+    activeFeePolicy
+  ]);
+
+  async function addToBrokerActionPlan() {
+    if (!averageGuard?.available) {
+      Alert.alert(
+        "Scenario Incomplete",
+        averageGuard?.message ||
+          "Choose an existing holding and enter a valid quantity and limit price."
+      );
+      return;
+    }
+
+    await addBrokerActionPlanOrder({
+      symbol: selectedStock.symbol,
+      name: selectedStock.name,
+      sector: selectedStock.sector,
+      side,
+      quantity: estimate.qty,
+      price: estimate.price,
+      amount: estimate.totalCost,
+      estimatedCharges: estimate.totalFees,
+      guardPrice:
+        side === "SELL"
+          ? averageGuard.minimumSalePrice
+          : averageGuard.maximumBuyPrice,
+      guardStatus: averageGuard.status,
+      reason:
+        side === "SELL"
+          ? `${averageGuard.recommendation} ${averageGuard.accountingNote}`
+          : averageGuard.recommendation,
+      costBasisSource: holdingSource,
+      costBasisMethod: averageGuard.costBasisMethod,
+      soldCostPerShare: averageGuard.soldCostPerShare,
+      projectedRemainingAverage: averageGuard.remainingAveragePrice,
+      removedLots: averageGuard.removedLots || []
+    });
+
+    router.push({
+      pathname: "/basket-execution",
+      params: { mode: "BROKER_PLAN" }
+    });
+  }
 
   async function getBrokerProfile() {
     return {
@@ -160,7 +433,8 @@ export default function Trade() {
 
         const newQty = existingQty + qty;
         const newCostValue = existingCostValue + totalCost;
-        const newAveragePrice = newQty > 0 ? newCostValue / newQty : price;
+        const newAveragePrice =
+          newQty > 0 ? newCostValue / newQty : price;
         const newMarketValue = newQty * price;
 
         nextPortfolio[existingIndex] = {
@@ -200,7 +474,9 @@ export default function Trade() {
           value: gross,
           profitLoss: gross - totalCost,
           profitLossPct:
-            totalCost > 0 ? ((gross - totalCost) / totalCost) * 100 : 0,
+            totalCost > 0
+              ? ((gross - totalCost) / totalCost) * 100
+              : 0,
           source: "TRADE_SIMULATION",
           createdAt: new Date().toISOString(),
           updatedAt: new Date().toISOString()
@@ -217,7 +493,9 @@ export default function Trade() {
       const existingQty = Number(existing.quantity || 0);
 
       if (qty > existingQty) {
-        throw new Error(`You only hold ${existingQty} shares of ${stock.symbol}.`);
+        throw new Error(
+          `You only hold ${existingQty} shares of ${stock.symbol}.`
+        );
       }
 
       const remainingQty = existingQty - qty;
@@ -251,8 +529,17 @@ export default function Trade() {
 
     trades.unshift(trade);
 
-    await savePracticePortfolio({ holdings: nextPortfolio, availableCash: nextCash, status: "ACTIVE", lastActivityType: "TRADE_SIMULATION" });
-    await userSetItem("practiceSimulatedTrades", JSON.stringify(trades));
+    await savePracticePortfolio({
+      holdings: nextPortfolio,
+      availableCash: nextCash,
+      status: "ACTIVE",
+      lastActivityType: "TRADE_SIMULATION"
+    });
+
+    await userSetItem(
+      "practiceSimulatedTrades",
+      JSON.stringify(trades)
+    );
   }
 
   async function confirmTrade() {
@@ -270,7 +557,9 @@ export default function Trade() {
       if (side === "BUY" && estimate.remainingCash < 0) {
         Alert.alert(
           "Insufficient Cash",
-          `You need KES ${money(estimate.totalCost)} but only have KES ${money(cash)}.`
+          `You need KES ${money(
+            estimate.totalCost
+          )} but only have KES ${money(cash)}.`
         );
         return;
       }
@@ -289,7 +578,10 @@ export default function Trade() {
       });
 
       if (!validation.ok) {
-        Alert.alert("Order Blocked", validation.errors.join("\n"));
+        Alert.alert(
+          "Order Blocked",
+          validation.errors.join("\n")
+        );
         return;
       }
 
@@ -329,7 +621,10 @@ export default function Trade() {
         `${side} ${estimate.qty} ${selectedStock.symbol} simulated.`
       );
     } catch (error) {
-      Alert.alert("Trade Failed", error.message || "Trade could not be completed.");
+      Alert.alert(
+        "Trade Failed",
+        error.message || "Trade could not be completed."
+      );
     }
   }
 
@@ -338,7 +633,8 @@ export default function Trade() {
 
     const currentOrder = activeExecution.orders.find(
       (order) =>
-        String(order.symbol).toUpperCase() === selectedStock.symbol &&
+        String(order.symbol).toUpperCase() ===
+          selectedStock.symbol &&
         order.status !== "FILLED"
     );
 
@@ -365,17 +661,25 @@ export default function Trade() {
 
   async function executeEntireBasket() {
     if (!activeExecution?.orders?.length) {
-      Alert.alert("No Basket", "No active basket execution found.");
+      Alert.alert(
+        "No Basket",
+        "No active basket execution found."
+      );
       return;
     }
 
     const pendingOrders = activeExecution.orders
       .filter((order) => order.status !== "FILLED")
       .map(normalizeBasketOrder)
-      .filter((order) => order.quantity > 0 && order.price > 0);
+      .filter(
+        (order) => order.quantity > 0 && order.price > 0
+      );
 
     if (!pendingOrders.length) {
-      Alert.alert("Basket Complete", "There are no pending basket orders.");
+      Alert.alert(
+        "Basket Complete",
+        "There are no pending basket orders."
+      );
       return;
     }
 
@@ -401,19 +705,25 @@ export default function Trade() {
       let workingPortfolio = [...portfolio];
       let workingCash = Number(cash || 0);
 
-      const tradeRaw = await userGetItem("practiceSimulatedTrades");
+      const tradeRaw = await userGetItem(
+        "practiceSimulatedTrades"
+      );
       const trades = tradeRaw ? JSON.parse(tradeRaw) : [];
 
-      const updatedOrders = activeExecution.orders.map(normalizeBasketOrder);
+      const updatedOrders =
+        activeExecution.orders.map(normalizeBasketOrder);
 
       for (const order of pendingOrders) {
         const stock =
-          stocks.find((item) => item.symbol === order.symbol) || {
+          stocks.find(
+            (item) => item.symbol === order.symbol
+          ) || {
             symbol: order.symbol,
             name: order.name || order.symbol,
             sector: order.sector || "NSE",
             price: order.price,
-            reason: order.reason || "Coach G basket order"
+            reason:
+              order.reason || "Coach G basket order"
           };
 
         const itemEstimate = buildEstimate({
@@ -435,10 +745,15 @@ export default function Trade() {
         });
 
         if (!validation.ok) {
-          throw new Error(`${stock.symbol}: ${validation.errors.join(", ")}`);
+          throw new Error(
+            `${stock.symbol}: ${validation.errors.join(", ")}`
+          );
         }
 
-        if ((order.side || "BUY") === "BUY" && itemEstimate.remainingCash < 0) {
+        if (
+          (order.side || "BUY") === "BUY" &&
+          itemEstimate.remainingCash < 0
+        ) {
           throw new Error(
             `${stock.symbol}: insufficient cash. Required KES ${money(
               itemEstimate.totalCost
@@ -468,7 +783,9 @@ export default function Trade() {
         trades.unshift(trade);
         workingCash = itemEstimate.remainingCash;
 
-        const index = updatedOrders.findIndex((item) => item.id === order.id);
+        const index = updatedOrders.findIndex(
+          (item) => item.id === order.id
+        );
 
         if (index >= 0) {
           updatedOrders[index] = {
@@ -489,10 +806,13 @@ export default function Trade() {
       const updatedExecution = {
         ...activeExecution,
         status:
-          completedOrders === updatedOrders.length ? "COMPLETED" : "IN_PROGRESS",
+          completedOrders === updatedOrders.length
+            ? "COMPLETED"
+            : "IN_PROGRESS",
         completedOrders,
-        failedOrders: updatedOrders.filter((order) => order.status === "FAILED")
-          .length,
+        failedOrders: updatedOrders.filter(
+          (order) => order.status === "FAILED"
+        ).length,
         totalOrders: updatedOrders.length,
         orders: updatedOrders,
         updatedAt: new Date().toISOString(),
@@ -502,8 +822,18 @@ export default function Trade() {
             : activeExecution.completedAt
       };
 
-      await savePracticePortfolio({ holdings: workingPortfolio, availableCash: workingCash, status: "ACTIVE", lastActivityType: "BASKET_TRADE_SIMULATION" });
-      await userSetItem("practiceSimulatedTrades", JSON.stringify(trades));
+      await savePracticePortfolio({
+        holdings: workingPortfolio,
+        availableCash: workingCash,
+        status: "ACTIVE",
+        lastActivityType: "BASKET_TRADE_SIMULATION"
+      });
+
+      await userSetItem(
+        "practiceSimulatedTrades",
+        JSON.stringify(trades)
+      );
+
       await saveBasketExecution(updatedExecution);
 
       setPortfolio(workingPortfolio);
@@ -516,62 +846,104 @@ export default function Trade() {
         `${pendingOrders.length} basket orders executed successfully.`
       );
     } catch (error) {
-      Alert.alert("Basket Execution Failed", error.message);
+      Alert.alert(
+        "Basket Execution Failed",
+        error.message
+      );
     }
   }
 
   const basketRemaining =
-    activeExecution?.orders?.filter((order) => order.status !== "FILLED")
-      .length || 0;
+    activeExecution?.orders?.filter(
+      (order) => order.status !== "FILLED"
+    ).length || 0;
 
   const normalizedExecutionOrders =
     activeExecution?.orders?.map(normalizeBasketOrder) || [];
 
+  const fifoOpenLots = Array.isArray(fifoEvidence?.openLots)
+    ? fifoEvidence.openLots
+    : [];
+
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={styles.content}
+    >
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Practice Trade</Text>
+        <Text style={styles.title}>
+          {averageCostMode
+            ? "Trade Lab — Average Cost Scenario"
+            : "Practice Trade"}
+        </Text>
 
         <Pressable
           style={styles.dashboardButton}
-          onPress={() => router.replace("/(tabs)/dashboard")}
+          onPress={() =>
+            router.replace("/(tabs)/dashboard")
+          }
         >
-          <Text style={styles.dashboardButtonText}>Dashboard</Text>
+          <Text style={styles.dashboardButtonText}>
+            Dashboard
+          </Text>
         </Pressable>
       </View>
 
       <Text style={styles.subtitle}>
-        Simulate decisions using Practice cash and holdings. Nothing here changes your REAL broker portfolio.
+        {averageCostMode
+          ? "Test price, quantity and temporary cash without creating a trade or changing any saved portfolio record."
+          : "Simulate decisions using Practice cash and holdings. Nothing here changes your REAL broker portfolio."}
       </Text>
 
       {activeExecution ? (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>Active Basket Execution</Text>
-
-          <Text style={styles.body}>
-            {activeExecution.source} • {activeExecution.status}
+          <Text style={styles.cardTitle}>
+            Active Basket Execution
           </Text>
 
-          <Text style={styles.body}>Remaining orders: {basketRemaining}</Text>
+          <Text style={styles.body}>
+            {activeExecution.source} •{" "}
+            {activeExecution.status}
+          </Text>
 
-          {normalizedExecutionOrders.slice(0, 5).map((order) => (
-            <View key={order.id} style={styles.basketMiniRow}>
-              <View>
-                <Text style={styles.basketSymbol}>{order.symbol}</Text>
-                <Text style={styles.small}>
-                  {order.side} • Qty {order.quantity} • KES{" "}
-                  {money(order.amount || order.gross)}
+          <Text style={styles.body}>
+            Remaining orders: {basketRemaining}
+          </Text>
+
+          {normalizedExecutionOrders
+            .slice(0, 5)
+            .map((order) => (
+              <View
+                key={order.id}
+                style={styles.basketMiniRow}
+              >
+                <View>
+                  <Text style={styles.basketSymbol}>
+                    {order.symbol}
+                  </Text>
+                  <Text style={styles.small}>
+                    {order.side} • Qty {order.quantity} • KES{" "}
+                    {money(order.amount || order.gross)}
+                  </Text>
+                </View>
+
+                <Text
+                  style={
+                    order.status === "FILLED"
+                      ? styles.greenText
+                      : styles.cyanText
+                  }
+                >
+                  {order.status}
                 </Text>
               </View>
-
-              <Text style={order.status === "FILLED" ? styles.greenText : styles.cyanText}>
-                {order.status}
-              </Text>
-            </View>
-          ))}
+            ))}
 
           {basketRemaining > 1 ? (
-            <Pressable style={styles.primary} onPress={executeEntireBasket}>
+            <Pressable
+              style={styles.primary}
+              onPress={executeEntireBasket}
+            >
               <Text style={styles.primaryText}>
                 Buy All Basket Orders ({basketRemaining})
               </Text>
@@ -580,78 +952,216 @@ export default function Trade() {
 
           <Pressable
             style={styles.secondary}
-            onPress={() => router.push("/basket-execution")}
+            onPress={() =>
+              router.push("/basket-execution")
+            }
           >
-            <Text style={styles.secondaryText}>Review Basket Execution</Text>
+            <Text style={styles.secondaryText}>
+              Review Basket Execution
+            </Text>
           </Pressable>
         </View>
       ) : null}
 
       <View style={styles.summaryCard}>
-        <Metric label="Available Cash" value={`KES ${money(cash)}`} />
-        <Metric label="Selected Stock" value={selectedStock.symbol || "Awaiting verified market"} />
+        {averageCostMode ? (
+          <View style={styles.metric}>
+            <Text style={styles.metricLabel}>
+              Scenario Cash (editable)
+            </Text>
+            <TextInput
+              value={String(cash)}
+              onChangeText={(value) =>
+                setCash(value.replace(/[^0-9.]/g, ""))
+              }
+              keyboardType="numeric"
+              style={styles.cashInput}
+              accessibilityLabel="Editable scenario cash"
+            />
+            <Text style={styles.metricHint}>
+              Temporary only; WAP works even at zero
+            </Text>
+          </View>
+        ) : (
+          <Metric
+            label="Available Practice Cash"
+            value={`KES ${money(cash)}`}
+          />
+        )}
+
+        <Metric
+          label="Selected Stock"
+          value={
+            selectedStock.symbol ||
+            "Awaiting verified market"
+          }
+        />
         <Metric label="Side" value={side} />
-        <Metric label="Portfolio Positions" value={String(portfolio.length)} />
+        <Metric
+          label="Cost Basis Source"
+          value={holdingSource}
+        />
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Choose Security</Text>
+        <Text style={styles.cardTitle}>
+          Choose Security
+        </Text>
 
-        {market.loading ? <Text style={styles.small}>Loading verified NSE securities…</Text> : null}
-        {!market.loading && !stocks.length ? <Text style={styles.reason}>{market.error || "Verified market prices are unavailable. Trading is disabled."}</Text> : null}
-        {stocks.map((stock) => (
+        {market.loading ? (
+          <Text style={styles.small}>
+            Loading verified NSE securities…
+          </Text>
+        ) : null}
+
+        {!market.loading && !stocks.length ? (
+          <Text style={styles.reason}>
+            {market.error ||
+              "Verified market prices are unavailable. Trading is disabled."}
+          </Text>
+        ) : null}
+
+        <Pressable
+          style={styles.securityDropdown}
+          onPress={() =>
+            setSecurityPickerOpen(true)
+          }
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={styles.symbol}>
+              {selectedStock.symbol ||
+                "Select a security"}
+            </Text>
+            <Text style={styles.small}>
+              {selectedStock.name ||
+                "Open the verified NSE list"}
+              {selectedStock.sector
+                ? ` • ${selectedStock.sector}`
+                : ""}
+            </Text>
+          </View>
+
+          <Text style={styles.dropdownValue}>
+            {selectedStock.price
+              ? `KES ${money(
+                  selectedStock.price
+                )}  ▾`
+              : "▾"}
+          </Text>
+        </Pressable>
+      </View>
+
+      <Modal
+        visible={securityPickerOpen}
+        transparent
+        animationType="fade"
+        onRequestClose={() =>
+          setSecurityPickerOpen(false)
+        }
+      >
+        <Pressable
+          style={styles.pickerOverlay}
+          onPress={() =>
+            setSecurityPickerOpen(false)
+          }
+        >
           <Pressable
-            key={stock.symbol}
-            style={[
-              styles.stockRow,
-              selectedStock.symbol === stock.symbol && styles.stockActive
-            ]}
-            onPress={() => selectStock(stock)}
+            style={styles.pickerModal}
+            onPress={(event) =>
+              event.stopPropagation()
+            }
           >
-            <View style={{ flex: 1 }}>
-              <Text style={styles.symbol}>{stock.symbol}</Text>
-              <Text style={styles.small}>
-                {stock.name} • {stock.sector}
+            <View style={styles.pickerHeader}>
+              <Text style={styles.cardTitle}>
+                Select Security
               </Text>
-              <Text style={styles.reason}>{market.provider || "LOCAL_VERIFIED_EOD"} • {market.lastUpdated ? new Date(market.lastUpdated).toLocaleDateString() : "Verified quote"}</Text>
+              <Pressable
+                style={styles.pickerClose}
+                onPress={() =>
+                  setSecurityPickerOpen(false)
+                }
+              >
+                <Text style={styles.pickerCloseText}>
+                  ×
+                </Text>
+              </Pressable>
             </View>
 
-            <Text style={styles.price}>KES {money(stock.price)}</Text>
+            <ScrollView style={styles.pickerList}>
+              {stocks.map((stock) => (
+                <Pressable
+                  key={stock.symbol}
+                  style={[
+                    styles.pickerRow,
+                    selectedStock.symbol ===
+                      stock.symbol &&
+                      styles.stockActive
+                  ]}
+                  onPress={() => selectStock(stock)}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.symbol}>
+                      {stock.symbol}
+                    </Text>
+                    <Text style={styles.small}>
+                      {stock.name} • {stock.sector}
+                    </Text>
+                  </View>
+                  <Text style={styles.price}>
+                    KES {money(stock.price)}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
           </Pressable>
-        ))}
-      </View>
+        </Pressable>
+      </Modal>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Order Ticket</Text>
+        <Text style={styles.cardTitle}>
+          {averageCostMode ? "Scenario Inputs" : "Order Ticket"}
+        </Text>
 
         <View style={styles.sideRow}>
           {["BUY", "SELL"].map((item) => (
             <Pressable
               key={item}
-              style={[styles.sideChip, side === item && styles.sideActive]}
+              style={[
+                styles.sideChip,
+                side === item && styles.sideActive
+              ]}
               onPress={() => {
                 setSide(item);
                 setConfirmedTrade(null);
               }}
             >
               <Text
-                style={side === item ? styles.sideTextActive : styles.sideText}
+                style={
+                  side === item
+                    ? styles.sideTextActive
+                    : styles.sideText
+                }
               >
-                {item}
+                {averageCostMode ? `Simulate ${item}` : item}
               </Text>
             </Pressable>
           ))}
         </View>
 
-        {side === "BUY" && estimate.remainingCash < 0 && (
-          <View style={styles.warningBox}>
-            <Text style={styles.warningTitle}>Insufficient Cash</Text>
-            <Text style={styles.warningText}>
-              Reduce quantity or add funds. You need KES{" "}
-              {money(estimate.totalCost)} but only have KES {money(cash)}.
-            </Text>
-          </View>
-        )}
+        {!averageCostMode &&
+          side === "BUY" &&
+          estimate.remainingCash < 0 && (
+            <View style={styles.warningBox}>
+              <Text style={styles.warningTitle}>
+                Insufficient Cash
+              </Text>
+              <Text style={styles.warningText}>
+                Reduce quantity or add funds. You need
+                KES {money(estimate.totalCost)} but only
+                have KES {money(cash)}.
+              </Text>
+            </View>
+          )}
 
         <Text style={styles.label}>Quantity</Text>
         <TextInput
@@ -678,104 +1188,529 @@ export default function Trade() {
           placeholderTextColor="#64748b"
           style={styles.input}
         />
+
+        {averageCostMode && side === "SELL" ? (
+          <>
+            <Text style={styles.label}>
+              Broker Cost-Basis Method
+            </Text>
+
+            <View style={styles.sideRow}>
+              {[
+                { id: "FIFO", label: "FIFO" },
+                {
+                  id: "AVERAGE_COST",
+                  label: "Average"
+                },
+                {
+                  id: "SPECIFIC_LOT",
+                  label: "Specific Lot"
+                }
+              ].map((item) => (
+                <Pressable
+                  key={item.id}
+                  style={[
+                    styles.methodChip,
+                    saleCostMethod === item.id &&
+                      styles.sideActive
+                  ]}
+                  onPress={() =>
+                    setSaleCostMethod(item.id)
+                  }
+                >
+                  <Text
+                    style={
+                      saleCostMethod === item.id
+                        ? styles.sideTextActive
+                        : styles.sideText
+                    }
+                  >
+                    {item.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {saleCostMethod === "FIFO" ? (
+              <>
+                <Text style={styles.small}>
+                  {fifoEvidence?.available
+                    ? `Reconciled FIFO evidence: ${
+                        fifoOpenLots.length
+                      } remaining acquisition lot${
+                        fifoOpenLots.length === 1 ? "" : "s"
+                      }.`
+                    : "Complete transaction history does not reconcile to the current broker holding. Coach G will not fabricate the FIFO result; review the transaction reconciliation report or use Specific Lot."}
+                </Text>
+                {!fifoEvidence?.available ? (
+                  <Pressable
+                    style={styles.reconciliationButton}
+                    onPress={() => router.push({ pathname: "/transactions", params: { symbol: selectedStock.symbol } })}
+                  >
+                    <Text style={styles.reconciliationButtonText}>Review Transaction Reconciliation</Text>
+                  </Pressable>
+                ) : null}
+              </>
+            ) : null}
+
+            {saleCostMethod === "SPECIFIC_LOT" ? (
+              <>
+                <Text style={styles.label}>
+                  Expected Average Cost of Shares Removed
+                </Text>
+                <TextInput
+                  value={removedLotAveragePrice}
+                  onChangeText={(value) =>
+                    setRemovedLotAveragePrice(
+                      value.replace(/[^0-9.]/g, "")
+                    )
+                  }
+                  keyboardType="numeric"
+                  placeholder="Cost per sold share"
+                  placeholderTextColor="#64748b"
+                  style={styles.input}
+                />
+              </>
+            ) : null}
+          </>
+        ) : null}
+
+        {averageCostMode ? (
+          <>
+            <Text style={styles.label}>
+              Additional Fixed / Stamp Charges
+            </Text>
+            <TextInput
+              value={scenarioExtraCharges}
+              onChangeText={(value) =>
+                setScenarioExtraCharges(
+                  value.replace(/[^0-9.]/g, "")
+                )
+              }
+              keyboardType="numeric"
+              placeholder="0.00"
+              placeholderTextColor="#64748b"
+              style={styles.input}
+            />
+            <Text style={styles.small}>
+              Contract-note evidence: 1.30% brokerage +
+              0.34% levies. Enter any quoted fixed or
+              stamp charge separately.
+            </Text>
+          </>
+        ) : null}
       </View>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Trade Estimate</Text>
+        <Text style={styles.cardTitle}>
+          {averageCostMode ? "Scenario Estimate" : "Trade Estimate"}
+        </Text>
 
-        <Info label="Gross Value" value={`KES ${money(estimate.gross)}`} />
-        <Info label="Broker Fee" value={`KES ${money(estimate.brokerFee)}`} />
+        <Info
+          label="Gross Value"
+          value={`KES ${money(estimate.gross)}`}
+        />
+        <Info
+          label="Broker Fee"
+          value={`KES ${money(
+            estimate.brokerFee
+          )}`}
+        />
         <Info
           label="Regulatory Fee"
-          value={`KES ${money(estimate.regulatoryFee)}`}
-        />
-        <Info label="Total Fees" value={`KES ${money(estimate.totalFees)}`} />
-        <Info
-          label={side === "BUY" ? "Cash Required" : "Estimated Proceeds"}
-          value={`KES ${money(estimate.totalCost)}`}
+          value={`KES ${money(
+            estimate.regulatoryFee
+          )}`}
         />
         <Info
-          label="Cash After Trade"
-          value={`KES ${money(estimate.remainingCash)}`}
-          valueStyle={estimate.remainingCash >= 0 ? styles.green : styles.red}
+          label="Total Fees"
+          value={`KES ${money(
+            estimate.totalFees
+          )}`}
+        />
+        <Info
+          label={
+            side === "BUY"
+              ? "Cash Required"
+              : "Estimated Proceeds"
+          }
+          value={`KES ${money(
+            estimate.totalCost
+          )}`}
+        />
+        <Info
+          label={
+            averageCostMode
+              ? "Projected Available Cash"
+              : "Cash After Trade"
+          }
+          value={`KES ${money(
+            estimate.remainingCash
+          )}`}
+          valueStyle={
+            estimate.remainingCash >= 0
+              ? styles.green
+              : styles.red
+          }
         />
       </View>
 
-      <Pressable
-        style={[
-          styles.primary,
-          side === "BUY" && estimate.remainingCash < 0 && styles.disabledButton
-        ]}
-        disabled={side === "BUY" && estimate.remainingCash < 0}
-        onPress={confirmTrade}
-      >
-        <Text style={styles.primaryText}>
-          {side === "BUY" && estimate.remainingCash < 0
-            ? "Insufficient Cash"
-            : `Confirm Simulated ${side}`}
-        </Text>
-      </Pressable>
+      {averageGuard ? (
+        <View
+          style={[
+            styles.card,
+            averageGuard.raisesAverage ||
+            averageGuard.realizesLoss
+              ? styles.averageGuardWarning
+              : styles.averageGuardSafe
+          ]}
+        >
+          <Text style={styles.cardTitle}>
+            {side === "SELL"
+              ? "Coach G Sale Break-Even Check"
+              : "Coach G Weighted Average Check"}
+          </Text>
+
+          {!averageGuard.available ? (
+            <Text style={styles.body}>
+              {averageGuard.message}
+            </Text>
+          ) : (
+            <>
+              <Info
+                label="Current Weighted Average"
+                value={`KES ${money(
+                  averageGuard.currentAveragePrice
+                )}`}
+              />
+
+              {side === "BUY" ? (
+                <>
+                  <Info
+                    label="All-in Cost Per New Share"
+                    value={`KES ${money(
+                      averageGuard.allInUnitCost
+                    )}`}
+                  />
+                  <Info
+                    label="Projected Weighted Average"
+                    value={`KES ${money(
+                      averageGuard.projectedAveragePrice
+                    )}`}
+                    valueStyle={
+                      averageGuard.raisesAverage
+                        ? styles.red
+                        : styles.green
+                    }
+                  />
+                  <Info
+                    label="Average Price Change"
+                    value={`${
+                      averageGuard.averagePriceChange >= 0
+                        ? "+"
+                        : ""
+                    }KES ${money(
+                      averageGuard.averagePriceChange
+                    )}`}
+                    valueStyle={
+                      averageGuard.raisesAverage
+                        ? styles.red
+                        : styles.green
+                    }
+                  />
+                  <Info
+                    label="Maximum Limit Price Without Raising Average"
+                    value={
+                      averageGuard.maximumBuyPrice ===
+                      null
+                        ? "Verified fee schedule required"
+                        : `KES ${money(
+                            averageGuard.maximumBuyPrice
+                          )}`
+                    }
+                  />
+                </>
+              ) : (
+                <>
+                  <Info
+                    label="Net Proceeds Per Share"
+                    value={`KES ${money(
+                      averageGuard.netProceedsPerShare
+                    )}`}
+                  />
+                  <Info
+                    label="Projected Cost Basis Released"
+                    value={`KES ${money(
+                      averageGuard.releasedCostBasis
+                    )}`}
+                  />
+                  <Info
+                    label="Projected Cost of Shares Removed"
+                    value={`KES ${money(
+                      averageGuard.soldCostPerShare
+                    )}`}
+                  />
+                  <Info
+                    label="Projected Realized Gain / Loss"
+                    value={`${
+                      averageGuard.estimatedRealizedProfitLoss >=
+                      0
+                        ? "+"
+                        : ""
+                    }KES ${money(
+                      averageGuard.estimatedRealizedProfitLoss
+                    )}`}
+                    valueStyle={
+                      averageGuard.realizesLoss
+                        ? styles.red
+                        : styles.green
+                    }
+                  />
+                  <Info
+                    label="Projected Remaining Quantity"
+                    value={String(
+                      averageGuard.remainingQuantity
+                    )}
+                  />
+                  <Info
+                    label="Projected Remaining WAP"
+                    value={
+                      averageGuard.remainingAveragePrice ===
+                      null
+                        ? "No shares remaining"
+                        : `KES ${money(
+                            averageGuard.remainingAveragePrice
+                          )}`
+                    }
+                  />
+                  <Info
+                    label="Projected WAP Change"
+                    value={
+                      averageGuard.remainingAverageChange ===
+                      null
+                        ? "N/A"
+                        : `${
+                            averageGuard.remainingAverageChange >=
+                            0
+                              ? "+"
+                              : ""
+                          }KES ${money(
+                            averageGuard.remainingAverageChange
+                          )}`
+                    }
+                    valueStyle={
+                      averageGuard.remainingAverageChange > 0
+                        ? styles.red
+                        : styles.green
+                    }
+                  />
+                  <Info
+                    label="Minimum Gross Limit to Avoid Cost-Basis Loss"
+                    value={
+                      averageGuard.minimumSalePrice === null
+                        ? "Verified fee schedule required"
+                        : `KES ${money(
+                            averageGuard.minimumSalePrice
+                          )}`
+                    }
+                  />
+
+                  {averageGuard.removedLots?.length ? (
+                    <View style={styles.lotList}>
+                      <Text style={styles.lotTitle}>
+                        FIFO shares expected to be sold first
+                      </Text>
+
+                      {averageGuard.removedLots.map(
+                        (lot, index) => (
+                          <Text
+                            key={`${lot.date}-${index}`}
+                            style={styles.small}
+                          >
+                            {lot.normalizedDate ||
+                              lot.date ||
+                              "Date unavailable"}
+                            : {lot.quantity} shares bought
+                            at KES{" "}
+                            {money(
+                              lot.originalUnitPrice
+                            )}
+                            ; calibrated cost KES{" "}
+                            {money(lot.unitCost)}
+                          </Text>
+                        )
+                      )}
+                    </View>
+                  ) : null}
+                </>
+              )}
+
+              <Text style={styles.body}>
+                {averageGuard.recommendation}
+              </Text>
+
+              {side === "SELL" ? (
+                <Text style={styles.small}>
+                  {averageGuard.accountingNote}
+                </Text>
+              ) : null}
+
+              <Text style={styles.small}>
+                This is an advisory scenario using the
+                displayed fee assumptions. Cost basis
+                alone is not a reason to buy, hold or
+                sell.
+              </Text>
+            </>
+          )}
+        </View>
+      ) : null}
+
+      {!averageCostMode ? (
+        <Pressable
+          style={[
+            styles.primary,
+            side === "BUY" &&
+              estimate.remainingCash < 0 &&
+              styles.disabledButton
+          ]}
+          disabled={
+            side === "BUY" &&
+            estimate.remainingCash < 0
+          }
+          onPress={confirmTrade}
+        >
+          <Text style={styles.primaryText}>
+            {side === "BUY" &&
+            estimate.remainingCash < 0
+              ? "Insufficient Cash"
+              : `Confirm Simulated ${side}`}
+          </Text>
+        </Pressable>
+      ) : (
+        <View style={styles.previewOnly}>
+          <Text style={styles.previewOnlyTitle}>
+            Preview Only — No Trade Created
+          </Text>
+          <Text style={styles.body}>
+            Adjust cash, quantity or limit price above.
+            Coach G recalculates immediately and does
+            not save these scenario values. When ready,
+            save only the proposed instruction to a
+            separate broker action plan.
+          </Text>
+          <Pressable
+            style={styles.primary}
+            onPress={addToBrokerActionPlan}
+          >
+            <Text style={styles.primaryText}>
+              Add to Broker Action Plan
+            </Text>
+          </Pressable>
+        </View>
+      )}
 
       {confirmedTrade && (
         <View style={styles.confirmCard}>
-          <Text style={styles.cardTitle}>Trade Complete</Text>
+          <Text style={styles.cardTitle}>
+            Trade Complete
+          </Text>
 
           <Text style={styles.body}>
-            {confirmedTrade.side} {confirmedTrade.quantity}{" "}
-            {confirmedTrade.symbol} at KES {money(confirmedTrade.price)} has
-            been simulated.
+            {confirmedTrade.side}{" "}
+            {confirmedTrade.quantity}{" "}
+            {confirmedTrade.symbol} at KES{" "}
+            {money(confirmedTrade.price)} has been
+            simulated.
           </Text>
 
           {basketRemaining > 0 ? (
             <Text style={styles.body}>
-              Next basket order has been loaded into the ticket.
+              Next basket order has been loaded into the
+              ticket.
             </Text>
           ) : (
             <Text style={styles.body}>
-              Portfolio and cash have been updated for Coach G monitoring.
+              Portfolio and cash have been updated for
+              Coach G monitoring.
             </Text>
           )}
 
           <Pressable
             style={styles.secondary}
-            onPress={() => router.replace("/(tabs)/dashboard")}
+            onPress={() =>
+              router.replace("/(tabs)/dashboard")
+            }
           >
-            <Text style={styles.secondaryText}>Open Dashboard</Text>
+            <Text style={styles.secondaryText}>
+              Open Dashboard
+            </Text>
           </Pressable>
 
           <Pressable
             style={styles.secondary}
-            onPress={() => router.push("/trade-history")}
+            onPress={() =>
+              router.push("/trade-history")
+            }
           >
-            <Text style={styles.secondaryText}>View Trade History</Text>
+            <Text style={styles.secondaryText}>
+              View Trade History
+            </Text>
           </Pressable>
         </View>
       )}
 
       <Pressable
         style={styles.backButton}
-        onPress={() => router.replace("/basket-execution")}
+        onPress={() =>
+          averageCostMode
+            ? router.replace({ pathname: "/basket-execution", params: { mode: "BROKER_PLAN" } })
+            : router.replace("/basket-execution")
+        }
       >
-        <Text style={styles.backText}>Back to Basket Execution</Text>
+        <Text style={styles.backText}>
+          {averageCostMode ? "Back to Broker Action Plan" : "Back to Basket Execution"}
+        </Text>
       </Pressable>
     </ScrollView>
   );
 }
 
-function buildEstimate({ side, quantity, price, cash }) {
+function buildEstimate({
+  side,
+  quantity,
+  price,
+  cash,
+  feePolicy = PRACTICE_FEE_POLICY
+}) {
   const qty = Number(quantity || 0);
   const tradePrice = Number(price || 0);
   const gross = qty * tradePrice;
 
-  const brokerFee = gross * 0.012;
-  const regulatoryFee = gross * 0.002;
-  const totalFees = brokerFee + regulatoryFee;
+  const brokerFee =
+    gross *
+    (Number(feePolicy.commissionRatePct || 0) / 100);
+
+  const regulatoryFee =
+    gross *
+    (Number(feePolicy.otherChargesRatePct || 0) / 100);
+
+  const fixedCharges = Number(
+    feePolicy.fixedCharges || 0
+  );
+
+  const totalFees =
+    brokerFee + regulatoryFee + fixedCharges;
 
   const totalCost =
-    side === "BUY" ? gross + totalFees : Math.max(gross - totalFees, 0);
+    side === "BUY"
+      ? gross + totalFees
+      : Math.max(gross - totalFees, 0);
 
   const remainingCash =
-    side === "BUY" ? Number(cash || 0) - totalCost : Number(cash || 0) + totalCost;
+    side === "BUY"
+      ? Number(cash || 0) - totalCost
+      : Number(cash || 0) + totalCost;
 
   return {
     qty,
@@ -783,6 +1718,7 @@ function buildEstimate({ side, quantity, price, cash }) {
     gross,
     brokerFee,
     regulatoryFee,
+    fixedCharges,
     totalFees,
     totalCost,
     remainingCash
@@ -824,7 +1760,9 @@ function Metric({ label, value }) {
   return (
     <View style={styles.metric}>
       <Text style={styles.metricLabel}>{label}</Text>
-      <Text style={styles.metricValue}>{String(value || "N/A")}</Text>
+      <Text style={styles.metricValue}>
+        {String(value || "N/A")}
+      </Text>
     </View>
   );
 }
@@ -833,7 +1771,9 @@ function Info({ label, value, valueStyle }) {
   return (
     <View style={styles.infoRow}>
       <Text style={styles.infoLabel}>{label}</Text>
-      <Text style={[styles.infoValue, valueStyle]}>{value}</Text>
+      <Text style={[styles.infoValue, valueStyle]}>
+        {value}
+      </Text>
     </View>
   );
 }
@@ -846,10 +1786,25 @@ function money(value) {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#020617" },
-  content: { padding: 22, paddingTop: 70, paddingBottom: 100 },
-  title: { color: "white", fontSize: 34, fontWeight: "900" },
-  subtitle: { color: "#94a3b8", marginTop: 10, lineHeight: 22 },
+  screen: {
+    flex: 1,
+    backgroundColor: "#020617"
+  },
+  content: {
+    padding: 22,
+    paddingTop: 70,
+    paddingBottom: 100
+  },
+  title: {
+    color: "white",
+    fontSize: 34,
+    fontWeight: "900"
+  },
+  subtitle: {
+    color: "#94a3b8",
+    marginTop: 10,
+    lineHeight: 22
+  },
   summaryCard: {
     marginTop: 22,
     backgroundColor: "#0f172a",
@@ -869,8 +1824,29 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 14
   },
-  metricLabel: { color: "#94a3b8", fontSize: 12 },
-  metricValue: { color: "white", fontWeight: "900", marginTop: 6 },
+  metricLabel: {
+    color: "#94a3b8",
+    fontSize: 12
+  },
+  metricValue: {
+    color: "white",
+    fontWeight: "900",
+    marginTop: 6
+  },
+  metricHint: {
+    color: "#67e8f9",
+    fontSize: 10,
+    marginTop: 4
+  },
+  cashInput: {
+    color: "white",
+    fontWeight: "900",
+    fontSize: 16,
+    marginTop: 5,
+    paddingVertical: 2,
+    borderBottomColor: "#475569",
+    borderBottomWidth: 1
+  },
   card: {
     marginTop: 22,
     backgroundColor: "#0f172a",
@@ -878,6 +1854,47 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 22,
     padding: 18
+  },
+  averageGuardWarning: {
+    borderColor: "#b45309",
+    backgroundColor: "rgba(120,53,15,.18)"
+  },
+  averageGuardSafe: {
+    borderColor: "#047857",
+    backgroundColor: "rgba(6,78,59,.18)"
+  },
+  methodChip: {
+    flex: 1,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#334155",
+    paddingVertical: 12,
+    alignItems: "center"
+  },
+  reconciliationButton: {
+    marginTop: 10,
+    borderColor: "#0891b2",
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+    alignItems: "center"
+  },
+  reconciliationButtonText: {
+    color: "#67e8f9",
+    fontWeight: "900"
+  },
+  lotList: {
+    marginTop: 14,
+    borderTopWidth: 1,
+    borderTopColor: "#334155",
+    paddingTop: 12,
+    gap: 6
+  },
+  lotTitle: {
+    color: "#67e8f9",
+    fontWeight: "900",
+    marginBottom: 2
   },
   cardTitle: {
     color: "#67e8f9",
@@ -913,11 +1930,96 @@ const styles = StyleSheet.create({
     borderColor: "#9333ea",
     backgroundColor: "rgba(147,51,234,.14)"
   },
-  symbol: { color: "white", fontWeight: "900", fontSize: 17 },
-  small: { color: "#94a3b8", marginTop: 4 },
-  reason: { color: "#cbd5e1", marginTop: 6, lineHeight: 19, fontSize: 12 },
-  price: { color: "#86efac", fontWeight: "900", marginTop: 2 },
-  sideRow: { flexDirection: "row", gap: 10 },
+  securityDropdown: {
+    marginTop: 8,
+    minHeight: 70,
+    backgroundColor: "#020617",
+    borderColor: "#334155",
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12
+  },
+  dropdownValue: {
+    color: "#86efac",
+    fontWeight: "900"
+  },
+  pickerOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(2,6,23,.86)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 18
+  },
+  pickerModal: {
+    width: "100%",
+    maxWidth: 620,
+    maxHeight: "78%",
+    backgroundColor: "#0f172a",
+    borderColor: "#334155",
+    borderWidth: 1,
+    borderRadius: 22,
+    padding: 16
+  },
+  pickerHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center"
+  },
+  pickerClose: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "#1e293b",
+    justifyContent: "center",
+    alignItems: "center"
+  },
+  pickerCloseText: {
+    color: "white",
+    fontWeight: "900",
+    fontSize: 24
+  },
+  pickerList: {
+    flexGrow: 0
+  },
+  pickerRow: {
+    marginTop: 8,
+    minHeight: 62,
+    backgroundColor: "#020617",
+    borderColor: "#1e293b",
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12
+  },
+  symbol: {
+    color: "white",
+    fontWeight: "900",
+    fontSize: 17
+  },
+  small: {
+    color: "#94a3b8",
+    marginTop: 4
+  },
+  reason: {
+    color: "#cbd5e1",
+    marginTop: 6,
+    lineHeight: 19,
+    fontSize: 12
+  },
+  price: {
+    color: "#86efac",
+    fontWeight: "900",
+    marginTop: 2
+  },
+  sideRow: {
+    flexDirection: "row",
+    gap: 10
+  },
   sideChip: {
     flex: 1,
     padding: 14,
@@ -930,9 +2032,20 @@ const styles = StyleSheet.create({
     backgroundColor: "#9333ea",
     borderColor: "#c084fc"
   },
-  sideText: { color: "#94a3b8", textAlign: "center", fontWeight: "900" },
-  sideTextActive: { color: "white", textAlign: "center", fontWeight: "900" },
-  label: { color: "#94a3b8", marginTop: 14 },
+  sideText: {
+    color: "#94a3b8",
+    textAlign: "center",
+    fontWeight: "900"
+  },
+  sideTextActive: {
+    color: "white",
+    textAlign: "center",
+    fontWeight: "900"
+  },
+  label: {
+    color: "#94a3b8",
+    marginTop: 14
+  },
   input: {
     backgroundColor: "#020617",
     borderColor: "#334155",
@@ -947,16 +2060,29 @@ const styles = StyleSheet.create({
     borderBottomColor: "#1e293b",
     borderBottomWidth: 1
   },
-  infoLabel: { color: "#94a3b8", fontSize: 12 },
-  infoValue: { color: "white", fontWeight: "900", marginTop: 4 },
+  infoLabel: {
+    color: "#94a3b8",
+    fontSize: 12
+  },
+  infoValue: {
+    color: "white",
+    fontWeight: "900",
+    marginTop: 4
+  },
   primary: {
     marginTop: 22,
     backgroundColor: "#9333ea",
     padding: 18,
     borderRadius: 18
   },
-  disabledButton: { opacity: 0.45 },
-  primaryText: { color: "white", textAlign: "center", fontWeight: "900" },
+  disabledButton: {
+    opacity: 0.45
+  },
+  primaryText: {
+    color: "white",
+    textAlign: "center",
+    fontWeight: "900"
+  },
   confirmCard: {
     marginTop: 22,
     backgroundColor: "rgba(34,197,94,.10)",
@@ -965,21 +2091,46 @@ const styles = StyleSheet.create({
     borderRadius: 22,
     padding: 18
   },
-  body: { color: "#cbd5e1", marginTop: 8, lineHeight: 21 },
+  previewOnly: {
+    marginTop: 22,
+    backgroundColor: "rgba(6,182,212,.10)",
+    borderColor: "#0891b2",
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 16
+  },
+  previewOnlyTitle: {
+    color: "#67e8f9",
+    fontWeight: "900",
+    fontSize: 16
+  },
+  body: {
+    color: "#cbd5e1",
+    marginTop: 8,
+    lineHeight: 21
+  },
   secondary: {
     marginTop: 18,
     backgroundColor: "#1e293b",
     padding: 16,
     borderRadius: 18
   },
-  secondaryText: { color: "#67e8f9", textAlign: "center", fontWeight: "900" },
+  secondaryText: {
+    color: "#67e8f9",
+    textAlign: "center",
+    fontWeight: "900"
+  },
   backButton: {
     marginTop: 14,
     backgroundColor: "#1e293b",
     padding: 16,
     borderRadius: 18
   },
-  backText: { color: "#cbd5e1", textAlign: "center", fontWeight: "900" },
+  backText: {
+    color: "#cbd5e1",
+    textAlign: "center",
+    fontWeight: "900"
+  },
   warningBox: {
     marginTop: 18,
     backgroundColor: "rgba(239,68,68,.12)",
@@ -988,8 +2139,15 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 14
   },
-  warningTitle: { color: "#fca5a5", fontWeight: "900" },
-  warningText: { color: "#cbd5e1", marginTop: 6, lineHeight: 20 },
+  warningTitle: {
+    color: "#fca5a5",
+    fontWeight: "900"
+  },
+  warningText: {
+    color: "#cbd5e1",
+    marginTop: 6,
+    lineHeight: 20
+  },
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -1004,9 +2162,22 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     borderRadius: 14
   },
-  dashboardButtonText: { color: "#67e8f9", fontWeight: "900" },
-  green: { color: "#86efac" },
-  red: { color: "#fca5a5" },
-  greenText: { color: "#86efac", fontWeight: "900" },
-  cyanText: { color: "#67e8f9", fontWeight: "900" }
+  dashboardButtonText: {
+    color: "#67e8f9",
+    fontWeight: "900"
+  },
+  green: {
+    color: "#86efac"
+  },
+  red: {
+    color: "#fca5a5"
+  },
+  greenText: {
+    color: "#86efac",
+    fontWeight: "900"
+  },
+  cyanText: {
+    color: "#67e8f9",
+    fontWeight: "900"
+  }
 });

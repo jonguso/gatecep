@@ -3,7 +3,7 @@ const DIVIDEND_MASTER = {
   SCOM: { annualDividendPerShare: 1.2, frequency: "ANNUAL", nextDate: "2026-08-20" },
   BAT: { annualDividendPerShare: 55.0, frequency: "ANNUAL", nextDate: "2026-09-15" },
   EABL: { annualDividendPerShare: 7.5, frequency: "ANNUAL", nextDate: "2026-10-10" },
-  EQTY: { annualDividendPerShare: 4.0, frequency: "ANNUAL", nextDate: "2026-07-30" },
+  EQT: { annualDividendPerShare: 4.0, frequency: "ANNUAL", nextDate: "2026-07-30" },
   KAPC: { annualDividendPerShare: 25.5, frequency: "ANNUAL", nextDate: "2026-08-05" }
 };
 

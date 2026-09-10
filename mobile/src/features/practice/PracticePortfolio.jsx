@@ -78,7 +78,7 @@ const PRACTICE_SECURITIES = {
         "Provides exposure to electricity generation and Kenya's long-term infrastructure needs."
     },
     {
-      symbol: "EQTY",
+      symbol: "EQT",
       name: "Equity Group",
       sector: "Banking",
       price: 85,
@@ -143,7 +143,7 @@ const PRACTICE_SECURITIES = {
         "Provides exposure to a large regional banking institution."
     },
     {
-      symbol: "EQTY",
+      symbol: "EQT",
       name: "Equity Group",
       sector: "Banking",
       price: 85,

@@ -3,7 +3,7 @@ export function getMarketDepth(symbol = "SCOM") {
     SCOM: 31.75,
     EABL: 258.25,
     KCB: 70.75,
-    EQTY: 77.25,
+    EQT: 77.25,
     COOP: 31.35
   };
 

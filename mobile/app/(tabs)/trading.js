@@ -5,25 +5,157 @@ import ActiveUserBanner from "../../src/components/ActiveUserBanner";
 import { loadTradingHubData } from "../../src/services/trade/tradingHubStore";
 import { ContainedPanel } from "../../src/components/mobile/MobileUI";
 
+import {
+  buildDecisionLabBaseline,
+  buildRecoveryStressTable
+} from "../../src/features/trading/coachGDecisionLabService";
 const TABS = ["Account", "Orders", "Depth", "Activity"];
+
+/* PC-030M20AQ2 Decision Lab Home — read-only analytical entry point.
+ * Uses inline styles deliberately so this patch does not depend on the host
+ * file's StyleSheet.create formatting or closing syntax.
+ */
+function DecisionLabHome({ data }) {
+  const holdings =
+    (Array.isArray(data?.portfolio) && data.portfolio) ||
+    (Array.isArray(data?.holdings) && data.holdings) ||
+    (Array.isArray(data?.brokerPortfolio) && data.brokerPortfolio) ||
+    [];
+
+  const availableCash = Number(
+    data?.cash ??
+    data?.availableCash ??
+    data?.cashBalance ??
+    data?.broker?.availableCash ??
+    0
+  );
+
+  const baseline = buildDecisionLabBaseline({ holdings, availableCash });
+  const recoveryStress = buildRecoveryStressTable();
+
+  const ui = {
+    hero: { backgroundColor: "#10243e", borderColor: "#22d3ee", borderWidth: 1, borderRadius: 18, padding: 16, marginBottom: 12 },
+    eyebrow: { color: "#67e8f9", fontSize: 11, fontWeight: "900", letterSpacing: 1 },
+    title: { color: "#ffffff", fontSize: 22, fontWeight: "900", marginTop: 5, marginBottom: 6 },
+    body: { color: "#cbd5e1", lineHeight: 20 },
+    actions: { flexDirection: "row", gap: 10, marginTop: 14 },
+    primary: { flex: 1, backgroundColor: "#0891b2", paddingVertical: 12, paddingHorizontal: 10, borderRadius: 12, alignItems: "center" },
+    primaryText: { color: "#ffffff", fontWeight: "900" },
+    secondary: { flex: 1, borderColor: "#67e8f9", borderWidth: 1, paddingVertical: 12, paddingHorizontal: 10, borderRadius: 12, alignItems: "center" },
+    secondaryText: { color: "#67e8f9", fontWeight: "900" },
+    card: { backgroundColor: "#111c2e", borderColor: "#243b53", borderWidth: 1, borderRadius: 16, padding: 14, marginBottom: 12 },
+    cardTitle: { color: "#ffffff", fontSize: 17, fontWeight: "900", marginBottom: 7 },
+    note: { color: "#94a3b8", fontSize: 12, marginTop: 8 },
+    recoveryRow: { flexDirection: "row", justifyContent: "space-between", gap: 12, borderTopColor: "#243b53", borderTopWidth: 1, paddingVertical: 8 },
+    recoveryLoss: { color: "#fca5a5", fontWeight: "800" },
+    recoveryNeed: { color: "#fde68a", fontWeight: "800", textAlign: "right", flex: 1 },
+    link: { marginTop: 10, borderColor: "#475569", borderWidth: 1, borderRadius: 10, padding: 10, alignItems: "center" },
+    linkText: { color: "#cbd5e1", fontWeight: "800" },
+    evidence: { color: "#67e8f9", fontSize: 13, fontWeight: "900", letterSpacing: 1, marginTop: 4, marginBottom: 8 }
+  };
+
+  return (
+    <>
+      <View style={ui.hero}>
+        <Text style={ui.eyebrow}>COACH G DECISION LAB</Text>
+        <Text style={ui.title}>What happens if I do this?</Text>
+        <Text style={ui.body}>
+          Test a hypothetical investment decision against your portfolio, goals,
+          liquidity, concentration and recovery risk before you act. This does
+          not place a REAL trade or change your portfolio.
+        </Text>
+
+        <View style={ui.actions}>
+          <Pressable
+            style={ui.primary}
+            onPress={() =>
+              router.push({
+                pathname: "/trade",
+                params: { mode: "AVERAGE_COST", side: "BUY", decisionLab: "1" }
+              })
+            }
+          >
+            <Text style={ui.primaryText}>Simulate a Buy</Text>
+          </Pressable>
+
+          <Pressable
+            style={ui.secondary}
+            onPress={() =>
+              router.push({
+                pathname: "/trade",
+                params: { mode: "AVERAGE_COST", side: "SELL", decisionLab: "1" }
+              })
+            }
+          >
+            <Text style={ui.secondaryText}>Simulate a Sell</Text>
+          </Pressable>
+        </View>
+      </View>
+
+      <View style={ui.card}>
+        <Text style={ui.cardTitle}>Current Decision Baseline</Text>
+        <Text style={ui.body}>
+          Holdings: {baseline.holdingsCount} • Portfolio evidence: KES {money(baseline.holdingsValue)}
+        </Text>
+        <Text style={ui.body}>Available cash: KES {money(baseline.availableCash)}</Text>
+        <Text style={ui.body}>
+          Largest position: {baseline.largestHolding || "N/A"}
+          {baseline.largestHolding ? ` • ${baseline.largestHoldingWeight}%` : ""}
+        </Text>
+        <Text style={ui.note}>
+          Detailed scenarios compare CURRENT vs PROJECTED. Projected values never overwrite REAL holdings.
+        </Text>
+      </View>
+
+      <View style={ui.card}>
+        <Text style={ui.cardTitle}>Risk & Recovery — what “Aggressive” means</Text>
+        <Text style={ui.body}>
+          Coach G must explain risk from evidence such as concentration, liquidity,
+          goal impact and downside. Recovery percentages are mathematical stress
+          tests, not return forecasts.
+        </Text>
+        {recoveryStress.map((row) => (
+          <View key={row.lossPercent} style={ui.recoveryRow}>
+            <Text style={ui.recoveryLoss}>-{row.lossPercent}% loss</Text>
+            <Text style={ui.recoveryNeed}>needs +{row.recoveryPercent}% to recover</Text>
+          </View>
+        ))}
+        <Pressable style={ui.link} onPress={() => router.push("/wealth-journey")}>
+          <Text style={ui.linkText}>Review Goal & Recovery Context</Text>
+        </Pressable>
+      </View>
+
+      <View style={ui.card}>
+        <Text style={ui.cardTitle}>Decision path</Text>
+        <Text style={ui.body}>
+          Explore → test portfolio and goal impact → understand risk and recovery → compare → save preferred scenario → Broker Action Plan.
+        </Text>
+        <Pressable
+          style={ui.link}
+          onPress={() =>
+            router.push({ pathname: "/basket-execution", params: { mode: "BROKER_PLAN" } })
+          }
+        >
+          <Text style={ui.linkText}>Review Broker Action Plan</Text>
+        </Pressable>
+      </View>
+    </>
+  );
+}
+
 export default function Trading() {
   const [tab,setTab]=useState("Account"), [data,setData]=useState(null), [error,setError]=useState("");
   const load=useCallback(async()=>{try{setError("");setData(await loadTradingHubData());}catch(e){setData(null);setError(e?.message||"Verified broker information is unavailable.");}},[]);
   useFocusEffect(useCallback(()=>{load();},[load]));
   const broker=data?.broker, cash=Number(data?.cash||0);
   return <ScrollView style={s.screen} contentContainerStyle={s.content}>
-    <View style={s.header}><View style={{flex:1}}><Text style={s.title}>Trading</Text><Text style={s.subtitle}>Read-only broker account, order, depth, and execution evidence.</Text></View><Pressable style={s.headerButton} onPress={()=>router.replace("/(tabs)/dashboard")}><Text style={s.headerButtonText}>Home</Text></Pressable></View>
-    <ActiveUserBanner />
-    <View style={s.notice}><Text style={s.noticeTitle}>Broker controlled</Text><Text style={s.body}>GateCEP does not submit trades, move money, or mark orders filled. Records appear only from a verified broker connection or import.</Text></View>
-    <View style={s.tabs}>{TABS.map(x=><Pressable key={x} style={[s.tab,tab===x&&s.activeTab]} onPress={()=>setTab(x)}><Text style={tab===x?s.activeTabText:s.tabText}>{x}</Text></Pressable>)}</View>
-    <ContainedPanel title={tab} subtitle="One trading view at a time" testID="trading-contained-panel">
-      {error?<Unavailable title="Trading data unavailable" message={error}/>:null}
-      {!error&&tab==="Account"?<><View style={s.card}><Text style={s.label}>Trading account</Text><Text style={s.cardTitle}>{broker?.broker||broker?.name||"No verified broker account"}</Text><Text style={s.body}>Client: {broker?.clientNumber||broker?.accountNumber||"Unavailable"}</Text><Text style={s.body}>Available cash: {data?.cashAvailable?`KES ${money(cash)}`:"Unavailable until a verified statement is loaded"}</Text></View><Pressable style={s.primary} onPress={()=>router.push("/broker-accounts")}><Text style={s.primaryText}>{broker?"Manage Broker Account":"Connect Broker Account"}</Text></Pressable><Pressable style={s.secondary} onPress={()=>router.push("/portfolio-sync-center")}><Text style={s.secondaryText}>Sync Broker Evidence</Text></Pressable></>:null}
-      {!error&&tab==="Orders"?<Unavailable title="Verified broker orders" message="No verified broker order feed is connected. GateCEP will not display locally simulated orders as broker orders."/>:null}
-      {!error&&tab==="Depth"?<Unavailable title="Verified market depth" message="Level 2 order-book depth is unavailable until a licensed NSE or broker depth feed is connected. Local EOD prices are not market depth."/>:null}
-      {!error&&tab==="Activity"?<Unavailable title="Verified execution activity" message="No verified broker execution feed is connected. Completed transactions can be reviewed after broker import or API synchronization." action="Open Portfolio Activity" onPress={()=>router.push("/portfolio-activity")}/>:null}
-    </ContainedPanel>
-  </ScrollView>;
+    <View style={s.header}><View style={{flex:1}}><Text style={s.title}>Trading</Text><Text style={s.subtitle}>Test investment decisions against your portfolio, goals and risk before you act.</Text></View><Pressable style={s.headerButton} onPress={()=>router.replace("/(tabs)/dashboard")}><Text style={s.headerButtonText}>Home</Text></Pressable></View>
+          {/* PC-030M20AQ3 UI consolidation — account context first; legacy broker evidence UI removed. */}
+      <ActiveUserBanner />
+
+      <DecisionLabHome data={data} />
+
+</ScrollView>;
 }
 function Unavailable({title,message,action,onPress}){return <View style={s.unavailable}><Text style={s.cardTitle}>{title}</Text><Text style={s.body}>{message}</Text>{action?<Pressable style={s.secondary} onPress={onPress}><Text style={s.secondaryText}>{action}</Text></Pressable>:null}</View>}
 function money(v){return Number(v||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2})}

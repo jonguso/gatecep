@@ -1,12 +1,14 @@
 import React, { useCallback, useMemo, useState } from "react";
 import {
+  Alert,
   Pressable,
   ScrollView,
+  Share,
   StyleSheet,
   Text,
   View
 } from "react-native";
-import { router, useFocusEffect } from "expo-router";
+import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 
 import ActiveUserBanner from "../src/components/ActiveUserBanner";
 import {
@@ -16,8 +18,11 @@ import {
   loadBasketExecution
 } from "../src/trade/basketExecutionStore";
 import { ORDER_STATUS } from "../src/trade/orderLifecycle";
+import { buildBrokerActionPlanText, clearBrokerActionPlan, loadBrokerActionPlan } from "../src/services/trade/brokerActionPlanStore";
 
 export default function BasketExecution() {
+  const { mode } = useLocalSearchParams();
+  const brokerPlanMode = String(mode || "").toUpperCase() === "BROKER_PLAN";
   const [execution, setExecution] = useState(null);
 
   useFocusEffect(
@@ -27,6 +32,10 @@ export default function BasketExecution() {
   );
 
   async function load() {
+    if (brokerPlanMode) {
+      setExecution(await loadBrokerActionPlan());
+      return;
+    }
     let saved = await loadBasketExecution();
 
     if (!saved) {
@@ -37,6 +46,7 @@ export default function BasketExecution() {
   }
 
   const activeOrders = useMemo(() => {
+    if (brokerPlanMode) return execution?.orders || [];
     return getActiveExecutionOrders(execution || {}).filter((order) =>
       [
         ORDER_STATUS.QUEUED,
@@ -45,7 +55,7 @@ export default function BasketExecution() {
         ORDER_STATUS.PARTIAL_FILL
       ].includes(order.status)
     );
-  }, [execution]);
+  }, [execution, brokerPlanMode]);
 
   const closedOrders = execution?.orders?.filter((order) =>
     [
@@ -65,21 +75,31 @@ export default function BasketExecution() {
     execution?.orders?.length > 0 && activeOrders.length === 0;
 
   async function clearExecution() {
-    await clearBasketExecution();
+    if (brokerPlanMode) await clearBrokerActionPlan();
+    else await clearBasketExecution();
     setExecution(null);
+  }
+
+  async function shareBrokerPlan() {
+    const report = buildBrokerActionPlanText(execution);
+    try {
+      await Share.share({ title: "Coach G Broker Action Plan", message: report });
+    } catch (error) {
+      Alert.alert("Report unavailable", error.message || "The action plan could not be shared.");
+    }
   }
 
   if (!execution || !execution.orders?.length) {
     return (
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Practice Basket Simulation</Text>
-        <Text style={styles.subtitle}>No active basket execution found.</Text>
+        <Text style={styles.title}>{brokerPlanMode ? "Broker Action Plan Review" : "Practice Basket Simulation"}</Text>
+        <Text style={styles.subtitle}>{brokerPlanMode ? "No advisory instructions have been saved yet." : "No active basket execution found."}</Text>
 
         <Pressable
           style={styles.primary}
-          onPress={() => router.push("/orders-review")}
+          onPress={() => brokerPlanMode ? router.back() : router.push("/orders-review")}
         >
-          <Text style={styles.primaryText}>Open Orders Review</Text>
+          <Text style={styles.primaryText}>{brokerPlanMode ? "Return to Cost Simulator" : "Open Orders Review"}</Text>
         </Pressable>
 
         <Pressable
@@ -95,7 +115,7 @@ export default function BasketExecution() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Practice Basket Simulation</Text>
+        <Text style={styles.title}>{brokerPlanMode ? "Broker Action Plan Review" : "Practice Basket Simulation"}</Text>
 
         <Pressable
           style={styles.dashboardButton}
@@ -106,29 +126,28 @@ export default function BasketExecution() {
       </View>
 
       <Text style={styles.subtitle}>
-        Track queued Practice orders and simulated fills. Practice records move to
-        portfolio and trade history.
+        {brokerPlanMode ? "Review scenario instructions prepared in Trade Lab. This is a broker handoff plan only; saving or sharing it does not place a trade or change any REAL or Practice portfolio." : "Track queued Practice orders and simulated fills. Practice records move to portfolio and trade history."}
       </Text>
 
       <ActiveUserBanner />
 
       <View style={styles.summaryCard}>
-        <Text style={styles.summaryLabel}>Active Execution Orders</Text>
+        <Text style={styles.summaryLabel}>{brokerPlanMode ? "Proposed Broker Instructions" : "Active Execution Orders"}</Text>
         <Text style={styles.summaryValue}>{activeOrders.length}</Text>
         <Text style={styles.body}>
-          Status: {execution.status} • Active Value KES {money(totalAmount)}
+          Status: {execution.status} • {brokerPlanMode ? "Indicative" : "Active"} Value KES {money(totalAmount)}
         </Text>
         <Text style={styles.body}>
-          Closed Orders: {closedOrders.length}
+          {brokerPlanMode ? "Execution confirmations: 0 — import required" : `Closed Orders: ${closedOrders.length}`}
         </Text>
       </View>
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>
-          {isComplete ? "Execution Complete" : "Active Orders"}
+          {brokerPlanMode ? "Instructions for Broker Review" : isComplete ? "Execution Complete" : "Active Orders"}
         </Text>
 
-        {isComplete ? (
+        {!brokerPlanMode && isComplete ? (
           <>
             <Text style={styles.body}>
               No active execution orders remain. Filled orders should now be
@@ -174,6 +193,8 @@ export default function BasketExecution() {
                 <Text style={styles.reason}>
                   {order.message || "Awaiting lifecycle action"}
                 </Text>
+                {brokerPlanMode && order.guardPrice ? <Text style={styles.reason}>{order.side === "SELL" ? "Minimum net break-even limit" : "Maximum no-average-increase limit"}: KES {money(order.guardPrice)}</Text> : null}
+                {brokerPlanMode && order.side === "SELL" && order.costBasisMethod ? <Text style={styles.reason}>{order.costBasisMethod} • removed-lot cost KES {money(order.soldCostPerShare)} • projected remaining WAP KES {money(order.projectedRemainingAverage)}</Text> : null}
               </View>
 
               <Text style={statusStyle(order.status)}>
@@ -183,6 +204,16 @@ export default function BasketExecution() {
           ))
         )}
       </View>
+
+      {brokerPlanMode ? <>
+        <View style={styles.safeguardCard}>
+          <Text style={styles.cardTitle}>Import-Gated Record</Text>
+          <Text style={styles.body}>This is an advisory handoff, not an order, fill or execution confirmation. It cannot update REAL or Practice holdings, cash, cost basis, profit/loss or trade history. Only confirmed broker activity imported through reconciliation may update the REAL portfolio.</Text>
+        </View>
+        <Pressable style={styles.primary} onPress={shareBrokerPlan}><Text style={styles.primaryText}>Share Broker Action Report</Text></Pressable>
+        <Pressable style={styles.secondary} onPress={() => router.back()}><Text style={styles.secondaryText}>Add or Revise an Instruction</Text></Pressable>
+        <Pressable style={styles.secondary} onPress={clearExecution}><Text style={styles.secondaryText}>Clear Broker Action Plan</Text></Pressable>
+      </> : <>
 
       <Pressable
         style={styles.primary}
@@ -215,6 +246,7 @@ export default function BasketExecution() {
       <Pressable style={styles.secondary} onPress={clearExecution}>
         <Text style={styles.secondaryText}>Clear Execution</Text>
       </Pressable>
+      </>}
     </ScrollView>
   );
 }
@@ -274,6 +306,14 @@ const styles = StyleSheet.create({
     marginTop: 20,
     backgroundColor: "#0f172a",
     borderColor: "#1e293b",
+    borderWidth: 1,
+    borderRadius: 22,
+    padding: 18
+  },
+  safeguardCard: {
+    marginTop: 20,
+    backgroundColor: "rgba(8,47,73,.55)",
+    borderColor: "#0891b2",
     borderWidth: 1,
     borderRadius: 22,
     padding: 18

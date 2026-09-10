@@ -1,0 +1,73 @@
+import { userGetItem, userSetItem } from "../auth/userStorage";
+import { normalizeOrder } from "./basketExecutionStore";
+
+const BROKER_ACTION_PLAN_KEY = "brokerActionPlanExecution";
+
+export async function loadBrokerActionPlan() {
+  const raw = await userGetItem(BROKER_ACTION_PLAN_KEY);
+  if (!raw) return null;
+  try {
+    const plan = JSON.parse(raw);
+    return Array.isArray(plan?.orders) ? plan : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function addBrokerActionPlanOrder(input = {}) {
+  const existing = await loadBrokerActionPlan();
+  const now = new Date().toISOString();
+  const order = normalizeOrder({
+    ...input,
+    id: input.id || `BAP-${Date.now()}`,
+    status: "REVIEW",
+    message: "Prepared for manual broker review; not executed",
+    advisoryOnly: true,
+    brokerExecutionConfirmed: false,
+    realPortfolioMutationAllowed: false,
+    practicePortfolioMutationAllowed: false,
+    createdAt: input.createdAt || now,
+    updatedAt: now
+  });
+  const prior = existing?.orders || [];
+  const orders = [...prior.filter((item) => !(item.symbol === order.symbol && item.side === order.side)), order];
+  const plan = {
+    id: existing?.id || `BROKER-PLAN-${Date.now()}`,
+    executionMode: "BROKER_HANDOFF_ONLY",
+    source: "COACH_G_ADVISORY",
+    status: "REVIEW",
+    createdAt: existing?.createdAt || now,
+    updatedAt: now,
+    orders
+  };
+  await userSetItem(BROKER_ACTION_PLAN_KEY, JSON.stringify(plan));
+  return plan;
+}
+
+export async function clearBrokerActionPlan() {
+  await userSetItem(BROKER_ACTION_PLAN_KEY, "");
+}
+
+export function buildBrokerActionPlanText(plan = {}) {
+  const rows = [
+    "COACH G — BROKER ACTION PLAN",
+    `Reference: ${plan.id || "Draft"}`,
+    `Prepared: ${plan.updatedAt || new Date().toISOString()}`,
+    "",
+    "ADVISORY HANDOFF ONLY — NOT AN EXECUTION CONFIRMATION"
+  ];
+  (plan.orders || []).forEach((order, index) => {
+    rows.push("");
+    rows.push(`${index + 1}. ${order.side} ${order.symbol} — Qty ${order.quantity} @ limit KES ${Number(order.price || 0).toFixed(2)}`);
+    rows.push(`Estimated charges: KES ${Number(order.estimatedCharges || 0).toFixed(2)}`);
+    if (order.guardPrice) rows.push(`${order.side === "SELL" ? "Minimum net break-even limit" : "Maximum no-average-increase limit"}: KES ${Number(order.guardPrice).toFixed(2)}`);
+    if (order.side === "SELL" && order.costBasisMethod) rows.push(`Cost-basis method: ${order.costBasisMethod}`);
+    if (order.side === "SELL" && order.soldCostPerShare) rows.push(`Expected cost of shares removed: KES ${Number(order.soldCostPerShare).toFixed(2)} per share`);
+    if (order.side === "SELL" && order.projectedRemainingAverage !== null && order.projectedRemainingAverage !== undefined) rows.push(`Projected remaining WAP: KES ${Number(order.projectedRemainingAverage).toFixed(2)}`);
+    (order.removedLots || []).forEach((lot) => rows.push(`FIFO lot: ${lot.date || "Date unavailable"}, ${lot.quantity} shares, purchase price KES ${Number(lot.originalUnitPrice || 0).toFixed(2)}`));
+    if (order.reason) rows.push(`Coach G context: ${order.reason}`);
+  });
+  rows.push("");
+  rows.push("This plan does not place, route, fill or record a trade. The REAL portfolio changes only after broker execution is confirmed and imported.");
+  return rows.join("\n");
+}

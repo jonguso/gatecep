@@ -1,4 +1,6 @@
 const VALID_SIDES = new Set(["BUY", "SELL"]);
+const COMPLETED_EXECUTION_STATUSES = ["FULLY TRADED", "FILLED", "COMPLETED", "SETTLED"];
+const NON_EXECUTED_STATUSES = ["REJECTED", "REFUSED", "CANCELLED", "CANCELED", "EXPIRED"];
 
 export function classifyBrokerExecutionEvidence(record = {}) {
   const missing = [];
@@ -10,6 +12,7 @@ export function classifyBrokerExecutionEvidence(record = {}) {
   const quantity = Number(record.quantity);
   const price = Number(record.price);
   const side = String(record.side || "").toUpperCase();
+  const executionStatus = String(record.status || record.orderStatus || "").trim().toUpperCase();
 
   if (!executionDate || Number.isNaN(new Date(executionDate).getTime())) missing.push("BROKER_EXECUTION_DATE");
   if (!brokerReference) missing.push("BROKER_REFERENCE");
@@ -19,10 +22,14 @@ export function classifyBrokerExecutionEvidence(record = {}) {
   if (!(price > 0)) missing.push("EXECUTED_PRICE");
   if (!Number.isFinite(fees) || fees < 0) missing.push("BROKER_AND_REGULATORY_FEES");
   if (!settlement) missing.push("SETTLEMENT_EVIDENCE");
+  if (!COMPLETED_EXECUTION_STATUSES.some((accepted) => executionStatus.includes(accepted))) {
+    missing.push(NON_EXECUTED_STATUSES.some((blocked) => executionStatus.includes(blocked)) ? "TRADE_NOT_EXECUTED" : "COMPLETED_EXECUTION_STATUS");
+  }
 
   return {
     ...record,
     side,
+    executionStatus,
     executionDate,
     date: executionDate,
     brokerReference,

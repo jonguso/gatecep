@@ -1,6 +1,7 @@
 import { userGetItem, userSetItem } from "../auth/userStorage";
 import { loadUnifiedPortfolio } from "./unifiedPortfolioApi";
 import { loadCanonicalRealTransactionHistory } from "../../features/wealth-journey/canonicalRealBehaviorHistoryService";
+import { loadBrokerLotHistoryEvidence } from "../../features/trading/brokerLotHistoryEvidenceService";
 
 export async function buildSyncStatus() {
   const portfolio = await loadUnifiedPortfolio();
@@ -22,6 +23,7 @@ export async function buildSyncStatus() {
   const brokerRaw = defaultBrokerRaw || legacyBrokerRaw;
   const brokerProfile = brokerRaw ? JSON.parse(brokerRaw) : null;
   const transactions = await loadCanonicalRealTransactionHistory();
+  const lotHistory = await loadBrokerLotHistoryEvidence();
 
   const statementSummary = statementSummaryRaw
     ? JSON.parse(statementSummaryRaw)
@@ -63,6 +65,9 @@ export async function buildSyncStatus() {
     portfolioUploaded: portfolioUploaded === "true",
     cashUploaded: cashUploaded === "true",
     transactionsUploaded: transactionsUploaded === "true" && transactions.length > 0,
+    lotHistoryReady: lotHistory.ready,
+    lotHistoryExecutionCount: lotHistory.completedCount,
+    lotHistorySecurityCount: lotHistory.symbols.length,
 
     lastPortfolioSync: statementSummary?.uploadedAt || null,
     lastCashSync: statementSummary?.uploadedAt || null,

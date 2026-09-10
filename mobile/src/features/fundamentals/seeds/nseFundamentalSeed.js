@@ -54,7 +54,7 @@ export const NSE_FUNDAMENTAL_STARTER_SEED = [
   },
   {
     symbol:
-      "EQTY",
+      "EQT",
 
     name:
       "Equity Group Holdings PLC",

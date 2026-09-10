@@ -21,6 +21,7 @@ import { router } from "expo-router";
 import ActiveUserBanner from "../src/components/ActiveUserBanner";
 import { userSetItem } from "../src/auth/userStorage";
 import { buildSyncStatus } from "../src/portfolio/syncStatus";
+import { rebuildCanonicalPortfolioLedger } from "../src/features/trading/canonicalPortfolioLedgerService";
 import { partitionBrokerExecutionEvidence } from "../src/features/broker-sync/brokerExecutionEvidencePolicy";
 import { ContainedPanel } from "../src/components/mobile/MobileUI";
 import { extractBrokerPdf } from "../src/services/brokers/brokerPdfExtractionApi";
@@ -329,6 +330,8 @@ export default function TransactionsUpload() {
       })
     );
 
+    await rebuildCanonicalPortfolioLedger();
+    await rebuildCanonicalPortfolioLedger();
     await buildSyncStatus();
 
     Alert.alert("Evidence Reviewed", `${verified.length} verified broker executions saved; ${unverified.length} incomplete records remain UNVERIFIED.`);

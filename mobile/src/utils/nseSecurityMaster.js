@@ -2,7 +2,7 @@ export const NSE_SECURITIES = [
   { symbol: "SCOM", name: "Safaricom PLC", sector: "Telecom" },
   { symbol: "KCB", name: "KCB Group", sector: "Banking" },
   { symbol: "COOP", name: "Co-operative Bank", sector: "Banking" },
-  { symbol: "EQT", name: "Equity Group", sector: "Banking" },
+  { symbol: "EQT", aliases: ["EQTY", "EQTYO0000"], name: "Equity Group", sector: "Banking" },
   { symbol: "EABL", name: "East African Breweries", sector: "Consumer" },
   { symbol: "ABSA", name: "Absa Bank Kenya", sector: "Banking" },
   { symbol: "BAT", name: "BAT Kenya", sector: "Consumer" },
@@ -37,7 +37,12 @@ export function getSecurityBySymbol(symbol) {
   const value = normalizeNseSymbol(symbol);
 
   return (
-    NSE_SECURITIES.find((item) => normalizeNseSymbol(item.symbol) === value) || {
+    NSE_SECURITIES.find((item) => {
+      if (normalizeNseSymbol(item.symbol) === value) return true;
+      return (Array.isArray(item.aliases) ? item.aliases : []).some(
+        (alias) => normalizeNseSymbol(alias) === value
+      );
+    }) || {
       symbol: value,
       name: value,
       sector: "Unknown"

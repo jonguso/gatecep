@@ -549,7 +549,7 @@ export async function syncMockBrokerAccount() {
 
   {
     symbol:
-      "EQTY",
+      "EQT",
 
     name:
       "Equity Group",
