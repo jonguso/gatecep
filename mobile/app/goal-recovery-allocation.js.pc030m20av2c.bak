@@ -1,0 +1,470 @@
+import React, { useEffect, useMemo, useState } from "react";
+import {
+  ActivityIndicator,
+  Pressable,
+  ScrollView,
+  StyleSheet,
+  Text,
+  View
+} from "react-native";
+import { router, useLocalSearchParams } from "expo-router";
+
+import {
+  loadCanonicalRealWealthMetrics
+} from "../src/features/wealth-journey/canonicalRealWealthMetricsService";
+
+import {
+  loadCoachGTopInvestmentOpportunities
+} from "../src/features/investment-intelligence/investmentAdvisorService";
+
+import {
+  buildGoalPreservingDiversifiedRecoveryAllocation
+} from "../src/features/wealth-journey/goalRecoveryDiversifiedAllocationService";
+
+import {
+  startDecisionConversation
+} from "../src/features/trading/coachGDecisionConversationSession";
+
+import {
+  requestFloatingCoachGOpen
+} from "../src/features/trading/floatingCoachGActivationService";
+
+import { buildRecoveryBasketExecution } from "../src/features/wealth-journey/goalRecoveryBasketHandoffService";
+import { saveBasketExecution } from "../src/services/trade/basketExecutionStore";
+
+function first(params, names = []) {
+  for (const name of names) {
+    const value = params?.[name];
+    if (value !== undefined && value !== null && String(value).trim() !== "") {
+      return Array.isArray(value) ? value[0] : value;
+    }
+  }
+  return null;
+}
+
+function num(v) {
+  if (v === null || v === undefined || v === "") return null;
+  const x = Number(v);
+  return Number.isFinite(x) ? x : null;
+}
+
+function safeJson(value, fallback = {}) {
+  if (!value) return fallback;
+  try {
+    const parsed = JSON.parse(String(value));
+    return parsed && typeof parsed === "object" ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function listFromAdvice(value) {
+  if (Array.isArray(value)) return value;
+  if (!value || typeof value !== "object") return [];
+  const candidates = [
+    value.opportunities,
+    value.recommendations,
+    value.items,
+    value.data,
+    value.topOpportunities,
+    value.investments
+  ];
+  return candidates.find(Array.isArray) || [];
+}
+
+function money(v) {
+  const x = num(v);
+  if (x === null) return "N/A";
+  return `KES ${x.toLocaleString(undefined, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2
+  })}`;
+}
+
+function pct(v) {
+  const x = num(v);
+  return x === null ? "N/A" : `${x.toFixed(2)}%`;
+}
+
+export default function GoalRecoveryAllocation() {
+  const params = useLocalSearchParams();
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [realWealth, setRealWealth] = useState(null);
+  const [opportunities, setOpportunities] = useState([]);
+
+  const goalName = first(params, ["goalName"]) || "Financial Goal";
+  const targetAmount = num(first(params, ["targetAmount"]));
+  const targetDate = first(params, ["targetDate"]);
+  const monthlyContribution = num(first(params, ["monthlyContribution"]));
+  const recoveryAmount = num(
+    first(params, ["recoveryAmount", "additionalAmountNow", "decisionAmount", "amount"])
+  );
+  const targetSectorWeights = safeJson(
+    first(params, ["targetSectorWeights", "sectorTargetsJson"]),
+    {}
+  );
+
+  useEffect(() => {
+    let active = true;
+
+    async function load() {
+      try {
+        setLoading(true);
+        setError("");
+
+        const [wealth, advice] = await Promise.all([
+          loadCanonicalRealWealthMetrics(),
+          loadCoachGTopInvestmentOpportunities().catch(() => [])
+        ]);
+
+        if (!active) return;
+        setRealWealth(wealth);
+        setOpportunities(listFromAdvice(advice));
+      } catch (e) {
+        if (!active) return;
+        setError(e?.message || "Unable to build the recovery allocation.");
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+
+    load();
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const allocation = useMemo(
+    () =>
+      buildGoalPreservingDiversifiedRecoveryAllocation({
+        holdings: realWealth?.holdings || [],
+        opportunities,
+        targetSectorWeights,
+        recoveryAmount,
+        sectorLimitPercent: 40,
+        minimumDistinctSectors: 2,
+        maximumSecurities: 4
+      }),
+    [
+      realWealth,
+      opportunities,
+      targetSectorWeights,
+      recoveryAmount
+    ]
+  );
+
+  async function reviewDiversifiedBasket() {
+    const handoff = buildRecoveryBasketExecution({
+      allocation: allocation?.allocation || [],
+      recoveryAmount,
+      goalContext: { goalName, targetAmount, targetDate, monthlyContribution }
+    });
+
+    if (!handoff?.ok || !handoff?.execution) {
+      setError("A diversified allocation with at least two priced securities is required before basket review.");
+      return;
+    }
+
+    await saveBasketExecution(handoff.execution);
+
+    router.push({
+      pathname: "/basket-execution",
+      params: {
+        mode: "BROKER_PLAN",
+        source: "GOAL_RECOVERY",
+        scenarioFunding: String(recoveryAmount || 0),
+        goalName
+      }
+    });
+  }
+
+  function discussWithCoachG() {
+    const scenario = {
+      source: "COACH_G_RECOVERY",
+      action: "EXPLORE",
+      amount: recoveryAmount,
+      security: null,
+      quantity: null,
+      price: null,
+      investorReason:
+        `Deploy additional recovery capital for ${goalName} while preserving the goal and improving diversification.`,
+      decisionPriority: "GOAL_RECOVERY_DIVERSIFICATION",
+      goalContext: {
+        goalName,
+        targetAmount,
+        targetDate,
+        monthlyContribution,
+        additionalAmountNow: recoveryAmount,
+        preserveGoal: true,
+        preserveTargetDate: true,
+        preserveContribution: true
+      },
+      recommendationContext: {
+        type: "DIVERSIFIED_RECOVERY_ALLOCATION",
+        allocation: allocation?.allocation || [],
+        rejected: allocation?.rejected || [],
+        targetSectorWeights
+      }
+    };
+
+    const openingText =
+      allocation?.status === "AVAILABLE"
+        ? `I found an evidence-backed way to spread ${money(recoveryAmount)} across ${allocation.allocation.length} securities without automatically adding more money to an already concentrated sector.`
+        : "I do not have enough evidence-supported opportunities across multiple compatible sectors to manufacture a diversified recovery basket.";
+
+    const openingQuestion =
+      allocation?.status === "AVAILABLE"
+        ? "Would you like to review why each security is included before we simulate the basket?"
+        : "Would you like me to explain which evidence is missing before we consider another recovery path?";
+
+    startDecisionConversation({
+      scenario,
+      openingText,
+      openingQuestion
+    });
+
+    requestFloatingCoachGOpen({
+      source: "GOAL_RECOVERY_DIVERSIFIED_ALLOCATION",
+      question: openingQuestion,
+      context: scenario
+    });
+  }
+
+  return (
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={styles.content}
+    >
+      <Text style={styles.eyebrow}>COACH G · RECOVERY ALLOCATION</Text>
+      <Text style={styles.title}>Use the new money without worsening concentration</Text>
+
+      <Text style={styles.body}>
+        This is a temporary recovery scenario. Your REAL cash and holdings remain unchanged.
+        Coach G only uses securities supported by the existing investment-intelligence evidence.
+      </Text>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>{goalName}</Text>
+        <View style={styles.grid}>
+          <Metric label="Additional recovery funding" value={money(recoveryAmount)} />
+          <Metric label="Goal target" value={money(targetAmount)} />
+          <Metric label="Target date" value={targetDate || "N/A"} />
+          <Metric label="Monthly contribution" value={money(monthlyContribution)} />
+        </View>
+        <Text style={styles.preserved}>
+          Goal target, target date and monthly contribution remain unchanged.
+        </Text>
+      </View>
+
+      {loading ? (
+        <View style={styles.card}>
+          <ActivityIndicator />
+          <Text style={styles.body}>Reviewing REAL holdings and Coach G investment evidence…</Text>
+        </View>
+      ) : null}
+
+      {error ? (
+        <View style={styles.warningCard}>
+          <Text style={styles.warningTitle}>Unable to build allocation</Text>
+          <Text style={styles.body}>{error}</Text>
+        </View>
+      ) : null}
+
+      {!loading && !error && allocation?.status === "AVAILABLE" ? (
+        <>
+          <View style={styles.card}>
+            <Text style={styles.section}>Coach G proposed use of the recovery funding</Text>
+            <Text style={styles.body}>
+              The allocation is spread across distinct evidence-supported sectors.
+              A sector at or above its saved target, or one that would breach the existing
+              40% concentration guard, is not eligible for new recovery capital.
+            </Text>
+
+            {(allocation?.allocation || []).map((row) => (
+              <View key={row.symbol} style={styles.allocationRow}>
+                <View style={styles.rowTop}>
+                  <Text style={styles.symbol}>{row.symbol}</Text>
+                  <Text style={styles.amount}>{money(row.proposedAmount)}</Text>
+                </View>
+                <Text style={styles.sector}>{row.sector}</Text>
+                <Text style={styles.body}>{row.rationale}</Text>
+                <Text style={styles.small}>
+                  Sector: {pct(row.currentSectorWeight)} → {pct(row.projectedSectorWeight)}
+                  {row.targetSectorWeight !== null
+                    ? ` · saved target ${pct(row.targetSectorWeight)}`
+                    : ""}
+                </Text>
+                <Text style={styles.small}>
+                  {row.approximateQuantity !== null
+                    ? `Approx. ${row.approximateQuantity.toLocaleString()} shares using price evidence ${money(row.price)} before detailed execution charges.`
+                    : "Quantity not estimated because valid price evidence is unavailable."}
+                </Text>
+              </View>
+            ))}
+
+            <View style={styles.summaryBox}>
+              <Metric
+                label="Allocated"
+                value={money(allocation.allocatedAmount)}
+              />
+              <Metric
+                label="Unallocated scenario funding"
+                value={money(allocation.unallocatedAmount)}
+              />
+            </View>
+          </View>
+
+          <View style={styles.card}>
+            <Text style={styles.section}>Current sector exposure</Text>
+            {(allocation?.exposures || []).map((row) => (
+              <View key={row.sector} style={styles.exposureRow}>
+                <Text style={styles.body}>{row.sector}</Text>
+                <Text style={styles.value}>{pct(row.weight)}</Text>
+              </View>
+            ))}
+          </View>
+        </>
+      ) : null}
+
+      {!loading &&
+      !error &&
+      allocation?.status !== "AVAILABLE" ? (
+        <View style={styles.warningCard}>
+          <Text style={styles.warningTitle}>No diversified recommendation manufactured</Text>
+          <Text style={styles.body}>
+            GateCEP does not currently have enough evidence-supported eligible securities
+            across at least two compatible sectors. Coach G will not force the full recovery
+            amount into one security merely to create a recommendation.
+          </Text>
+          <Text style={styles.small}>
+            Status: {allocation?.status || "UNAVAILABLE"} · {allocation?.reason || "Evidence unavailable"}
+          </Text>
+        </View>
+      ) : null}
+
+      {allocation?.status === "AVAILABLE" ? (
+        <Pressable
+          style={styles.primary}
+          onPress={reviewDiversifiedBasket}
+          disabled={loading}
+        >
+          <Text style={styles.primaryText}>
+            Review diversified basket simulation
+          </Text>
+        </Pressable>
+      ) : null}
+
+      <Pressable
+        style={styles.primary}
+        onPress={discussWithCoachG}
+        disabled={loading}
+      >
+        <Text style={styles.primaryText}>
+          Discuss this allocation with Coach G
+        </Text>
+      </Pressable>
+
+      <View style={styles.safeguard}>
+        <Text style={styles.safeguardTitle}>Recovery funding is scenario funding</Text>
+        <Text style={styles.small}>
+          The additional amount is not treated as existing REAL available cash.
+          Nothing on this screen deposits cash, changes holdings, changes your goal,
+          changes Investor DNA, or creates a broker order.
+        </Text>
+      </View>
+
+      <Pressable style={styles.back} onPress={() => router.back()}>
+        <Text style={styles.backText}>Back</Text>
+      </Pressable>
+    </ScrollView>
+  );
+}
+
+function Metric({ label, value }) {
+  return (
+    <View style={styles.metric}>
+      <Text style={styles.metricLabel}>{label}</Text>
+      <Text style={styles.value}>{value}</Text>
+    </View>
+  );
+}
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: "#020617" },
+  content: { padding: 20, paddingBottom: 80, gap: 16 },
+  eyebrow: { color: "#22d3ee", fontWeight: "900", fontSize: 12 },
+  title: { color: "#f8fafc", fontSize: 27, fontWeight: "900" },
+  body: { color: "#cbd5e1", lineHeight: 21 },
+  small: { color: "#94a3b8", lineHeight: 18, fontSize: 12 },
+  card: {
+    backgroundColor: "#111827",
+    borderColor: "#334155",
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 16,
+    gap: 12
+  },
+  warningCard: {
+    backgroundColor: "#1c1917",
+    borderColor: "#f59e0b",
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 16,
+    gap: 10
+  },
+  warningTitle: { color: "#fde68a", fontSize: 18, fontWeight: "900" },
+  cardTitle: { color: "#67e8f9", fontSize: 20, fontWeight: "900" },
+  section: { color: "#67e8f9", fontSize: 18, fontWeight: "900" },
+  preserved: { color: "#86efac", fontWeight: "800" },
+  grid: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  metric: {
+    minWidth: 190,
+    flexGrow: 1,
+    backgroundColor: "#020617",
+    padding: 12,
+    borderRadius: 12
+  },
+  metricLabel: { color: "#94a3b8", fontSize: 12 },
+  value: { color: "#f8fafc", fontWeight: "800" },
+  allocationRow: {
+    backgroundColor: "#020617",
+    borderRadius: 14,
+    padding: 14,
+    gap: 6
+  },
+  rowTop: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    gap: 10
+  },
+  symbol: { color: "#f8fafc", fontSize: 18, fontWeight: "900" },
+  amount: { color: "#86efac", fontSize: 17, fontWeight: "900" },
+  sector: { color: "#67e8f9", fontWeight: "800" },
+  summaryBox: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  exposureRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    borderBottomColor: "#334155",
+    borderBottomWidth: 1,
+    paddingVertical: 8
+  },
+  primary: {
+    backgroundColor: "#0891b2",
+    borderRadius: 12,
+    padding: 14,
+    alignItems: "center"
+  },
+  primaryText: { color: "#fff", fontWeight: "900" },
+  safeguard: {
+    backgroundColor: "#0f172a",
+    borderColor: "#22d3ee",
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 14,
+    gap: 6
+  },
+  safeguardTitle: { color: "#67e8f9", fontWeight: "900" },
+  back: { padding: 12, alignSelf: "flex-start" },
+  backText: { color: "#67e8f9", fontWeight: "800" }
+});

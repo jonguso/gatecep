@@ -22,6 +22,7 @@ import {
   syncConnectedBrokerMirror
 } from "../src/features/broker-sync/brokerSyncService";
 
+// PC-030M20AV3M RESPONSIVE CALIBRATION
 export default function BrokerSync() {
   const [
     loading,
@@ -651,11 +652,7 @@ const styles =
         "#020617"
     },
 
-    content: {
-      padding: 22,
-      paddingTop: 70,
-      paddingBottom: 110
-    },
+    content: { width: "100%", maxWidth: 960, alignSelf: "center", padding: 22, paddingTop: 70, paddingBottom: 128 },
 
     center: {
       flex: 1,
@@ -782,6 +779,8 @@ const styles =
 
     metric: {
       width: "47%",
+      flexGrow: 1,
+      minWidth: 140,
       backgroundColor:
         "#0f172a",
       borderColor:

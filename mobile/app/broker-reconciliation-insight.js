@@ -10,6 +10,7 @@ import {
 
 const STEPS = ["Evidence", "Compare", "Review", "Resolve", "Complete"];
 
+// PC-030M20AV3L RESPONSIVE CALIBRATION
 export default function BrokerReconciliationInsight() {
   const [loading, setLoading] = useState(true);
   const [insight, setInsight] = useState(null);
@@ -122,7 +123,8 @@ const styles = StyleSheet.create({
   issueMessage: { color: "#cbd5e1", lineHeight: 21, marginTop: 8 },
   symbols: { color: "#67e8f9", fontWeight: "900", marginTop: 10 },
   caution: { color: "#fde68a", lineHeight: 21 },
-  historyLink: { backgroundColor: "#020617", padding: 15, borderRadius: 14, marginTop: 8, minHeight: 48, flexDirection: "row", alignItems: "center" },
+  historyLink: { backgroundColor: "#020617", padding: 15, borderRadius: 14, marginTop: 8, minHeight: 48, flexDirection: "row",
+    flexWrap: "wrap", alignItems: "center" },
   historyText: { color: "white", fontWeight: "900", flex: 1 },
   arrow: { color: "#c084fc", fontSize: 23, fontWeight: "900" }
 });

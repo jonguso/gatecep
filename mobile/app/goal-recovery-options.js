@@ -227,13 +227,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 24
   },
-  content: {
+  content: { /* PC-030M20AV3U RESPONSIVE CALIBRATION */
     width: "100%",
-    maxWidth: 720,
+    maxWidth: 960,
     alignSelf: "center",
     padding: 18,
     paddingTop: 64,
-    paddingBottom: 100
+    paddingBottom: 128
   },
   header: { flexDirection: "row", gap: 12, alignItems: "flex-start" },
   headerText: { flex: 1 },

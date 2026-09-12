@@ -1,0 +1,111 @@
+import fs from "node:fs";
+import path from "node:path";
+
+const ROOT=process.cwd();
+const APP=path.join(ROOT,"app");
+
+function walk(dir) {
+  const out=[];
+  for (const ent of fs.readdirSync(dir,{withFileTypes:true})) {
+    const p=path.join(dir,ent.name);
+    if (ent.isDirectory()) out.push(...walk(p));
+    else if (ent.isFile() && /\.(js|jsx|ts|tsx)$/.test(ent.name)) out.push(p);
+  }
+  return out;
+}
+function rel(p){ return path.relative(ROOT,p).replaceAll("\\","/"); }
+
+const files=walk(APP).sort();
+const routeFiles=files.filter(p=>{
+  const base=path.basename(p);
+  if (base.startsWith("_layout.")) return false;
+  if (base.startsWith("+")) return false;
+  return true;
+});
+
+const explicitLegacy = new Set(["app/watchlist-old.js"]);
+
+// AV3N1 correction:
+// Match route segments anywhere in app/, not only directly after the leading slash.
+// This correctly classifies app/onboarding/* and app/signup.js.
+const setupAuthSegment = /(?:^|\/)(?:login|register|signup|new-investor|first-trade|demo)(?:\.[^/]+)?$/i;
+const onboardingSegment = /(?:^|\/)onboarding(?:\/|$)/i;
+
+function facts(p){
+  const r=rel(p);
+  const s=fs.readFileSync(p,"utf8");
+  const markers=[...s.matchAll(/PC-030M20AV3[A-Z0-9]* RESPONSIVE CALIBRATION/g)].map(m=>m[0]);
+  const usesMobileScreen=/\bMobileScreen\b/.test(s);
+  const usesSticky=/\bStickyActionBar\b/.test(s);
+  const max960=/maxWidth\s*:\s*960/.test(s);
+  const bottom128=/paddingBottom\s*:\s*128/.test(s);
+  const contentWide=/\bcontentWide\b/.test(s);
+  const reexport=/^\s*export\s*\{?\s*default\b/m.test(s) && s.split(/\r?\n/).length < 40;
+  const legacy=explicitLegacy.has(r);
+  const appRelative=r.replace(/^app\//,"");
+  const setupAuth=setupAuthSegment.test(appRelative) || onboardingSegment.test(appRelative);
+  const contained=max960 || usesMobileScreen || contentWide || reexport;
+  const bottomSafe=bottom128 || usesMobileScreen || usesSticky || reexport;
+  return {r,markers,usesMobileScreen,usesSticky,max960,bottom128,contentWide,reexport,legacy,setupAuth,contained,bottomSafe};
+}
+
+const rows=routeFiles.map(facts);
+const investor=rows.filter(x=>!x.legacy && !x.setupAuth);
+const residual=investor.filter(x=>!x.contained || !x.bottomSafe);
+const legacy=rows.filter(x=>x.legacy);
+const auth=rows.filter(x=>x.setupAuth);
+const calibrated=investor.filter(x=>x.markers.length>0);
+
+let lines=[];
+lines.push("PC-030M20AV3N1 — Residual Audit Classification Correction");
+lines.push("");
+lines.push(`Active route-like files scanned: ${rows.length}`);
+lines.push(`Investor-facing files considered: ${investor.length}`);
+lines.push(`Files with AV3 responsive markers: ${calibrated.length}`);
+lines.push(`Explicit legacy exclusions: ${legacy.length}`);
+lines.push(`Auth/onboarding/setup surfaces reported separately: ${auth.length}`);
+lines.push(`Residual investor-facing candidates: ${residual.length}`);
+lines.push("");
+
+if (residual.length) {
+  lines.push("=== RESIDUAL INVESTOR-FACING CANDIDATES ===");
+  for (const x of residual) {
+    const missing=[];
+    if (!x.contained) missing.push("desktop containment");
+    if (!x.bottomSafe) missing.push("bottom clearance/shell");
+    lines.push(`${x.r} :: missing ${missing.join(" + ")} :: MobileScreen=${x.usesMobileScreen} max960=${x.max960} bottom128=${x.bottom128} contentWide=${x.contentWide} reexport=${x.reexport}`);
+  }
+  lines.push("");
+} else {
+  lines.push("PASS — no residual investor-facing responsive candidates detected.");
+  lines.push("");
+}
+
+lines.push("=== AUTH / ONBOARDING / SETUP SURFACES (SEPARATE CLASSIFICATION) ===");
+for (const x of auth) {
+  lines.push(`${x.r} :: contained=${x.contained} bottomSafe=${x.bottomSafe} MobileScreen=${x.usesMobileScreen} max960=${x.max960} bottom128=${x.bottom128}`);
+}
+lines.push("");
+
+lines.push("=== EXPLICIT LEGACY EXCLUSIONS ===");
+for (const x of legacy) lines.push(x.r);
+lines.push("");
+
+lines.push("=== CALIBRATED AV3 SURFACES ===");
+for (const x of calibrated) lines.push(`${x.r} :: ${x.markers.join(" | ")}`);
+lines.push("");
+
+lines.push("Classification correction:");
+lines.push("- app/onboarding/* is now reliably classified as onboarding/setup.");
+lines.push("- app/signup.js is now classified with auth/setup.");
+lines.push("- demo, first-trade, login, register and new-investor remain in auth/setup.");
+lines.push("- No application source is modified.");
+lines.push("- No remaining residual candidate is automatically patched by this audit.");
+
+const report=lines.join("\n");
+console.log(report);
+fs.writeFileSync(".pc030m20av3n1-residual-audit.txt",report+"\n","utf8");
+fs.writeFileSync(".pc030m20av3n1-residual-audit.json",JSON.stringify({
+  summary:{routeFiles:rows.length,investor:investor.length,calibrated:calibrated.length,legacy:legacy.length,auth:auth.length,residual:residual.length},
+  residual,auth,legacy,calibrated
+},null,2)+"\n","utf8");

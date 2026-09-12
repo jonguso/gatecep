@@ -41,6 +41,7 @@ const steps = [
   }
 ];
 
+// PC-030M20AV3K RESPONSIVE CALIBRATION
 export default function BrokerStatus() {
   const [profile, setProfile] = useState(null);
   const [brokerProfile, setBrokerProfile] = useState(null);
@@ -237,7 +238,7 @@ export default function BrokerStatus() {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#020617" },
-  content: { padding: 22, paddingTop: 70, paddingBottom: 100 },
+  content: { width: "100%", maxWidth: 960, alignSelf: "center", padding: 22, paddingTop: 70, paddingBottom: 128 },
   title: { color: "white", fontSize: 34, fontWeight: "900" },
   subtitle: { color: "#94a3b8", marginTop: 10, lineHeight: 22 },
   brokerCard: {

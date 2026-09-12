@@ -5,7 +5,8 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  View
+  View,
+  useWindowDimensions
 } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -15,7 +16,9 @@ import { calculatePortfolioSummary } from "../src/shared/portfolio/engine";
 import { ContainedPanel, StatusBanner } from "../src/components/mobile/MobileUI";
 import InvestorJourneyNavigation from "../src/components/mobile/InvestorJourneyNavigation";
 
+// PC-030M20AV3E RESPONSIVE CALIBRATION
 export default function HoldingDetails() {
+  const { width: av3eWidth } = useWindowDimensions();
   const [holdings, setHoldings] = useState([]);
   const [loading, setLoading] = useState(true);
   const [hasVerifiedData, setHasVerifiedData] = useState(false);
@@ -69,10 +72,15 @@ export default function HoldingDetails() {
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <ScrollView
         style={styles.screen}
-        contentContainerStyle={styles.content}
+        contentContainerStyle={[
+          styles.content,
+          av3eWidth >= 720 && { width: "100%", maxWidth: 960, alignSelf: "center" },
+          av3eWidth < 720 && { paddingHorizontal: 16, paddingBottom: 128 },
+          av3eWidth < 480 && { paddingHorizontal: 12 }
+        ]}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
+        <View style={[styles.header, av3eWidth < 520 && { flexWrap: "wrap" }]}>
           <Pressable
             accessibilityRole="button"
             style={styles.backIcon}
@@ -101,7 +109,7 @@ export default function HoldingDetails() {
           </Pressable>
         ) : null}
 
-        <View style={styles.summary}>
+        <View style={[styles.summary, av3eWidth < 480 && { flexDirection: "column" }]}>
           <Summary label="Current Value" value={loading ? "Loading…" : hasVerifiedData ? `KES ${money(summary.totalValue)}` : "N/A"} />
           <Summary label="Invested" value={loading ? "Loading…" : hasVerifiedData ? `KES ${money(summary.investedValue)}` : "N/A"} />
           <Summary
@@ -133,7 +141,7 @@ export default function HoldingDetails() {
             heightRatio={0.62}
             testID="holding-focused-detail-panel"
           >
-            <HoldingDetailCard security={selectedSecurity.security} totalValue={summary.totalValue} />
+            <HoldingDetailCard security={selectedSecurity.security} totalValue={summary.totalValue} compact={av3eWidth < 520} />
             <Pressable style={styles.listReturn} onPress={() => setSelectedSecurity(null)}><Text style={styles.listReturnText}>‹ Back to Holdings List</Text></Pressable>
           </ContainedPanel>
         ) : (
@@ -145,7 +153,7 @@ export default function HoldingDetails() {
             heightRatio={0.62}
             testID="holdings-contained-panel"
           >
-            {securities.map((security, index) => <HoldingListRow key={`${security.symbol || "SECURITY"}-${security.broker || "ALL"}-${index}`} security={security} totalValue={summary.totalValue} onPress={() => setSelectedSecurity({ security, index })} />)}
+            {securities.map((security, index) => <HoldingListRow key={`${security.symbol || "SECURITY"}-${security.broker || "ALL"}-${index}`} security={security} totalValue={summary.totalValue} compact={av3eWidth < 520} onPress={() => setSelectedSecurity({ security, index })} />)}
           </ContainedPanel>
         )}
         {!selectedSecurity ? <InvestorJourneyNavigation stage="holdings" onRefresh={load} refreshing={loading} nextLabel="Continue to Goals" /> : null}
@@ -154,16 +162,16 @@ export default function HoldingDetails() {
   );
 }
 
-function HoldingListRow({ security, totalValue, onPress }) {
+function HoldingListRow({ security, totalValue, onPress, compact = false }) {
   const gain = number(security.profitLoss);
   const quantity = number(security.quantity);
   const currentPrice = number(security.marketPrice || security.price || security.lastPrice);
   const currentValue = number(security.marketValue || security.value) || quantity * currentPrice;
   const weight = number(totalValue) > 0 ? currentValue / number(totalValue) * 100 : 0;
-  return <Pressable accessibilityRole="button" accessibilityLabel={`Open ${security.symbol || "holding"} details`} style={({ pressed }) => [styles.holdingListRow, pressed && styles.holdingListRowPressed]} onPress={onPress}><View style={styles.securityCopy}><Text style={styles.symbol}>{security.symbol || "N/A"}</Text><Text numberOfLines={1} style={styles.name}>{security.name || security.securityName || "Listed security"}</Text><Text style={styles.sector}>{security.sector || "Other"}{security.broker ? ` • ${security.broker}` : ""}</Text></View><View style={styles.securityValue}><Text style={styles.value}>KES {money(currentValue)}</Text><Text style={gain >= 0 ? styles.positive : styles.negative}>{gain >= 0 ? "+" : ""}KES {money(gain)}</Text><Text style={styles.weight}>{weight.toFixed(1)}% of portfolio</Text></View><Text style={styles.rowChevron}>›</Text></Pressable>;
+  return <Pressable accessibilityRole="button" accessibilityLabel={`Open ${security.symbol || "holding"} details`} style={({ pressed }) => [styles.holdingListRow, compact && { flexDirection: "column", alignItems: "stretch" }, pressed && styles.holdingListRowPressed]} onPress={onPress}><View style={styles.securityCopy}><Text style={styles.symbol}>{security.symbol || "N/A"}</Text><Text numberOfLines={1} style={styles.name}>{security.name || security.securityName || "Listed security"}</Text><Text style={styles.sector}>{security.sector || "Other"}{security.broker ? ` • ${security.broker}` : ""}</Text></View><View style={styles.securityValue}><Text style={styles.value}>KES {money(currentValue)}</Text><Text style={gain >= 0 ? styles.positive : styles.negative}>{gain >= 0 ? "+" : ""}KES {money(gain)}</Text><Text style={styles.weight}>{weight.toFixed(1)}% of portfolio</Text></View><Text style={styles.rowChevron}>›</Text></Pressable>;
 }
 
-function HoldingDetailCard({ security, totalValue }) {
+function HoldingDetailCard({ security, totalValue, compact = false }) {
   const gain = number(security.profitLoss);
   const returnPct = number(security.profitLossPct);
   const quantity = number(security.quantity);
@@ -173,7 +181,7 @@ function HoldingDetailCard({ security, totalValue }) {
   const currentValue = number(security.marketValue || security.value) || quantity * currentPrice;
   const sellableQuantity = number(security.settledQuantity ?? security.sellableQuantity ?? security.quantity);
   const weight = number(totalValue) > 0 ? currentValue / number(totalValue) * 100 : 0;
-  return <View style={styles.security}><View style={styles.securityHeader}><View style={styles.securityCopy}><Text style={styles.symbol}>{security.symbol || "N/A"}</Text><Text numberOfLines={2} style={styles.name}>{security.name || security.securityName || "Listed security"}</Text><Text style={styles.sector}>{security.sector || "Other"}{security.broker ? ` • ${security.broker}` : ""}</Text></View><View style={styles.securityValue}><Text style={styles.value}>KES {money(currentValue)}</Text><Text style={gain >= 0 ? styles.positive : styles.negative}>{gain >= 0 ? "+" : ""}KES {money(gain)}</Text></View></View><View style={styles.details}><Detail label="Portfolio Weight" value={`${weight.toFixed(2)}%`} /><Detail label="Quantity" value={quantity.toLocaleString()} /><Detail label="Avg. Price" value={`KES ${money(averagePrice)}`} /><Detail label="Invested Value" value={`KES ${money(investedValue)}`} /><Detail label="LTP / Current Price" value={`KES ${money(currentPrice)}`} /><Detail label="Current Value" value={`KES ${money(currentValue)}`} /><Detail label="P&L Value" value={`${gain >= 0 ? "+" : ""}KES ${money(gain)}`} positive={gain >= 0} /><Detail label="P&L %" value={`${returnPct >= 0 ? "+" : ""}${returnPct.toFixed(2)}%`} positive={returnPct >= 0} /><Detail label="Sellable Qty" value={sellableQuantity.toLocaleString()} /><Detail label="Settlement" value={security.settlementStatus || "SETTLED"} /></View></View>;
+  return <View style={styles.security}><View style={[styles.securityHeader, compact && { flexDirection: "column", alignItems: "stretch" }]}><View style={styles.securityCopy}><Text style={styles.symbol}>{security.symbol || "N/A"}</Text><Text numberOfLines={2} style={styles.name}>{security.name || security.securityName || "Listed security"}</Text><Text style={styles.sector}>{security.sector || "Other"}{security.broker ? ` • ${security.broker}` : ""}</Text></View><View style={styles.securityValue}><Text style={styles.value}>KES {money(currentValue)}</Text><Text style={gain >= 0 ? styles.positive : styles.negative}>{gain >= 0 ? "+" : ""}KES {money(gain)}</Text></View></View><View style={styles.details}><Detail label="Portfolio Weight" value={`${weight.toFixed(2)}%`} /><Detail label="Quantity" value={quantity.toLocaleString()} /><Detail label="Avg. Price" value={`KES ${money(averagePrice)}`} /><Detail label="Invested Value" value={`KES ${money(investedValue)}`} /><Detail label="LTP / Current Price" value={`KES ${money(currentPrice)}`} /><Detail label="Current Value" value={`KES ${money(currentValue)}`} /><Detail label="P&L Value" value={`${gain >= 0 ? "+" : ""}KES ${money(gain)}`} positive={gain >= 0} /><Detail label="P&L %" value={`${returnPct >= 0 ? "+" : ""}${returnPct.toFixed(2)}%`} positive={returnPct >= 0} /><Detail label="Sellable Qty" value={sellableQuantity.toLocaleString()} /><Detail label="Settlement" value={security.settlementStatus || "SETTLED"} /></View></View>;
 }
 
 function Summary({ label, value, positive }) {

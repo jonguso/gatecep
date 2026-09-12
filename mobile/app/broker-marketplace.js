@@ -1,11 +1,31 @@
 import React from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View,
+  useWindowDimensions
+} from "react-native";
 import { router } from "expo-router";
 
+// PC-030M20AV3I RESPONSIVE CALIBRATION
 export default function BrokerMarketplace() {
+  const { width: windowWidth } = useWindowDimensions();
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Broker Marketplace</Text>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={[
+        styles.content,
+        windowWidth >= 720 && { width: "100%", maxWidth: 960, alignSelf: "center" },
+        windowWidth < 720 && { paddingHorizontal: 16, paddingTop: 32, paddingBottom: 128 },
+        windowWidth < 480 && { paddingHorizontal: 12, paddingTop: 24 }
+      ]}
+    >
+      <Text
+        style={[
+          styles.title,
+          windowWidth < 720 && { fontSize: 28, lineHeight: 34 },
+          windowWidth < 480 && { fontSize: 25, lineHeight: 31 }
+        ]}
+      >
+        Broker Marketplace
+      </Text>
       <Text style={styles.subtitle}>
         Connect or review supported NSE brokers.
       </Text>

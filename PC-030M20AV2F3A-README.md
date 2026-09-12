@@ -1,0 +1,1 @@
+PC-030M20AV2F3A fixes the AV2F3 patcher's brittle style anchor. It applies the same fee-management feature but inserts new styles directly after `const styles = StyleSheet.create({` instead of relying on an exact primaryText style line. No broker fee rates are seeded.

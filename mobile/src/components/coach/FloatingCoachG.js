@@ -16,6 +16,7 @@ import {
   clearDecisionConversation
 } from "../../features/trading/coachGDecisionConversationSession";
 
+import { subscribeFloatingCoachGOpen } from "../../features/trading/floatingCoachGActivationService";
 const HIDDEN_PATHS = new Set(["/", "/login", "/register", "/menu", "/trade", "/first-trade", "/portfolio-simulator", "/practice-decision", "/demo", "/coach", "/coach-insights"]);
 const MAX_RECORDING_SECONDS = 45;
 
@@ -32,6 +33,16 @@ export default function FloatingCoachG() {
   const { user, loading: authLoading, accessToken } = useAuth();
   const recorder = useAudioRecorder(RecordingPresets.HIGH_QUALITY);
   const [open, setOpen] = useState(false);
+  // PC-030M20AU4B runtime-state-aware activation
+  React.useEffect(() => {
+    return subscribeFloatingCoachGOpen((request) => {
+      if (request?.question) {
+        setQuestion(request.question);
+      }
+      setOpen(true);
+    });
+  }, []);
+
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState(null);
   const [asking, setAsking] = useState(false);

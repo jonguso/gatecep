@@ -23,6 +23,7 @@ function nairobiDate() {
   return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
+// PC-030M20AV3I RESPONSIVE CALIBRATION
 export default function MarketPriceImport() {
   const { accessToken } = useAuth();
   const [file, setFile] = useState(null);
@@ -219,8 +220,8 @@ const styles = StyleSheet.create({
   previewButton: { minHeight: 52, borderRadius: 14, marginTop: 12, backgroundColor: "#9333ea", alignItems: "center", justifyContent: "center" },
   previewText: { color: "white", fontWeight: "900" },
   disabled: { opacity: 0.4 },
-  row: { flexDirection: "row", justifyContent: "space-between", gap: 12, paddingVertical: 9, borderBottomColor: "#1e293b", borderBottomWidth: 1 },
+  row: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 12, paddingVertical: 9, borderBottomColor: "#1e293b", borderBottomWidth: 1 },
   rowLabel: { color: "#94a3b8", flex: 1 },
-  rowValue: { color: "white", fontWeight: "900", textAlign: "right", flex: 1 },
-  checksum: { color: "#64748b", fontSize: 9, marginTop: 12 }
+  rowValue: { color: "white", fontWeight: "900", textAlign: "right", flex: 1, minWidth: 120 },
+  checksum: { color: "#64748b", fontSize: 9, marginTop: 12, flexShrink: 1 }
 });

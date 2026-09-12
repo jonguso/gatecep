@@ -64,11 +64,8 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#020617"
   },
-  content: {
-    padding: 22,
-    paddingTop: 70,
-    paddingBottom: 40
-  },
+  content: { /* PC-030M20AV3R RESPONSIVE CALIBRATION */ width: "100%", maxWidth: 960, alignSelf: "center", padding: 22,
+    paddingTop: 70, paddingBottom: 128 },
   title: {
     color: "white",
     fontSize: 32,

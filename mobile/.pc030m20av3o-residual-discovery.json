@@ -1,0 +1,1809 @@
+{
+  "groups": {
+    "READ_MOSTLY_INVESTOR": [
+      "app/alerts.js",
+      "app/analysis-ready.js",
+      "app/behavior-analytics.js",
+      "app/corporate-actions.js",
+      "app/dividend-center.js",
+      "app/investor-home.js",
+      "app/investor-timeline.js",
+      "app/live-dashboard.js",
+      "app/monthly-review.js",
+      "app/portfolio-activity.js",
+      "app/progress.js",
+      "app/recommendation-history.js",
+      "app/security/[symbol].js"
+    ],
+    "GENERAL_INVESTOR": [
+      "app/dna-update-review.js",
+      "app/existing-portal.js",
+      "app/index.js",
+      "app/investor-alert-review.js",
+      "app/my-profile.js",
+      "app/portfolio-simulator.js",
+      "app/queue-manager.js"
+    ],
+    "CONSEQUENTIAL_WORKFLOW": [
+      "app/execution-audit.js",
+      "app/execution-bridge.js",
+      "app/execution-wizard.js",
+      "app/import-portfolio.js",
+      "app/link-broker-account.js",
+      "app/manual-portfolio-entry.js",
+      "app/order-handoff.js",
+      "app/orders-review.js",
+      "app/orders.js",
+      "app/reconciliation-center.js",
+      "app/reconciliation-conversation.js",
+      "app/review-portfolio-import.js",
+      "app/trade-basket.js",
+      "app/trade.js",
+      "app/transaction-import.js"
+    ],
+    "EDIT_OR_PLANNING": [
+      "app/goal-details-edit.js",
+      "app/goal-recovery-options.js",
+      "app/investor-profile-edit.js"
+    ],
+    "DEV_ADMIN_UTILITY": [
+      "app/storage-debug.js",
+      "app/version-center.js"
+    ]
+  },
+  "screens": [
+    {
+      "rel": "app/alerts.js",
+      "category": "READ_MOSTLY_INVESTOR",
+      "risk": {
+        "score": 3,
+        "level": "MEDIUM",
+        "reasons": [
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { padding: 22, paddingTop: 70, paddingBottom: 110 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": true,
+        "hasPadding22": true,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.push({ pathname: \"/investor-alert-review\", params: { alert: JSON.stringify(item.payload)",
+        "router.push(item.route)",
+        "router.replace(\"/(tabs)"
+      ],
+      "imports": [],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "setAlerts(",
+        "saveAlerts(",
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT"
+      ],
+      "lineCount": 247
+    },
+    {
+      "rel": "app/analysis-ready.js",
+      "category": "READ_MOSTLY_INVESTOR",
+      "risk": {
+        "score": 3,
+        "level": "MEDIUM",
+        "reasons": [
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { padding: 22, paddingTop: 70, paddingBottom: 90 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": true,
+        "hasPadding22": true,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.replace(\"/(tabs)",
+        "router.push(\"/(tabs)",
+        "router.push(\"/portfolio-sync-center\")"
+      ],
+      "imports": [],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "setBroker(",
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT",
+        "TRADE"
+      ],
+      "lineCount": 209
+    },
+    {
+      "rel": "app/behavior-analytics.js",
+      "category": "READ_MOSTLY_INVESTOR",
+      "risk": {
+        "score": 3,
+        "level": "MEDIUM",
+        "reasons": [
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { padding: 22, paddingTop: 70, paddingBottom: 110 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": true,
+        "hasPadding22": true,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.push(\r\n            \"/investor-timeline\"\r\n          )",
+        "router.replace(\r\n            \"/(tabs)"
+      ],
+      "imports": [],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "setLoading(",
+        "setError(",
+        "setAnalytics(",
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT"
+      ],
+      "lineCount": 939
+    },
+    {
+      "rel": "app/corporate-actions.js",
+      "category": "READ_MOSTLY_INVESTOR",
+      "risk": {
+        "score": 3,
+        "level": "MEDIUM",
+        "reasons": [
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { padding: 22, paddingTop: 70, paddingBottom: 110 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": true,
+        "hasPadding22": true,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.replace(\"/\")"
+      ],
+      "imports": [],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "setLoading(",
+        "setError(",
+        "setExperience(",
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT"
+      ],
+      "lineCount": 1173
+    },
+    {
+      "rel": "app/dividend-center.js",
+      "category": "READ_MOSTLY_INVESTOR",
+      "risk": {
+        "score": 3,
+        "level": "MEDIUM",
+        "reasons": [
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { padding: 22, paddingTop: 70, paddingBottom: 110 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": true,
+        "hasPadding22": true,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.replace(\r\n              \"/(tabs)"
+      ],
+      "imports": [],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "setLoading(",
+        "setError(",
+        "setRecords(",
+        "setForecast(",
+        "setHoldings(",
+        "setEditingId(",
+        "setForm(",
+        "setModalVisible(",
+        "setSaving(",
+        "saveDividendRecord(",
+        "confirmDelete(",
+        "confirm(",
+        "removeRecord(",
+        "deleteDividendRecord(",
+        "confirmReceiveDividend(",
+        "setReceivingId("
+      ],
+      "buttonText": [
+        "IMPORT",
+        "SAVE",
+        "DELETE",
+        "CONFIRM"
+      ],
+      "lineCount": 3012
+    },
+    {
+      "rel": "app/dna-update-review.js",
+      "category": "GENERAL_INVESTOR",
+      "risk": {
+        "score": 3,
+        "level": "MEDIUM",
+        "reasons": [
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { padding: 18, paddingBottom: 40 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": false,
+        "hasPadding22": false,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.back()"
+      ],
+      "imports": [],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "setLoading(",
+        "setReview(",
+        "setFields(",
+        "updateField(",
+        "confirmInvestorDNAReviewField(",
+        "submit(",
+        "setSubmitting(",
+        "setMessage(",
+        "submitInvestorDNAReviewConfirmation(",
+        "setConfirmAll(",
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT",
+        "SUBMIT",
+        "SAVE",
+        "UPDATE",
+        "CONFIRM",
+        "APPROVE",
+        "TRADE"
+      ],
+      "lineCount": 472
+    },
+    {
+      "rel": "app/execution-audit.js",
+      "category": "CONSEQUENTIAL_WORKFLOW",
+      "risk": {
+        "score": 7,
+        "level": "HIGH",
+        "reasons": [
+          "consequential workflow filename",
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { padding: 22, paddingTop: 70, paddingBottom: 110 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": true,
+        "hasPadding22": true,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.replace(\"/(tabs)",
+        "router.push(\"/(tabs)",
+        "router.push(\"/orders\")"
+      ],
+      "imports": [],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "setEvents(",
+        "clearTrail(",
+        "clearExecutionAuditTrail(",
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT",
+        "TRADE"
+      ],
+      "lineCount": 308
+    },
+    {
+      "rel": "app/execution-bridge.js",
+      "category": "CONSEQUENTIAL_WORKFLOW",
+      "risk": {
+        "score": 7,
+        "level": "HIGH",
+        "reasons": [
+          "consequential workflow filename",
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content:{padding:22,paddingTop:70,paddingBottom:120}",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": true,
+        "hasPadding22": true,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.push(\"/orders-review\")",
+        "router.push(\"/(tabs)",
+        "router.push(\"/orders\")",
+        "router.push(\"/execution-audit\")"
+      ],
+      "imports": [],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "setBridge(",
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT"
+      ],
+      "lineCount": 176
+    },
+    {
+      "rel": "app/execution-wizard.js",
+      "category": "CONSEQUENTIAL_WORKFLOW",
+      "risk": {
+        "score": 7,
+        "level": "HIGH",
+        "reasons": [
+          "consequential workflow filename",
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { padding: 22, paddingTop: 70, paddingBottom: 120 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": true,
+        "hasPadding22": true,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.push(\"/broker-marketplace\")",
+        "router.push(\"/orders-review\")"
+      ],
+      "imports": [],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "setReadiness(",
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT",
+        "TRADE"
+      ],
+      "lineCount": 272
+    },
+    {
+      "rel": "app/existing-portal.js",
+      "category": "GENERAL_INVESTOR",
+      "risk": {
+        "score": 3,
+        "level": "MEDIUM",
+        "reasons": [
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { padding: 22, paddingTop: 70, paddingBottom: 40 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": true,
+        "hasPadding22": true,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.push(\"/import-portfolio\")",
+        "router.push(\"/investor-home\")"
+      ],
+      "imports": [],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT",
+        "UPLOAD"
+      ],
+      "lineCount": 146
+    },
+    {
+      "rel": "app/goal-details-edit.js",
+      "category": "EDIT_OR_PLANNING",
+      "risk": {
+        "score": 3,
+        "level": "MEDIUM",
+        "reasons": [
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { width: \"100%\", maxWidth: 680, alignSelf: \"center\", padding: 20, paddingTop: 70, paddingBottom: 100 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": true,
+        "hasPadding22": false,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.replace(\"/wealth-journey\")"
+      ],
+      "imports": [],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "setName(",
+        "setTargetAmount(",
+        "setTargetDate(",
+        "setLoading(",
+        "save(",
+        "setSaving(",
+        "saveCanonicalGoalDetails(",
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT",
+        "SAVE"
+      ],
+      "lineCount": 227
+    },
+    {
+      "rel": "app/goal-recovery-options.js",
+      "category": "EDIT_OR_PLANNING",
+      "risk": {
+        "score": 3,
+        "level": "MEDIUM",
+        "reasons": [
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { width: \"100%\", maxWidth: 720, alignSelf: \"center\", padding: 18, paddingTop: 64, paddingBottom: 100 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": false,
+        "hasPadding22": false,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.replace(\"/wealth-journey\")"
+      ],
+      "imports": [],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "setError(",
+        "setLoading(",
+        "setIndex(",
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT",
+        "TRADE"
+      ],
+      "lineCount": 333
+    },
+    {
+      "rel": "app/import-portfolio.js",
+      "category": "CONSEQUENTIAL_WORKFLOW",
+      "risk": {
+        "score": 7,
+        "level": "HIGH",
+        "reasons": [
+          "consequential workflow filename",
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { padding: 22, paddingTop: 70, paddingBottom: 100 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": true,
+        "hasPadding22": true,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.replace(\"/portfolio-sync-center\")",
+        "router.push({\n        pathname: \"/review-portfolio-import\",\n        params: {\n          mode: reconciliationMode ? \"RECONCILE\" : \"INITIAL\"\n        }\n      })",
+        "router.replace(\"/(tabs)"
+      ],
+      "imports": [
+        "import { buildSyncStatus } from \"../src/portfolio/syncStatus\";",
+        "import { loadBrokerAccounts, saveCdsProfile } from \"../src/services/brokers/brokerAccountStore\";",
+        "import { hasConnectedRealBrokerAccount } from \"../src/features/broker-sync/brokerCashEvidencePolicy\";",
+        "import { extractBrokerPdf } from \"../src/services/brokers/brokerPdfExtractionApi\";"
+      ],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "setCdsNumber(",
+        "setStoredCdsNumber(",
+        "setConnectedRealBroker(",
+        "setStatus(",
+        "saveCdsProfile(",
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT",
+        "RECONCILE",
+        "UPLOAD",
+        "APPROVE"
+      ],
+      "lineCount": 680
+    },
+    {
+      "rel": "app/index.js",
+      "category": "GENERAL_INVESTOR",
+      "risk": {
+        "score": 3,
+        "level": "MEDIUM",
+        "reasons": [
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": false,
+        "contentPreview": "",
+        "hasPaddingBottom": false,
+        "hasPaddingTop70": false,
+        "hasPadding22": false,
+        "hasStylesheet": false
+      },
+      "routes": [
+        "router.replace(\"/login\")",
+        "router.replace(\"/(tabs)",
+        "router.replace(\"/onboarding/name\")",
+        "router.replace(\"/new-investor\")",
+        "router.replace(\"/starter-plan\")"
+      ],
+      "imports": [],
+      "components": [],
+      "mutations": [
+        "setTimeout(",
+        "saveProfile("
+      ],
+      "buttonText": [
+        "IMPORT"
+      ],
+      "lineCount": 329
+    },
+    {
+      "rel": "app/investor-alert-review.js",
+      "category": "GENERAL_INVESTOR",
+      "risk": {
+        "score": 3,
+        "level": "MEDIUM",
+        "reasons": [
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { padding: 20, paddingTop: 54, paddingBottom: 120, gap: 16 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": false,
+        "hasPadding22": false,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.replace(\"/(tabs)",
+        "router.back()",
+        "router.push(\"/goal-scenario-planner\")",
+        "router.push({ pathname: \"/trade\", params: { symbol: alert.symbol, mode: \"AVERAGE_COST\" } })",
+        "router.push(`/security/${alert.symbol}`)"
+      ],
+      "imports": [],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT",
+        "BUY",
+        "TRADE"
+      ],
+      "lineCount": 52
+    },
+    {
+      "rel": "app/investor-home.js",
+      "category": "READ_MOSTLY_INVESTOR",
+      "risk": {
+        "score": 3,
+        "level": "MEDIUM",
+        "reasons": [
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { padding: 22, paddingTop: 70, paddingBottom: 40 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": true,
+        "hasPadding22": true,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.push(\"/broker-upload\")",
+        "router.push(\"/new-investor\")",
+        "router.push(\"/(tabs)",
+        "router.push(\"/holding-details\")",
+        "router.push(\"/order-book\")",
+        "router.push(\"/trade-history\")",
+        "router.push(\"/brokers\")"
+      ],
+      "imports": [],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT",
+        "UPLOAD",
+        "TRADE"
+      ],
+      "lineCount": 199
+    },
+    {
+      "rel": "app/investor-profile-edit.js",
+      "category": "EDIT_OR_PLANNING",
+      "risk": {
+        "score": 3,
+        "level": "MEDIUM",
+        "reasons": [
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { padding: 22, paddingTop: 70, paddingBottom: 120 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": true,
+        "hasPadding22": true,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.replace(\"/my-profile\")"
+      ],
+      "imports": [
+        "import { useAuth } from \"../src/features/auth/hooks/useAuth\";"
+      ],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "setName(",
+        "setGoal(",
+        "setRisk(",
+        "setExperience(",
+        "setTimeHorizon(",
+        "setContribution(",
+        "setMarketDrop(",
+        "setAmount(",
+        "save(",
+        "setSaving(",
+        "setSaveStatus(",
+        "saveInvestorProfile(",
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT",
+        "SELL",
+        "BUY",
+        "SAVE",
+        "UPDATE"
+      ],
+      "lineCount": 309
+    },
+    {
+      "rel": "app/investor-timeline.js",
+      "category": "READ_MOSTLY_INVESTOR",
+      "risk": {
+        "score": 3,
+        "level": "MEDIUM",
+        "reasons": [
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { padding: 22, paddingTop: 70, paddingBottom: 110 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": true,
+        "hasPadding22": true,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.push({\r\n            pathname: \"/monthly-review\",\r\n            params: { returnTo: \"timeline\" }\r\n          })",
+        "router.replace(\r\n            \"/(tabs)"
+      ],
+      "imports": [],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "setLoading(",
+        "setError(",
+        "setTimeline(",
+        "setFilter(",
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT"
+      ],
+      "lineCount": 898
+    },
+    {
+      "rel": "app/link-broker-account.js",
+      "category": "CONSEQUENTIAL_WORKFLOW",
+      "risk": {
+        "score": 7,
+        "level": "HIGH",
+        "reasons": [
+          "consequential workflow filename",
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { padding: 22, paddingTop: 70, paddingBottom: 100 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": true,
+        "hasPadding22": true,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.replace(\"/broker-accounts\")"
+      ],
+      "imports": [
+        "import { upsertBrokerAccount } from \"../src/brokers/brokerAccountStore\";"
+      ],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "save(",
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT",
+        "SAVE"
+      ],
+      "lineCount": 69
+    },
+    {
+      "rel": "app/live-dashboard.js",
+      "category": "READ_MOSTLY_INVESTOR",
+      "risk": {
+        "score": 3,
+        "level": "MEDIUM",
+        "reasons": [
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { padding: 22, paddingTop: 70, paddingBottom: 120 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": true,
+        "hasPadding22": true,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.replace(\"/(tabs)",
+        "router.push(route)"
+      ],
+      "imports": [
+        "import { getMarketSocket } from \"../src/features/market/api/marketSocket\";",
+        "import { getMarketIntelligenceHome } from \"../src/features/market/api/marketIntelligenceApi\";",
+        "import { getUserBrokers } from \"../src/features/brokers/api/userBrokerApi\";"
+      ],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "setMarketIntel(",
+        "setLoading(",
+        "setBrokers(",
+        "setLastUpdated(",
+        "setEvents(",
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT",
+        "UPDATE",
+        "TRADE"
+      ],
+      "lineCount": 393
+    },
+    {
+      "rel": "app/manual-portfolio-entry.js",
+      "category": "CONSEQUENTIAL_WORKFLOW",
+      "risk": {
+        "score": 7,
+        "level": "HIGH",
+        "reasons": [
+          "consequential workflow filename",
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { padding: 22, paddingTop: 70, paddingBottom: 40 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": true,
+        "hasPadding22": true,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.replace(\"/portfolio-sync-center\")",
+        "router.push(\"/(tabs)"
+      ],
+      "imports": [
+        "import { savePortfolio } from \"../src/portfolio/portfolioStore\";",
+        "import { buildSyncStatus } from \"../src/portfolio/syncStatus\";",
+        "import { loadBrokerAccounts } from \"../src/services/brokers/brokerAccountStore\";",
+        "import { hasConnectedRealBrokerAccount } from \"../src/features/broker-sync/brokerCashEvidencePolicy\";"
+      ],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "setConnectedRealBroker(",
+        "addRow(",
+        "setRows(",
+        "setQuantity(",
+        "setAvgPrice(",
+        "removeRow(",
+        "submitPortfolio(",
+        "savePortfolio(",
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT",
+        "CONFIRM",
+        "SUBMIT"
+      ],
+      "lineCount": 371
+    },
+    {
+      "rel": "app/monthly-review.js",
+      "category": "READ_MOSTLY_INVESTOR",
+      "risk": {
+        "score": 3,
+        "level": "MEDIUM",
+        "reasons": [
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { padding: 22, paddingTop: 70, paddingBottom: 110 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": true,
+        "hasPadding22": true,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.replace(returnsToTimeline ? \"/investor-timeline\" : \"/(tabs)"
+      ],
+      "imports": [],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "setLoading(",
+        "setError(",
+        "setReview(",
+        "setSavedSnapshot(",
+        "saveCurrentReview(",
+        "setSavingSnapshot(",
+        "saveMonthlyReview(",
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT",
+        "SAVE",
+        "UPDATE"
+      ],
+      "lineCount": 1112
+    },
+    {
+      "rel": "app/my-profile.js",
+      "category": "GENERAL_INVESTOR",
+      "risk": {
+        "score": 3,
+        "level": "MEDIUM",
+        "reasons": [
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { padding: 22, paddingTop: 70, paddingBottom: 100 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": true,
+        "hasPadding22": true,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.replace(\"/login\")",
+        "router.replace(\"/(tabs)",
+        "router.push(\"/account-edit\")",
+        "router.push(\"/investor-profile-edit\")",
+        "router.push(\"/broker-accounts\")",
+        "router.push(\"/portfolio-hub\")",
+        "router.push(\"/portfolio-sync-center\")"
+      ],
+      "imports": [
+        "import { useAuth } from \"../src/features/auth/hooks/useAuth\";",
+        "import { getInvestorProfile } from \"../src/features/profile/api/investorProfileApi\";",
+        "import { loadUnifiedPortfolio } from \"../src/portfolio/unifiedPortfolioApi\";",
+        "import { getUserCash } from \"../src/features/cash/api/userCashApi\";",
+        "import { getUserBrokers } from \"../src/features/brokers/api/userBrokerApi\";",
+        "import { logout } from \"../src/auth/authStore\";"
+      ],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "setProfile(",
+        "setBroker(",
+        "setCash(",
+        "setPortfolioValue(",
+        "setActiveSection(",
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT",
+        "UPDATE"
+      ],
+      "lineCount": 299
+    },
+    {
+      "rel": "app/order-handoff.js",
+      "category": "CONSEQUENTIAL_WORKFLOW",
+      "risk": {
+        "score": 7,
+        "level": "HIGH",
+        "reasons": [
+          "consequential workflow filename",
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content:{padding:22,paddingTop:70}",
+        "hasPaddingBottom": false,
+        "hasPaddingTop70": true,
+        "hasPadding22": true,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.replace(\"/(tabs)"
+      ],
+      "imports": [],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "setPack(",
+        "setStringAsync(",
+        "saveAndReturn(",
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT",
+        "SAVE"
+      ],
+      "lineCount": 156
+    },
+    {
+      "rel": "app/orders-review.js",
+      "category": "CONSEQUENTIAL_WORKFLOW",
+      "risk": {
+        "score": 7,
+        "level": "HIGH",
+        "reasons": [
+          "consequential workflow filename",
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { padding: 22, paddingTop: 70, paddingBottom: 110 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": true,
+        "hasPadding22": true,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.push(\"/(tabs)",
+        "router.push(\"/trade-basket\")",
+        "router.replace(\"/(tabs)"
+      ],
+      "imports": [
+        "import { ORDER_STATUS } from \"../src/trade/orderLifecycle\";"
+      ],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "createBasketExecution(",
+        "setExecution(",
+        "updateOrder(",
+        "updateExecutionOrder(",
+        "deleteOrder(",
+        "deleteExecutionOrder(",
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT",
+        "TRADE",
+        "DELETE",
+        "SUBMIT",
+        "BUY",
+        "SELL"
+      ],
+      "lineCount": 565
+    },
+    {
+      "rel": "app/orders.js",
+      "category": "CONSEQUENTIAL_WORKFLOW",
+      "risk": {
+        "score": 7,
+        "level": "HIGH",
+        "reasons": [
+          "consequential workflow filename",
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { padding: 22, paddingTop: 70, paddingBottom: 110 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": true,
+        "hasPadding22": true,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.push(\"/trade-basket\")",
+        "router.replace(\"/(tabs)",
+        "router.push(\"/orders-review\")",
+        "router.push(\"/basket-execution\")"
+      ],
+      "imports": [
+        "import { ORDER_STATUS, isClosedOrder } from \"../src/trade/orderLifecycle\";"
+      ],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "createBasketExecution(",
+        "setExecution(",
+        "setTimeout(",
+        "updateOrder(",
+        "updateExecutionOrder(",
+        "setTab(",
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT",
+        "TRADE"
+      ],
+      "lineCount": 580
+    },
+    {
+      "rel": "app/portfolio-activity.js",
+      "category": "READ_MOSTLY_INVESTOR",
+      "risk": {
+        "score": 3,
+        "level": "MEDIUM",
+        "reasons": [
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { padding: 20, paddingTop: 60, paddingBottom: 120 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": false,
+        "hasPadding22": false,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.replace(\"/(tabs)"
+      ],
+      "imports": [
+        "import { loadCanonicalRealTransactionHistory } from \"../src/features/wealth-journey/canonicalRealBehaviorHistoryService\";"
+      ],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "setLoading(",
+        "setEvents(",
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT",
+        "UPLOAD",
+        "BUY",
+        "SELL",
+        "SAVE"
+      ],
+      "lineCount": 286
+    },
+    {
+      "rel": "app/portfolio-simulator.js",
+      "category": "GENERAL_INVESTOR",
+      "risk": {
+        "score": 3,
+        "level": "MEDIUM",
+        "reasons": [
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { padding: 22, paddingTop: 70, paddingBottom: 100 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": true,
+        "hasPadding22": true,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.replace(\"/(tabs)",
+        "router.replace(\"/starter-plan\")"
+      ],
+      "imports": [],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "setHoldings(",
+        "setCash(",
+        "setResult(",
+        "saveScenario(",
+        "setSelectedScenario(",
+        "setCustomMonthly(",
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT",
+        "SAVE"
+      ],
+      "lineCount": 382
+    },
+    {
+      "rel": "app/progress.js",
+      "category": "READ_MOSTLY_INVESTOR",
+      "risk": {
+        "score": 3,
+        "level": "MEDIUM",
+        "reasons": [
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { padding: 22, paddingTop: 70, paddingBottom: 40 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": true,
+        "hasPadding22": true,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.push(item.route)",
+        "router.push(\"/demo\")"
+      ],
+      "imports": [],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "setState(",
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT",
+        "UPLOAD"
+      ],
+      "lineCount": 236
+    },
+    {
+      "rel": "app/queue-manager.js",
+      "category": "GENERAL_INVESTOR",
+      "risk": {
+        "score": 3,
+        "level": "MEDIUM",
+        "reasons": [
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { padding: 22, paddingTop: 70, paddingBottom: 110 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": true,
+        "hasPadding22": true,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.push(\"/trade-basket\")",
+        "router.replace(\"/(tabs)",
+        "router.push(\"/orders-review\")",
+        "router.push(\"/(tabs)",
+        "router.push(\"/orders\")",
+        "router.push(\"/basket-execution\")"
+      ],
+      "imports": [
+        "import { ORDER_STATUS } from \"../src/trade/orderLifecycle\";"
+      ],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "createBasketExecution(",
+        "setExecution(",
+        "updateExecutionOrder(",
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT",
+        "TRADE"
+      ],
+      "lineCount": 549
+    },
+    {
+      "rel": "app/recommendation-history.js",
+      "category": "READ_MOSTLY_INVESTOR",
+      "risk": {
+        "score": 3,
+        "level": "MEDIUM",
+        "reasons": [
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { padding: 22, paddingTop: 70, paddingBottom: 90 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": true,
+        "hasPadding22": true,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.replace(\"/(tabs)"
+      ],
+      "imports": [],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "setHistory(",
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT"
+      ],
+      "lineCount": 343
+    },
+    {
+      "rel": "app/reconciliation-center.js",
+      "category": "CONSEQUENTIAL_WORKFLOW",
+      "risk": {
+        "score": 7,
+        "level": "HIGH",
+        "reasons": [
+          "consequential workflow filename",
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content:{padding:22,paddingTop:70,paddingBottom:120}",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": true,
+        "hasPadding22": true,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.replace(\"/(tabs)"
+      ],
+      "imports": [
+        "import { runPositionReconciliation } from \"../src/reconciliation/positionReconciliation\";"
+      ],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "setResult(",
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT",
+        "RECONCILE"
+      ],
+      "lineCount": 151
+    },
+    {
+      "rel": "app/reconciliation-conversation.js",
+      "category": "CONSEQUENTIAL_WORKFLOW",
+      "risk": {
+        "score": 7,
+        "level": "HIGH",
+        "reasons": [
+          "consequential workflow filename",
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { padding: 18, paddingBottom: 40 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": false,
+        "hasPadding22": false,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.back()",
+        "router.push(\"/dna-update-review\")"
+      ],
+      "imports": [],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "setLoading(",
+        "setResult(",
+        "submit(",
+        "setSubmitting(",
+        "setSavedMessage(",
+        "submitCoachGReconciliationClarification(",
+        "setSelectedType(",
+        "setResponseText(",
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT",
+        "SUBMIT",
+        "SAVE",
+        "UPDATE"
+      ],
+      "lineCount": 459
+    },
+    {
+      "rel": "app/review-portfolio-import.js",
+      "category": "CONSEQUENTIAL_WORKFLOW",
+      "risk": {
+        "score": 9,
+        "level": "HIGH",
+        "reasons": [
+          "consequential workflow filename",
+          "mutation-like call",
+          "storage mutation",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { padding: 22, paddingTop: 70, paddingBottom: 40 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": true,
+        "hasPadding22": true,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.replace(\"/portfolio-sync-center\")",
+        "router.replace(\"/login\")",
+        "router.replace(\"/broker-upload\")"
+      ],
+      "imports": [
+        "import { getStoredAccessToken } from \"../src/features/auth/storage/authStorage\";",
+        "import { uploadConfirmedPortfolio } from \"../src/portfolio/uploadPortfolioApi\";",
+        "import { syncHoldingsToCloud } from \"../src/features/portfolio/api/portfolioSyncApi\";",
+        "import { getCurrentSession } from \"../src/auth/authStore\";",
+        "import { loadBrokerAccounts } from \"../src/services/brokers/brokerAccountStore\";",
+        "import { hasConnectedRealBrokerAccount } from \"../src/features/broker-sync/brokerCashEvidencePolicy\";"
+      ],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "setConnectedRealBroker(",
+        "setFileInfo(",
+        "setRows(",
+        "setEditingIndex(",
+        "setEditingRow(",
+        "saveEdit(",
+        "setItem(",
+        "addHolding(",
+        "removeHolding(",
+        "confirmPortfolio(",
+        "saveVerifiedUploadedBrokerMirror(",
+        "removeItem(",
+        "savePortfolio(",
+        "syncHoldingsToCloud(",
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT",
+        "UPLOAD",
+        "RECONCILE",
+        "CONFIRM",
+        "SAVE"
+      ],
+      "lineCount": 703
+    },
+    {
+      "rel": "app/security/[symbol].js",
+      "category": "READ_MOSTLY_INVESTOR",
+      "risk": {
+        "score": 3,
+        "level": "MEDIUM",
+        "reasons": [
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { padding: 22, paddingTop: 70, paddingBottom: 120 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": true,
+        "hasPadding22": true,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.push(\"/watchlist\")",
+        "router.back()",
+        "router.replace(\"/(tabs)",
+        "router.push(\"/fundamental-data-hub\")"
+      ],
+      "imports": [
+        "import useMarketData from \"../../src/services/markets/useMarketData\";",
+        "import { loadFundamentalRecord } from \"../../src/features/fundamentals/fundamentalRepository\";",
+        "import { buildSecurityEducationModel, explainMetric } from \"../../src/services/markets/securityEducationService\";"
+      ],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "setFundamentals(",
+        "setWatchlists(",
+        "addToWatchlist(",
+        "saveWatchlists(",
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT",
+        "CONFIRM"
+      ],
+      "lineCount": 662
+    },
+    {
+      "rel": "app/storage-debug.js",
+      "category": "DEV_ADMIN_UTILITY",
+      "risk": {
+        "score": 3,
+        "level": "MEDIUM",
+        "reasons": [
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { padding: 22, paddingTop: 70, paddingBottom: 100 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": true,
+        "hasPadding22": true,
+        "hasStylesheet": true
+      },
+      "routes": [],
+      "imports": [],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "setLoading(",
+        "setReport(",
+        "setRepairing(",
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT",
+        "RECONCILE"
+      ],
+      "lineCount": 605
+    },
+    {
+      "rel": "app/trade-basket.js",
+      "category": "CONSEQUENTIAL_WORKFLOW",
+      "risk": {
+        "score": 7,
+        "level": "HIGH",
+        "reasons": [
+          "consequential workflow filename",
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { padding: 22, paddingTop: 70, paddingBottom: 110 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": true,
+        "hasPadding22": true,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.push(\"/orders-review\")",
+        "router.replace(\"/(tabs)",
+        "router.push(\"/coach-insights\")"
+      ],
+      "imports": [],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "setBasket(",
+        "removeItem(",
+        "clearBasket(",
+        "saveTradeBasket(",
+        "clearTradeBasket(",
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT",
+        "TRADE",
+        "BUY"
+      ],
+      "lineCount": 269
+    },
+    {
+      "rel": "app/trade.js",
+      "category": "CONSEQUENTIAL_WORKFLOW",
+      "risk": {
+        "score": 10,
+        "level": "HIGH",
+        "reasons": [
+          "consequential workflow filename",
+          "execute* call",
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { padding: 22, paddingTop: 70, paddingBottom: 100 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": true,
+        "hasPadding22": true,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.push({\r\n      pathname: \"/basket-execution\",\r\n      params: { mode: \"BROKER_PLAN\" }\r\n    })",
+        "router.replace(\"/(tabs)",
+        "router.push(\"/basket-execution\")",
+        "router.push({ pathname: \"/transactions\", params: { symbol: selectedStock.symbol } })",
+        "router.push(\"/trade-history\")",
+        "router.replace({ pathname: \"/basket-execution\", params: { mode: \"BROKER_PLAN\" } })",
+        "router.replace(\"/basket-execution\")"
+      ],
+      "imports": [
+        "import useMarketData from \"../src/services/markets/useMarketData\";",
+        "import { savePracticePortfolio } from \"../src/features/investor/investorContextStore\";",
+        "import { buildHistoricalSecurityLotLedger } from \"../src/features/trading/historicalSecurityLotLedgerService\";",
+        "import { loadUnifiedPortfolioRuntime } from \"../src/portfolio/unifiedPortfolioApi\";",
+        "import { addBrokerActionPlanOrder } from \"../src/services/trade/brokerActionPlanStore\";",
+        "import { loadBrokerLotHistoryEvidence } from \"../src/features/trading/brokerLotHistoryEvidenceService\";",
+        "import { buildProjectedImpactReview } from \"../src/features/trading/coachGProjectedImpactService\";",
+        "import { loadRealCurrentInvestorWealthJourney } from \"../src/features/wealth-journey/realWealthJourneyRuntime\";",
+        "import { buildGoalRiskStressImpact, extractVerifiedGoalEvidence } from \"../src/features/trading/coachGGoalRiskStressImpactService\";",
+        "import { canonicalSecuritySymbol } from \"../src/features/trading/securityIdentityService\";",
+        "import { deriveApproximateScenarioQuantity } from \"../src/features/trading/decisionAmountQuantityService\";"
+      ],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "setSide(",
+        "setSelectedStock(",
+        "setLimitPrice(",
+        "setConfirmedTrade(",
+        "setPortfolio(",
+        "setCash(",
+        "setRealHoldings(",
+        "setRealTransactions(",
+        "setGoalEvidence(",
+        "setActiveExecution(",
+        "setQuantity(",
+        "setSecurityPickerOpen(",
+        "addToBrokerActionPlan(",
+        "addBrokerActionPlanOrder(",
+        "persistTrade(",
+        "savePracticePortfolio("
+      ],
+      "buttonText": [
+        "IMPORT",
+        "TRADE",
+        "BUY",
+        "SELL",
+        "EXECUTE",
+        "RECONCILE",
+        "CONFIRM",
+        "SAVE"
+      ],
+      "lineCount": 2514
+    },
+    {
+      "rel": "app/transaction-import.js",
+      "category": "CONSEQUENTIAL_WORKFLOW",
+      "risk": {
+        "score": 7,
+        "level": "HIGH",
+        "reasons": [
+          "consequential workflow filename",
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { padding: 22, paddingTop: 70, paddingBottom: 100 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": true,
+        "hasPadding22": true,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.replace(\"/portfolio-sync-center\")",
+        "router.replace(\"/broker-upload\")"
+      ],
+      "imports": [
+        "import { buildSyncStatus } from \"../src/portfolio/syncStatus\";",
+        "import { rebuildCanonicalPortfolioLedger } from \"../src/features/trading/canonicalPortfolioLedgerService\";",
+        "import { partitionBrokerExecutionEvidence } from \"../src/features/broker-sync/brokerExecutionEvidencePolicy\";",
+        "import { extractBrokerPdf } from \"../src/services/brokers/brokerPdfExtractionApi\";"
+      ],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "setStatus(",
+        "setSelectedFile(",
+        "setTransactions(",
+        "addTransaction(",
+        "setForm(",
+        "saveTransactions(",
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT",
+        "BUY",
+        "SELL",
+        "TRADE",
+        "UPLOAD"
+      ],
+      "lineCount": 592
+    },
+    {
+      "rel": "app/version-center.js",
+      "category": "DEV_ADMIN_UTILITY",
+      "risk": {
+        "score": 3,
+        "level": "MEDIUM",
+        "reasons": [
+          "mutation-like call",
+          "financial/portfolio boundary terms"
+        ]
+      },
+      "styles": {
+        "hasContentStyle": true,
+        "contentPreview": "content: { padding: 22, paddingTop: 70, paddingBottom: 100 }",
+        "hasPaddingBottom": true,
+        "hasPaddingTop70": true,
+        "hasPadding22": true,
+        "hasStylesheet": true
+      },
+      "routes": [
+        "router.replace(\"/(tabs)"
+      ],
+      "imports": [],
+      "components": [
+        "ScrollView"
+      ],
+      "mutations": [
+        "create("
+      ],
+      "buttonText": [
+        "IMPORT",
+        "TRADE"
+      ],
+      "lineCount": 178
+    }
+  ]
+}

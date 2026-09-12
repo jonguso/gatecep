@@ -8,6 +8,7 @@ import {
   MobileScreen, StatusBanner, StickyActionBar
 } from "../src/components/mobile/MobileUI";
 
+// PC-030M20AV3L RESPONSIVE CALIBRATION
 export default function BrokerSyncHistory() {
   const [loading, setLoading] = useState(true);
   const [history, setHistory] = useState([]);
@@ -94,13 +95,15 @@ function money(value) { return Number(value || 0).toLocaleString("en-US", { mini
 function formatDate(value) { const date = new Date(value); return value && !Number.isNaN(date.getTime()) ? date.toLocaleString("en-US") : "Unknown"; }
 
 const styles = StyleSheet.create({
-  header: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  header: { flexDirection: "row",
+    flexWrap: "wrap", alignItems: "flex-start", gap: 12 },
   flex: { flex: 1 },
   eventType: { color: "white", fontSize: 17, fontWeight: "900" },
   date: { color: "#94a3b8", marginTop: 5, fontSize: 12 },
   status: { color: "#fbbf24", fontSize: 11, fontWeight: "900", maxWidth: "42%", textAlign: "right" },
   details: { marginTop: 13, backgroundColor: "#020617", borderRadius: 14, paddingHorizontal: 12 },
-  row: { minHeight: 45, flexDirection: "row", alignItems: "center", gap: 12, borderBottomColor: "#1e293b", borderBottomWidth: 1 },
+  row: { minHeight: 45, flexDirection: "row",
+    flexWrap: "wrap", alignItems: "center", gap: 12, borderBottomColor: "#1e293b", borderBottomWidth: 1 },
   rowLabel: { color: "#94a3b8", flex: 1, fontSize: 12 },
   rowValue: { color: "white", flex: 1, textAlign: "right", fontWeight: "900" },
   rowWarning: { color: "#fbbf24", flex: 1, textAlign: "right", fontWeight: "900" },

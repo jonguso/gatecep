@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from "react-native";
 import { router } from "expo-router";
 
 import { loadRealCurrentInvestorWealthJourney } from "../src/features/wealth-journey/realWealthJourneyRuntime";
@@ -8,6 +8,7 @@ import { buildGoalDiversificationScenario } from "../src/features/wealth-journey
 import InvestorJourneyNavigation from "../src/components/mobile/InvestorJourneyNavigation";
 
 export default function GoalScenarioPlanner() {
+  const { width: viewportWidth } = useWindowDimensions();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [portfolio, setPortfolio] = useState(null);
@@ -66,7 +67,7 @@ export default function GoalScenarioPlanner() {
 
   function continueToRecommendations() {
     router.push({
-      pathname: "/portfolio-rebalancing",
+      pathname: "/goal-recovery-choice",
       params: {
         scenario: "goal-aware",
         goalName: goal?.name || "Financial Goal",
@@ -81,7 +82,8 @@ export default function GoalScenarioPlanner() {
         defensiveGap: String(scenario?.defensivePlan?.gap ?? ""),
         largestSector: scenario?.concentration?.currentLargestSector || "",
         largestCurrent: String(scenario?.concentration?.currentLargestPercentage ?? ""),
-        largestSimulated: String(scenario?.concentration?.simulatedLargestPercentage ?? "")
+        largestSimulated: String(scenario?.concentration?.simulatedLargestPercentage ?? ""),
+        sectorTargetsJson: JSON.stringify(sectorTargets || {})
       }
     });
   }
@@ -89,16 +91,16 @@ export default function GoalScenarioPlanner() {
   if (loading) return <View style={styles.center}><ActivityIndicator size="large" color="#67e8f9" /><Text style={styles.muted}>Building a read-only scenario…</Text></View>;
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, viewportWidth >= 720 && styles.av3bContentWide, viewportWidth < 720 && styles.av3bContentCompact, viewportWidth < 480 && styles.av3bContentNarrow]}>
       <Text style={styles.eyebrow}>COACH G • SIMULATION ONLY</Text>
-      <Text style={styles.title}>Goal Recovery Simulator</Text>
+      <Text style={[styles.title, viewportWidth < 720 && styles.av3bTitleCompact, viewportWidth < 480 && styles.av3bTitleNarrow]}>Goal Recovery Simulator</Text>
       <Text style={styles.subtitle}>Change the assumptions and see the impact. Your REAL portfolio, goal, Investor DNA, and contributions will not be changed.</Text>
 
       {error ? <View style={styles.warning}><Text style={styles.warningTitle}>Scenario unavailable</Text><Text style={styles.body}>{error}</Text></View> : null}
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>{goal?.name || "Goal assumptions"}</Text>
-        <View style={styles.inputGrid}>
+        <View style={[styles.inputGrid, styles.av3bInputGrid]}>
           <Field label="Target amount (KES)" value={targetAmount} onChangeText={setTargetAmount} numeric />
           <Field label="Target date (YYYY-MM-DD)" value={targetDate} onChangeText={setTargetDate} />
           <Field label="Monthly contribution (KES)" value={monthlyContribution} onChangeText={setMonthlyContribution} numeric />
@@ -136,7 +138,7 @@ export default function GoalScenarioPlanner() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Diversification simulation</Text>
           <Text style={styles.body}>Edit illustrative sector targets. Future equity contributions are redirected toward underweight sectors; no sale is created.</Text>
-          {scenario.sectorPlan.map((row) => <View key={row.sector} style={styles.sectorRow}>
+          {scenario.sectorPlan.map((row) => <View key={row.sector} style={[styles.sectorRow, viewportWidth < 480 && styles.av3bSectorRowNarrow]}>
             <View style={styles.sectorCopy}><Text style={styles.sectorName}>{row.sector}</Text><Text style={styles.muted}>Current {row.currentPercentage.toFixed(1)}% → simulated {row.simulatedPercentage.toFixed(1)}%</Text><Text style={styles.successText}>Direct KES {money(row.directedContribution)}</Text></View>
             <View><Text style={styles.inputLabel}>Target %</Text><TextInput style={styles.targetInput} keyboardType="decimal-pad" value={String(sectorTargets[row.sector] ?? row.targetPercentage)} onChangeText={(value) => setSectorTargets((current) => ({ ...current, [row.sector]: value }))} /></View>
           </View>)}
@@ -151,7 +153,7 @@ export default function GoalScenarioPlanner() {
   );
 }
 
-function Field({ label, value, onChangeText, numeric }) { return <View style={styles.field}><Text style={styles.inputLabel}>{label}</Text><TextInput style={styles.input} value={value} onChangeText={onChangeText} keyboardType={numeric ? "decimal-pad" : "default"} /></View>; }
+function Field({ label, value, onChangeText, numeric }) { return <View style={[styles.field, styles.av3bField]}><Text style={styles.inputLabel}>{label}</Text><TextInput style={styles.input} value={value} onChangeText={onChangeText} keyboardType={numeric ? "decimal-pad" : "default"} /></View>; }
 function Metric({ label, value, danger }) { return <View style={styles.metric}><Text style={styles.inputLabel}>{label}</Text><Text style={danger ? styles.dangerValue : styles.metricValue}>{value}</Text></View>; }
 function RouteRow({ label, value }) { return <View style={styles.routeRow}><Text style={styles.body}>{label}</Text><Text style={styles.metricValue}>KES {money(value)}</Text></View>; }
 function Preset({ label, onPress }) { return <Pressable style={styles.preset} onPress={onPress}><Text style={styles.presetText}>{label}</Text></Pressable>; }
@@ -164,5 +166,50 @@ function isDefensive(row) { const text = `${row?.assetClass || ""} ${row?.sector
 function defensiveValue(holdings = []) { return (Array.isArray(holdings) ? holdings : []).filter(isDefensive).reduce((sum, row) => sum + holdingValue(row), 0); }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#020617" }, content: { padding: 20, paddingTop: 54, paddingBottom: 120, gap: 16 }, center: { flex: 1, backgroundColor: "#020617", alignItems: "center", justifyContent: "center", gap: 12 }, eyebrow: { color: "#67e8f9", fontWeight: "900", fontSize: 12 }, title: { color: "#fff", fontSize: 32, fontWeight: "900" }, subtitle: { color: "#94a3b8", lineHeight: 21 }, card: { backgroundColor: "#0f172a", borderWidth: 1, borderColor: "#1e293b", borderRadius: 20, padding: 16, gap: 12 }, cardTitle: { color: "#67e8f9", fontSize: 20, fontWeight: "900" }, body: { color: "#cbd5e1", lineHeight: 20 }, muted: { color: "#94a3b8", lineHeight: 18 }, inputGrid: { gap: 10 }, field: { gap: 5 }, inputLabel: { color: "#94a3b8", fontSize: 12 }, input: { minHeight: 46, borderRadius: 12, borderWidth: 1, borderColor: "#334155", backgroundColor: "#020617", color: "#fff", paddingHorizontal: 12, fontWeight: "800" }, presetRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 }, preset: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, backgroundColor: "#1e293b" }, presetText: { color: "#67e8f9", fontWeight: "800" }, metrics: { flexDirection: "row", flexWrap: "wrap", gap: 10 }, metric: { width: "48%", backgroundColor: "#020617", borderRadius: 12, padding: 12, gap: 5 }, metricValue: { color: "#f8fafc", fontWeight: "900" }, dangerValue: { color: "#fca5a5", fontWeight: "900" }, warningText: { color: "#fca5a5", fontWeight: "800", lineHeight: 20 }, successText: { color: "#86efac", fontWeight: "800", lineHeight: 20 }, routeRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12, borderBottomWidth: 1, borderBottomColor: "#1e293b", paddingVertical: 9 }, sectorRow: { flexDirection: "row", justifyContent: "space-between", gap: 12, borderBottomWidth: 1, borderBottomColor: "#1e293b", paddingVertical: 10 }, sectorCopy: { flex: 1, gap: 4 }, sectorName: { color: "#fff", fontWeight: "900", fontSize: 16 }, targetInput: { width: 76, minHeight: 42, borderRadius: 10, borderWidth: 1, borderColor: "#7e22ce", backgroundColor: "#020617", color: "#fff", textAlign: "center", fontWeight: "900" }, warning: { backgroundColor: "#1c1418", borderColor: "#854d0e", borderWidth: 1, borderRadius: 18, padding: 15, gap: 7 }, warningTitle: { color: "#fde68a", fontWeight: "900" }
+  screen: { flex: 1, backgroundColor: "#020617" }, content: { padding: 20, paddingTop: 54, paddingBottom: 120, gap: 16 }, center: { flex: 1, backgroundColor: "#020617", alignItems: "center", justifyContent: "center", gap: 12 }, eyebrow: { color: "#67e8f9", fontWeight: "900", fontSize: 12 }, title: { color: "#fff", fontSize: 32, fontWeight: "900" }, subtitle: { color: "#94a3b8", lineHeight: 21 }, card: { backgroundColor: "#0f172a", borderWidth: 1, borderColor: "#1e293b", borderRadius: 20, padding: 16, gap: 12 }, cardTitle: { color: "#67e8f9", fontSize: 20, fontWeight: "900" }, body: { color: "#cbd5e1", lineHeight: 20 }, muted: { color: "#94a3b8", lineHeight: 18 }, inputGrid: { gap: 10 }, field: { gap: 5 }, inputLabel: { color: "#94a3b8", fontSize: 12 }, input: { minHeight: 46, borderRadius: 12, borderWidth: 1, borderColor: "#334155", backgroundColor: "#020617", color: "#fff", paddingHorizontal: 12, fontWeight: "800" }, presetRow: { flexDirection: "row", flexWrap: "wrap", gap: 8 }, preset: { paddingHorizontal: 12, paddingVertical: 10, borderRadius: 12, backgroundColor: "#1e293b" }, presetText: { color: "#67e8f9", fontWeight: "800" }, metrics: { flexDirection: "row", flexWrap: "wrap", gap: 10 }, metric: { width: "48%", backgroundColor: "#020617", borderRadius: 12, padding: 12, gap: 5 }, metricValue: { color: "#f8fafc", fontWeight: "900" }, dangerValue: { color: "#fca5a5", fontWeight: "900" }, warningText: { color: "#fca5a5", fontWeight: "800", lineHeight: 20 }, successText: { color: "#86efac", fontWeight: "800", lineHeight: 20 }, routeRow: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", gap: 12, borderBottomWidth: 1, borderBottomColor: "#1e293b", paddingVertical: 9 }, sectorRow: { flexDirection: "row", justifyContent: "space-between", gap: 12, borderBottomWidth: 1, borderBottomColor: "#1e293b", paddingVertical: 10 }, sectorCopy: { flex: 1, gap: 4 }, sectorName: { color: "#fff", fontWeight: "900", fontSize: 16 }, targetInput: { width: 76, minHeight: 42, borderRadius: 10, borderWidth: 1, borderColor: "#7e22ce", backgroundColor: "#020617", color: "#fff", textAlign: "center", fontWeight: "900" }, warning: { backgroundColor: "#1c1418", borderColor: "#854d0e", borderWidth: 1, borderRadius: 18, padding: 15, gap: 7 }, warningTitle: { color: "#fde68a", fontWeight: "900" },
+
+  /* PC-030M20AV3B RESPONSIVE CALIBRATION */
+  av3bContentWide: {
+    width: "100%",
+    maxWidth: 960,
+    alignSelf: "center",
+    paddingHorizontal: 24
+  },
+  av3bContentCompact: {
+    paddingHorizontal: 16,
+    paddingTop: 24,
+    paddingBottom: 128
+  },
+  av3bContentNarrow: {
+    paddingHorizontal: 12
+  },
+  av3bHeaderCompact: {
+    flexWrap: "wrap",
+    alignItems: "stretch"
+  },
+  av3bHeaderActionsCompact: {
+    width: "100%",
+    flexWrap: "wrap"
+  },
+  av3bTitleCompact: {
+    fontSize: 28,
+    lineHeight: 34
+  },
+  av3bTitleNarrow: {
+    fontSize: 25,
+    lineHeight: 31
+  },
+  av3bInputGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap"
+  },
+  av3bField: {
+    flexGrow: 1,
+    flexBasis: 260,
+    minWidth: 0
+  },
+  av3bSectorRowNarrow: {
+    flexDirection: "column",
+    alignItems: "stretch"
+  }
 });

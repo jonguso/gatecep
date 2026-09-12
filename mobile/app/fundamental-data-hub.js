@@ -7,7 +7,8 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  View
+  View,
+  useWindowDimensions
 } from "react-native";
 
 import {
@@ -30,7 +31,9 @@ import {
  * ============================================================
  */
 
+// PC-030M20AV3F RESPONSIVE CALIBRATION
 export default function FundamentalDataHubScreen() {
+  const { width: windowWidth } = useWindowDimensions();
   const routeCount =
     useMemo(
       () =>
@@ -52,9 +55,12 @@ export default function FundamentalDataHubScreen() {
       style={
         styles.screen
       }
-      contentContainerStyle={
-        styles.content
-      }
+      contentContainerStyle={[
+        styles.content,
+        windowWidth >= 720 && { width: "100%", maxWidth: 960, alignSelf: "center" },
+        windowWidth < 720 && { paddingHorizontal: 16, paddingTop: 32, paddingBottom: 128 },
+        windowWidth < 480 && { paddingHorizontal: 12, paddingTop: 24 }
+      ]}
     >
       <Text
         style={
@@ -65,9 +71,11 @@ export default function FundamentalDataHubScreen() {
       </Text>
 
       <Text
-        style={
-          styles.title
-        }
+        style={[
+          styles.title,
+          windowWidth < 720 && { fontSize: 28, lineHeight: 34 },
+          windowWidth < 480 && { fontSize: 25, lineHeight: 31 }
+        ]}
       >
         Fundamental Data Hub
       </Text>
@@ -83,9 +91,10 @@ export default function FundamentalDataHubScreen() {
       </Text>
 
       <View
-        style={
-          styles.hero
-        }
+        style={[
+          styles.hero,
+          windowWidth < 520 && { flexDirection: "column", alignItems: "stretch" }
+        ]}
       >
         <View
           style={
@@ -200,9 +209,10 @@ export default function FundamentalDataHubScreen() {
                     key={
                       item.id
                     }
-                    style={
-                      styles.routeCard
-                    }
+                    style={[
+                      styles.routeCard,
+                      windowWidth < 600 && { width: "100%", minWidth: 0 }
+                    ]}
                     onPress={() =>
                       router.push(
                         item.route

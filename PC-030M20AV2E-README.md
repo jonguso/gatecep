@@ -1,0 +1,1 @@
+AV2E inserts a projected-portfolio stage between diversified recovery allocation and Broker Action Plan. It models the whole basket against canonical REAL holdings, shows current/projected sector weights, scenario funding and residual funding before detailed charges, and preserves read-only advisory integrity.

@@ -1,0 +1,179 @@
+{
+  "generatedAt": "2026-09-12T09:40:14.825Z",
+  "discoveryOnly": true,
+  "rows": [
+    {
+      "route": "execution-audit",
+      "file": "app/execution-audit.js",
+      "status": "ACTIVE_REFERENCED",
+      "refs": [
+        "app/execution-bridge.js"
+      ],
+      "responsive": true
+    },
+    {
+      "route": "execution-bridge",
+      "file": "app/execution-bridge.js",
+      "status": "UNREFERENCED_LEGACY_CANDIDATE",
+      "refs": [],
+      "responsive": true
+    },
+    {
+      "route": "execution-wizard",
+      "file": "app/execution-wizard.js",
+      "status": "UNREFERENCED_LEGACY_CANDIDATE",
+      "refs": [],
+      "responsive": false
+    },
+    {
+      "route": "import-portfolio",
+      "file": "app/import-portfolio.js",
+      "status": "ACTIVE_REFERENCED",
+      "refs": [
+        "app/broker-sync.js",
+        "app/broker-upload.js",
+        "app/brokers.js",
+        "app/existing-portal.js",
+        "app/portfolio-sync-center.js"
+      ],
+      "responsive": false
+    },
+    {
+      "route": "link-broker-account",
+      "file": "app/link-broker-account.js",
+      "status": "ACTIVE_REFERENCED",
+      "refs": [
+        "app/broker-marketplace.js"
+      ],
+      "responsive": false
+    },
+    {
+      "route": "manual-portfolio-entry",
+      "file": "app/manual-portfolio-entry.js",
+      "status": "ACTIVE_REFERENCED",
+      "refs": [
+        "app/brokers.js",
+        "app/menu.js",
+        "app/portfolio-sync-center.js"
+      ],
+      "responsive": false
+    },
+    {
+      "route": "order-handoff",
+      "file": "app/order-handoff.js",
+      "status": "UNREFERENCED_LEGACY_CANDIDATE",
+      "refs": [],
+      "responsive": false
+    },
+    {
+      "route": "orders-review",
+      "file": "app/orders-review.js",
+      "status": "ACTIVE_REFERENCED",
+      "refs": [
+        "app/basket-execution.js",
+        "app/broker-routing.js",
+        "app/execution-bridge.js",
+        "app/execution-wizard.js",
+        "app/orders.js",
+        "app/queue-manager.js",
+        "app/trade-basket.js"
+      ],
+      "responsive": false
+    },
+    {
+      "route": "orders",
+      "file": "app/orders.js",
+      "status": "ACTIVE_REFERENCED",
+      "refs": [
+        "app/basket-execution.js",
+        "app/broker-routing.js",
+        "app/execution-audit.js",
+        "app/execution-bridge.js",
+        "app/execution-wizard.js",
+        "app/queue-manager.js",
+        "app/trade-basket.js"
+      ],
+      "responsive": false
+    },
+    {
+      "route": "reconciliation-center",
+      "file": "app/reconciliation-center.js",
+      "status": "UNREFERENCED_LEGACY_CANDIDATE",
+      "refs": [],
+      "responsive": false
+    },
+    {
+      "route": "reconciliation-conversation",
+      "file": "app/reconciliation-conversation.js",
+      "status": "ACTIVE_REFERENCED",
+      "refs": [
+        "src/features/wealth-journey/components/CoachGReconciliationCard.js"
+      ],
+      "responsive": false
+    },
+    {
+      "route": "review-portfolio-import",
+      "file": "app/review-portfolio-import.js",
+      "status": "ACTIVE_REFERENCED",
+      "refs": [
+        "app/import-portfolio.js"
+      ],
+      "responsive": false
+    },
+    {
+      "route": "trade-basket",
+      "file": "app/trade-basket.js",
+      "status": "ACTIVE_REFERENCED",
+      "refs": [
+        "app/orders-review.js",
+        "app/orders.js",
+        "app/queue-manager.js"
+      ],
+      "responsive": false
+    },
+    {
+      "route": "trade",
+      "file": "app/trade.js",
+      "status": "ACTIVE_REFERENCED",
+      "refs": [
+        "app/(tabs)/trading.js",
+        "app/basket-execution.js",
+        "app/coach-insights.js",
+        "app/first-trade.js",
+        "app/investor-alert-review.js",
+        "app/investor-home.js",
+        "app/live-dashboard.js",
+        "app/order-book.js",
+        "app/orders-review.js",
+        "app/orders.js",
+        "app/queue-manager.js",
+        "src/components/coach/FloatingCoachG.js"
+      ],
+      "responsive": false
+    },
+    {
+      "route": "transaction-import",
+      "file": "app/transaction-import.js",
+      "status": "ACTIVE_REFERENCED",
+      "refs": [
+        "app/broker-upload.js",
+        "app/brokers.js"
+      ],
+      "responsive": false
+    },
+    {
+      "route": "storage-debug",
+      "file": "app/storage-debug.js",
+      "status": "UNREFERENCED_LEGACY_CANDIDATE",
+      "refs": [],
+      "responsive": false
+    },
+    {
+      "route": "version-center",
+      "file": "app/version-center.js",
+      "status": "UNREFERENCED_LEGACY_CANDIDATE",
+      "refs": [],
+      "responsive": false
+    }
+  ]
+}

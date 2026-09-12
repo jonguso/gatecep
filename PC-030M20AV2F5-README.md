@@ -1,0 +1,1 @@
+PC-030M20AV2F5 fixes a value-contract mismatch: recovery handoff used proposedAmount (allocation budget) as order.amount, and the Broker Action Plan preferred amount over gross. Now unavailable-fee orders use gross consideration; verified-fee orders may use verified estimatedTotalCost. No fee rate is invented.\n

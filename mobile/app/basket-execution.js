@@ -6,7 +6,8 @@ import {
   Share,
   StyleSheet,
   Text,
-  View
+  View,
+  useWindowDimensions
 } from "react-native";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 
@@ -20,7 +21,9 @@ import {
 import { ORDER_STATUS } from "../src/trade/orderLifecycle";
 import { buildBrokerActionPlanText, clearBrokerActionPlan, loadBrokerActionPlan } from "../src/services/trade/brokerActionPlanStore";
 
+// PC-030M20AV3C RESPONSIVE CALIBRATION
 export default function BasketExecution() {
+  const { width: av3cWidth } = useWindowDimensions();
   const { mode } = useLocalSearchParams();
   const brokerPlanMode = String(mode || "").toUpperCase() === "BROKER_PLAN";
   const [execution, setExecution] = useState(null);
@@ -91,8 +94,8 @@ export default function BasketExecution() {
 
   if (!execution || !execution.orders?.length) {
     return (
-      <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-        <Text style={styles.title}>{brokerPlanMode ? "Broker Action Plan Review" : "Practice Basket Simulation"}</Text>
+      <ScrollView style={styles.screen} contentContainerStyle={[styles.content, av3cWidth >= 720 && { width: "100%", maxWidth: 960, alignSelf: "center" }, av3cWidth < 720 && { paddingHorizontal: 16, paddingBottom: 128 }, av3cWidth < 480 && { paddingHorizontal: 12 }]}>
+        <Text style={[styles.title, av3cWidth < 720 && { fontSize: 28, lineHeight: 34 }, av3cWidth < 480 && { fontSize: 25, lineHeight: 31 }]}>{brokerPlanMode ? "Broker Action Plan Review" : "Practice Basket Simulation"}</Text>
         <Text style={styles.subtitle}>{brokerPlanMode ? "No advisory instructions have been saved yet." : "No active basket execution found."}</Text>
 
         <Pressable
@@ -113,9 +116,9 @@ export default function BasketExecution() {
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <View style={styles.headerRow}>
-        <Text style={styles.title}>{brokerPlanMode ? "Broker Action Plan Review" : "Practice Basket Simulation"}</Text>
+    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, av3cWidth >= 720 && { width: "100%", maxWidth: 960, alignSelf: "center" }, av3cWidth < 720 && { paddingHorizontal: 16, paddingBottom: 128 }, av3cWidth < 480 && { paddingHorizontal: 12 }]}>
+      <View style={[styles.headerRow, av3cWidth < 600 && { flexDirection: "column", alignItems: "stretch" }]}>
+        <Text style={[styles.title, av3cWidth < 720 && { fontSize: 28, lineHeight: 34 }, av3cWidth < 480 && { fontSize: 25, lineHeight: 31 }]}>{brokerPlanMode ? "Broker Action Plan Review" : "Practice Basket Simulation"}</Text>
 
         <Pressable
           style={styles.dashboardButton}
@@ -135,11 +138,30 @@ export default function BasketExecution() {
         <Text style={styles.summaryLabel}>{brokerPlanMode ? "Proposed Broker Instructions" : "Active Execution Orders"}</Text>
         <Text style={styles.summaryValue}>{activeOrders.length}</Text>
         <Text style={styles.body}>
-          Status: {execution.status} • {brokerPlanMode ? "Indicative" : "Active"} Value KES {money(totalAmount)}
+          Status: {execution.status} • {brokerPlanMode ? "Planned Gross Purchases" : "Active Value"} KES {money(brokerPlanMode ? (execution?.costSummary?.plannedGrossPurchases ?? totalAmount) : totalAmount)}
         </Text>
+        {brokerPlanMode && execution?.costSummary?.allChargesVerified ? (
+          <>
+            <Text style={styles.body}>Verified Estimated Charges: KES {money(execution.costSummary.verifiedEstimatedCharges)}</Text>
+            <Text style={styles.body}>Estimated Total Basket Cost: KES {money(execution.costSummary.estimatedTotalBasketCost)}</Text>
+          </>
+        ) : null}
         <Text style={styles.body}>
           {brokerPlanMode ? "Execution confirmations: 0 — import required" : `Closed Orders: ${closedOrders.length}`}
         </Text>
+        {brokerPlanMode && execution?.scenarioFunding?.amount ? (
+          <Text style={styles.body}>
+            Scenario Recovery Funding: KES {money(execution.scenarioFunding.amount)}
+          </Text>
+        ) : null}
+        {brokerPlanMode && execution?.costSummary?.allChargesVerified && execution?.costSummary?.scenarioFundingRemainingAfterCharges !== null && execution?.costSummary?.scenarioFundingRemainingAfterCharges !== undefined ? (
+          <Text style={styles.body}>
+            Estimated Funding Remaining: KES {money(execution.costSummary.scenarioFundingRemainingAfterCharges)}
+          </Text>
+        ) : null}
+        {brokerPlanMode && execution?.goalContext?.goalName ? (
+          <Text style={styles.body}>Goal: {execution.goalContext.goalName}</Text>
+        ) : null}
       </View>
 
       <View style={styles.card}>
@@ -170,7 +192,7 @@ export default function BasketExecution() {
           </>
         ) : (
           activeOrders.map((order) => (
-            <View key={order.id} style={styles.orderRow}>
+            <View key={order.id} style={[styles.orderRow, av3cWidth < 520 && { flexDirection: "column", alignItems: "stretch" }]}>
               <View style={styles.logoCircle}>
                 <Text style={styles.logoText}>
                   {String(order.symbol || "?").slice(0, 2)}
@@ -180,15 +202,34 @@ export default function BasketExecution() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.symbol}>{order.symbol}</Text>
 
-                <Text style={styles.bodySmall}>
-                  {order.side || "BUY"} • Qty {order.quantity} • KES{" "}
-                  {money(order.amount || order.gross)}
-                </Text>
-
-                <Text style={styles.reason}>
-                  Price KES {money(order.price)} •{" "}
-                  {order.brokerName || "Broker not assigned"}
-                </Text>
+                {brokerPlanMode ? (
+                  <>
+                    <Text style={styles.bodySmall}>
+                      {order.side || "BUY"} • Qty {Number(order.quantity || 0).toLocaleString()} @ KES {money(order.price)}
+                    </Text>
+                    <Text style={styles.reason}>Gross purchase: KES {money(order.gross)}</Text>
+                    {order?.feeEvidenceAvailable === true && order?.estimatedCharges !== null && order?.estimatedCharges !== undefined && order?.estimatedTotalCost !== null && order?.estimatedTotalCost !== undefined ? (
+                      <>
+                        <Text style={styles.reason}>Verified estimated charges: KES {money(order.estimatedCharges)}</Text>
+                        <Text style={styles.reason}>Estimated total cost: KES {money(order.estimatedTotalCost)}</Text>
+                      </>
+                    ) : (
+                      <Text style={styles.reason}>Verified estimated charges: Unavailable</Text>
+                    )}
+                    <Text style={styles.reason}>Broker: {order.brokerName || "Not assigned"}</Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.bodySmall}>
+                      {order.side || "BUY"} • Qty {order.quantity} • KES{" "}
+                      {money(order.amount || order.gross)}
+                    </Text>
+                    <Text style={styles.reason}>
+                      Price KES {money(order.price)} •{" "}
+                      {order.brokerName || "Broker not assigned"}
+                    </Text>
+                  </>
+                )}
 
                 <Text style={styles.reason}>
                   {order.message || "Awaiting lifecycle action"}
@@ -209,6 +250,27 @@ export default function BasketExecution() {
         <View style={styles.safeguardCard}>
           <Text style={styles.cardTitle}>Import-Gated Record</Text>
           <Text style={styles.body}>This is an advisory handoff, not an order, fill or execution confirmation. It cannot update REAL or Practice holdings, cash, cost basis, profit/loss or trade history. Only confirmed broker activity imported through reconciliation may update the REAL portfolio.</Text>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>Next Step</Text>
+          <Text style={styles.body}>
+            Use or share this plan with your broker. After the broker has actually executed the trades, import and verify the broker activity before GateCEP updates any REAL portfolio record.
+          </Text>
+
+          <Pressable
+            style={styles.primary}
+            onPress={() => router.push("/portfolio-sync-center")}
+          >
+            <Text style={styles.primaryText}>After broker execution — Import & Verify</Text>
+          </Pressable>
+
+          <Pressable
+            style={styles.secondary}
+            onPress={() => router.replace("/wealth-journey")}
+          >
+            <Text style={styles.secondaryText}>Return to Wealth Journey</Text>
+          </Pressable>
         </View>
         <Pressable style={styles.primary} onPress={shareBrokerPlan}><Text style={styles.primaryText}>Share Broker Action Report</Text></Pressable>
         <Pressable style={styles.secondary} onPress={() => router.back()}><Text style={styles.secondaryText}>Add or Revise an Instruction</Text></Pressable>

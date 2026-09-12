@@ -63,6 +63,7 @@ const BROKERS = [
   }
 ];
 
+// PC-030M20AV3M RESPONSIVE CALIBRATION
 export default function BrokerRouting() {
   const [execution, setExecution] = useState(null);
 
@@ -437,9 +438,10 @@ function money(value) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#020617" },
-  content: { padding: 22, paddingTop: 70, paddingBottom: 110 },
+  content: { width: "100%", maxWidth: 960, alignSelf: "center", padding: 22, paddingTop: 70, paddingBottom: 128 },
   headerRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     alignItems: "center",
     gap: 12
@@ -468,6 +470,8 @@ const styles = StyleSheet.create({
   },
   metric: {
     width: "47%",
+      flexGrow: 1,
+      minWidth: 140,
     backgroundColor: "#020617",
     borderColor: "#334155",
     borderWidth: 1,
@@ -554,6 +558,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 14,
     flexDirection: "row",
+    flexWrap: "wrap",
     alignItems: "center",
     gap: 12
   },

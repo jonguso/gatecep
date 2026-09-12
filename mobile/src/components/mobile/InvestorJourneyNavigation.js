@@ -6,11 +6,9 @@ export const INVESTOR_JOURNEY = {
   coach: { step: 1, title: "Coach Insights", previous: "/(tabs)/dashboard", next: "/unified-portfolio-analytics" },
   analysis: { step: 2, title: "Portfolio Analysis", previous: "/(tabs)/coach", next: "/performance" },
   performance: { step: 3, title: "Performance", previous: "/unified-portfolio-analytics", next: "/portfolio-risk" },
-  risk: { step: 4, title: "Portfolio Risk", previous: "/performance", next: "/holding-details" },
-  holdings: { step: 5, title: "Holdings", previous: "/portfolio-risk", next: "/wealth-journey" },
-  goals: { step: 6, title: "Goals & Wealth Journey", previous: "/holding-details", next: "/goal-scenario-planner" },
-  scenario: { step: 7, title: "Goal Recovery Simulation", previous: "/wealth-journey", next: "/portfolio-rebalancing" },
-  recommendations: { step: 8, title: "Coach G Recommendations", previous: "/goal-scenario-planner", next: "/(tabs)/dashboard" }
+  risk: { step: 4, title: "Portfolio Risk", previous: "/performance", next: "/wealth-journey" },
+  goals: { step: 5, title: "Goals & Wealth Journey", previous: "/portfolio-risk", next: "/goal-scenario-planner" },
+  scenario: { step: 6, title: "Goal Recovery Simulation", previous: "/wealth-journey", next: "/(tabs)/dashboard" }
 };
 
 export default function InvestorJourneyNavigation({
@@ -28,7 +26,7 @@ export default function InvestorJourneyNavigation({
 
   return (
     <View style={styles.container} testID={`investor-journey-${stage}`}>
-      <Text style={styles.progress}>INVESTOR JOURNEY • {current.step} OF 8</Text>
+      <Text style={styles.progress}>INVESTOR JOURNEY • {current.step} OF {Object.keys(INVESTOR_JOURNEY).length}</Text>
       <Text style={styles.title}>{current.title}</Text>
       <View style={styles.utilityRow}>
         <Pressable style={styles.utilityButton} onPress={() => router.replace(current.previous)}>

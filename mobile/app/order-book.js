@@ -4,13 +4,16 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  View
+  View,
+  useWindowDimensions
 } from "react-native";
 import { router } from "expo-router";
 
 import { userGetItem } from "../src/auth/userStorage";
 
+// PC-030M20AV3D RESPONSIVE CALIBRATION
 export default function OrderBook() {
+  const { width: av3dWidth } = useWindowDimensions();
   const [trades, setTrades] = useState([]);
 
   useEffect(() => {
@@ -32,9 +35,18 @@ export default function OrderBook() {
   }, [trades]);
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <View style={styles.headerRow}>
-        <Text style={styles.title}>Practice Order Book</Text>
+    <ScrollView style={styles.screen} contentContainerStyle={[
+      styles.content,
+      av3dWidth >= 720 && { width: "100%", maxWidth: 960, alignSelf: "center" },
+      av3dWidth < 720 && { paddingHorizontal: 16, paddingTop: 32, paddingBottom: 128 },
+      av3dWidth < 480 && { paddingHorizontal: 12, paddingTop: 24 }
+    ]}>
+      <View style={[styles.headerRow, av3dWidth < 600 && { flexDirection: "column", alignItems: "stretch" }]}>
+        <Text style={[
+      styles.title,
+      av3dWidth < 720 && { fontSize: 28, lineHeight: 34 },
+      av3dWidth < 480 && { fontSize: 25, lineHeight: 31 }
+    ]}>Practice Order Book</Text>
 
         <Pressable
           style={styles.dashboardButton}
@@ -64,7 +76,7 @@ export default function OrderBook() {
           trades.map((order, index) => (
             <View
               key={`${order.symbol}-${order.tradedAt}-${index}`}
-              style={styles.orderRow}
+              style={[styles.orderRow, av3dWidth < 520 && { flexDirection: "column" }]}
             >
               <View style={{ flex: 1 }}>
                 <Text style={styles.symbol}>
@@ -78,7 +90,7 @@ export default function OrderBook() {
                 <Text style={styles.tiny}>{formatDate(order.tradedAt)}</Text>
               </View>
 
-              <View style={styles.right}>
+              <View style={[styles.right, av3dWidth < 520 && { alignItems: "flex-start", minWidth: 0 }]}>
                 <Text style={order.side === "BUY" ? styles.buy : styles.sell}>
                   KES {money(order.gross)}
                 </Text>

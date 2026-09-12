@@ -1,0 +1,1694 @@
+{
+  "summary": {
+    "routeFiles": 125,
+    "investor": 107,
+    "calibrated": 54,
+    "legacy": 1,
+    "auth": 17,
+    "residual": 40
+  },
+  "residual": [
+    {
+      "r": "app/alerts.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/analysis-ready.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/behavior-analytics.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/corporate-actions.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/dividend-center.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/dna-update-review.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/execution-audit.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/execution-bridge.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/execution-wizard.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/existing-portal.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/goal-details-edit.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/goal-recovery-options.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/import-portfolio.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/index.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/investor-alert-review.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/investor-home.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/investor-profile-edit.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/investor-timeline.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/link-broker-account.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/live-dashboard.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/manual-portfolio-entry.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/monthly-review.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/my-profile.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/order-handoff.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/orders-review.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/orders.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/portfolio-activity.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/portfolio-simulator.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/progress.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/queue-manager.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/recommendation-history.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/reconciliation-center.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/reconciliation-conversation.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/review-portfolio-import.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/security/[symbol].js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/storage-debug.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/trade-basket.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/trade.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/transaction-import.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/version-center.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    }
+  ],
+  "auth": [
+    {
+      "r": "app/demo.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": true,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/first-trade.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": true,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/login.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": true,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/new-investor.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": true,
+      "legacy": false,
+      "setupAuth": true,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/onboarding/broker-question.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": true,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/onboarding/connect-broker.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": true,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/onboarding/experience.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": true,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/onboarding/goal.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": true,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/onboarding/horizon.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": true,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/onboarding/name.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": true,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/onboarding/recommend-broker.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": true,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/onboarding/risk.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": true,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/onboarding/smart-portfolio.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": true,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/onboarding/upload-portfolio.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": true,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/onboarding/welcome.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": true,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/register.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": true,
+      "contained": false,
+      "bottomSafe": false
+    },
+    {
+      "r": "app/signup.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": true,
+      "contained": false,
+      "bottomSafe": false
+    }
+  ],
+  "legacy": [
+    {
+      "r": "app/watchlist-old.js",
+      "markers": [],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": true,
+      "setupAuth": false,
+      "contained": false,
+      "bottomSafe": false
+    }
+  ],
+  "calibrated": [
+    {
+      "r": "app/(tabs)/calendar.js",
+      "markers": [
+        "PC-030M20AV3J RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/(tabs)/coach.js",
+      "markers": [
+        "PC-030M20AV3B RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/(tabs)/funds.js",
+      "markers": [
+        "PC-030M20AV3J RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/(tabs)/markets.js",
+      "markers": [
+        "PC-030M20AV3F RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/(tabs)/news.js",
+      "markers": [
+        "PC-030M20AV3J RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/(tabs)/trading.js",
+      "markers": [
+        "PC-030M20AV3D RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/basket-execution.js",
+      "markers": [
+        "PC-030M20AV3C RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/broker-account-center.js",
+      "markers": [
+        "PC-030M20AV3K RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/broker-accounts.js",
+      "markers": [
+        "PC-030M20AV3K RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/broker-marketplace.js",
+      "markers": [
+        "PC-030M20AV3I RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/broker-portfolio-import.js",
+      "markers": [
+        "PC-030M20AV3M RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/broker-profile.js",
+      "markers": [
+        "PC-030M20AV3K RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/broker-reconciliation-actions.js",
+      "markers": [
+        "PC-030M20AV3L RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/broker-reconciliation-case.js",
+      "markers": [
+        "PC-030M20AV3L RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": true,
+      "usesSticky": true,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/broker-reconciliation-cases.js",
+      "markers": [
+        "PC-030M20AV3L RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/broker-reconciliation-insight.js",
+      "markers": [
+        "PC-030M20AV3L RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": true,
+      "usesSticky": true,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/broker-reconciliation.js",
+      "markers": [
+        "PC-030M20AV3L RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": true,
+      "usesSticky": true,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/broker-resolution-ledger.js",
+      "markers": [
+        "PC-030M20AV3L RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": true,
+      "usesSticky": true,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/broker-resolution.js",
+      "markers": [
+        "PC-030M20AV3L RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": true,
+      "usesSticky": true,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/broker-routing.js",
+      "markers": [
+        "PC-030M20AV3M RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/broker-status.js",
+      "markers": [
+        "PC-030M20AV3K RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/broker-sync-history.js",
+      "markers": [
+        "PC-030M20AV3L RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": true,
+      "usesSticky": true,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/broker-sync.js",
+      "markers": [
+        "PC-030M20AV3M RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/broker-upload.js",
+      "markers": [
+        "PC-030M20AV3K RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/brokers.js",
+      "markers": [
+        "PC-030M20AV3K RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/coach-insights.js",
+      "markers": [
+        "PC-030M20AV3B RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/filing-extraction.js",
+      "markers": [
+        "PC-030M20AV3G RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/filing-import-bridge.js",
+      "markers": [
+        "PC-030M20AV3G RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/filing-submission-history.js",
+      "markers": [
+        "PC-030M20AV3G RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/fundamental-data-hub.js",
+      "markers": [
+        "PC-030M20AV3F RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/fundamental-import.js",
+      "markers": [
+        "PC-030M20AV3G RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/fundamental-operations-center.js",
+      "markers": [
+        "PC-030M20AV3G RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/goal-recovery-allocation.js",
+      "markers": [
+        "PC-030M20AV3C RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/goal-recovery-choice.js",
+      "markers": [
+        "PC-030M20AV3C RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/goal-recovery-preview.js",
+      "markers": [
+        "PC-030M20AV3C RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/goal-scenario-planner.js",
+      "markers": [
+        "PC-030M20AV3B RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/holding-details.js",
+      "markers": [
+        "PC-030M20AV3E RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/intelligence-center.js",
+      "markers": [
+        "PC-030M20AV3F RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/investment-intelligence.js",
+      "markers": [
+        "PC-030M20AV3I RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/market-price-import.js",
+      "markers": [
+        "PC-030M20AV3I RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": true,
+      "usesSticky": true,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/multi-period-filing-extraction.js",
+      "markers": [
+        "PC-030M20AV3H RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/order-book.js",
+      "markers": [
+        "PC-030M20AV3D RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/performance.js",
+      "markers": [
+        "PC-030M20AV3B RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/portfolio-rebalancing.js",
+      "markers": [
+        "PC-030M20AV3E RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/portfolio-risk.js",
+      "markers": [
+        "PC-030M20AV3E RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/portfolio-sync-center.js",
+      "markers": [
+        "PC-030M20AV3D RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": true,
+      "usesSticky": true,
+      "max960": false,
+      "bottom128": false,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/research-valuation.js",
+      "markers": [
+        "PC-030M20AV3F RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/trade-history.js",
+      "markers": [
+        "PC-030M20AV3D RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/transactions-upload.js",
+      "markers": [
+        "PC-030M20AV3D RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/transactions.js",
+      "markers": [
+        "PC-030M20AV3D RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/unified-portfolio-analytics.js",
+      "markers": [
+        "PC-030M20AV3E RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/verified-filings.js",
+      "markers": [
+        "PC-030M20AV3F RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/watchlist.js",
+      "markers": [
+        "PC-030M20AV3F RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    },
+    {
+      "r": "app/wealth-journey.js",
+      "markers": [
+        "PC-030M20AV3C RESPONSIVE CALIBRATION"
+      ],
+      "usesMobileScreen": false,
+      "usesSticky": false,
+      "max960": true,
+      "bottom128": true,
+      "contentWide": false,
+      "reexport": false,
+      "legacy": false,
+      "setupAuth": false,
+      "contained": true,
+      "bottomSafe": true
+    }
+  ]
+}

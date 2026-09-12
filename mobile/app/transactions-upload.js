@@ -6,7 +6,8 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  View
+  View,
+  useWindowDimensions
 } from "react-native";
 import * as DocumentPicker from "expo-document-picker";
 import * as XLSX from "xlsx";
@@ -26,7 +27,9 @@ import { partitionBrokerExecutionEvidence } from "../src/features/broker-sync/br
 import { ContainedPanel } from "../src/components/mobile/MobileUI";
 import { extractBrokerPdf } from "../src/services/brokers/brokerPdfExtractionApi";
 
+// PC-030M20AV3D RESPONSIVE CALIBRATION
 export default function TransactionsUpload() {
+  const { width: av3dWidth } = useWindowDimensions();
   const [selectedFile, setSelectedFile] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [status, setStatus] = useState("");
@@ -339,9 +342,18 @@ export default function TransactionsUpload() {
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <View style={styles.headerRow}>
-        <Text style={styles.title}>Broker Execution Upload</Text>
+    <ScrollView style={styles.screen} contentContainerStyle={[
+      styles.content,
+      av3dWidth >= 720 && { width: "100%", maxWidth: 960, alignSelf: "center" },
+      av3dWidth < 720 && { paddingHorizontal: 16, paddingTop: 32, paddingBottom: 128 },
+      av3dWidth < 480 && { paddingHorizontal: 12, paddingTop: 24 }
+    ]}>
+      <View style={[styles.headerRow, av3dWidth < 600 && { flexDirection: "column", alignItems: "stretch" }]}>
+        <Text style={[
+      styles.title,
+      av3dWidth < 720 && { fontSize: 28, lineHeight: 34 },
+      av3dWidth < 480 && { fontSize: 25, lineHeight: 31 }
+    ]}>Broker Execution Upload</Text>
 
         <Pressable
           style={styles.dashboardButton}
@@ -384,7 +396,7 @@ export default function TransactionsUpload() {
           null
         ) : (
           transactions.slice(0, 10).map((tx) => (
-            <View key={tx.id} style={styles.row}>
+            <View key={tx.id} style={[styles.row, av3dWidth < 520 && { flexDirection: "column" }]}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.symbol}>{tx.symbol}</Text>
                 <Text style={styles.small}>
@@ -395,7 +407,7 @@ export default function TransactionsUpload() {
                 </Text>
               </View>
 
-              <View style={{ alignItems: "flex-end" }}>
+              <View style={{ alignItems: av3dWidth < 520 ? "flex-start" : "flex-end" }}>
                 <Text style={styles.value}>KES {money(tx.value)}</Text>
                 <Text style={styles.small}>@ {money(tx.price)}</Text>
               </View>

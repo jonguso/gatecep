@@ -163,13 +163,13 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     padding: 24
   },
-  content: {
+  content: { /* PC-030M20AV3U RESPONSIVE CALIBRATION */
     width: "100%",
-    maxWidth: 680,
+    maxWidth: 960,
     alignSelf: "center",
     padding: 20,
     paddingTop: 70,
-    paddingBottom: 100
+    paddingBottom: 128
   },
   eyebrow: { color: "#22d3ee", fontWeight: "900", fontSize: 12 },
   title: { color: "white", fontSize: 30, fontWeight: "900", marginTop: 8 },

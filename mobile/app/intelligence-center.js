@@ -5,7 +5,8 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  View
+  View,
+  useWindowDimensions
 } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 import { getCurrentSession } from "../src/auth/authStore";
@@ -16,7 +17,9 @@ import {
 } from "../src/features/intelligence/api/intelligenceApi";
 import { loadAlerts, saveAlerts } from "../src/services/alerts/alertStore";
 
+// PC-030M20AV3F RESPONSIVE CALIBRATION
 export default function IntelligenceCenter() {
+  const { width: windowWidth } = useWindowDimensions();
   const [loading, setLoading] = useState(true);
   const [coach, setCoach] = useState(null);
   const [notifications, setNotifications] = useState([]);
@@ -107,8 +110,13 @@ async function handleReadAll() {
   const dividends = coach?.dividends;
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <View style={styles.topBar}>
+    <ScrollView style={styles.screen} contentContainerStyle={[
+      styles.content,
+      windowWidth >= 720 && { width: "100%", maxWidth: 960, alignSelf: "center" },
+      windowWidth < 720 && { paddingHorizontal: 16, paddingTop: 24, paddingBottom: 128 },
+      windowWidth < 480 && { paddingHorizontal: 12 }
+    ]}>
+      <View style={[styles.topBar, windowWidth < 420 && { flexWrap: "wrap", gap: 10 }]}>
         <Pressable style={styles.icon} onPress={() => router.back()}>
           <Text style={styles.iconText}>‹</Text>
         </Pressable>
@@ -153,7 +161,7 @@ async function handleReadAll() {
 
     <Text style={styles.small}>Projected Annual Dividend</Text>
 
-    <View style={styles.summaryGrid}>
+    <View style={[styles.summaryGrid, windowWidth < 480 && { flexWrap: "wrap" }]}>
       <MiniStat
         label="Monthly"
         value={`KES ${money(dividends.projectedMonthlyDividend)}`}
@@ -164,7 +172,7 @@ async function handleReadAll() {
       />
     </View>
 
-    <View style={styles.summaryGrid}>
+    <View style={[styles.summaryGrid, windowWidth < 480 && { flexWrap: "wrap" }]}>
       <MiniStat
         label="Best"
         value={dividends.bestDividendHolding?.symbol || "-"}

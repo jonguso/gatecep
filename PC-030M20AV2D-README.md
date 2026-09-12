@@ -1,0 +1,1 @@
+PC-030M20AV2D adds the missing completion path to the existing Broker Action Plan Review. After real broker execution, the investor can continue to the canonical /portfolio-sync-center to import/verify valuation, cash, and transaction history, or return to /wealth-journey without clearing the saved action plan. No new screen is added and no execution boundary is weakened.

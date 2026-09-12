@@ -11,7 +11,8 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  View
+  View,
+  useWindowDimensions
 } from "react-native";
 
 import {
@@ -64,7 +65,9 @@ const DETAIL_TABS = [
   "RISKS"
 ];
 
+// PC-030M20AV3F RESPONSIVE CALIBRATION
 export default function ResearchValuationScreen() {
+  const { width: windowWidth } = useWindowDimensions();
   const [
     loading,
     setLoading
@@ -309,9 +312,12 @@ export default function ResearchValuationScreen() {
       style={
         styles.screen
       }
-      contentContainerStyle={
-        styles.content
-      }
+      contentContainerStyle={[
+        styles.content,
+        windowWidth >= 720 && { width: "100%", maxWidth: 960, alignSelf: "center" },
+        windowWidth < 720 && { paddingHorizontal: 16, paddingTop: 32, paddingBottom: 128 },
+        windowWidth < 480 && { paddingHorizontal: 12, paddingTop: 24 }
+      ]}
     >
       <Text
         style={
@@ -322,9 +328,11 @@ export default function ResearchValuationScreen() {
       </Text>
 
       <Text
-        style={
-          styles.title
-        }
+        style={[
+          styles.title,
+          windowWidth < 720 && { fontSize: 28, lineHeight: 34 },
+          windowWidth < 480 && { fontSize: 25, lineHeight: 31 }
+        ]}
       >
         Research & Valuation
       </Text>
@@ -356,9 +364,10 @@ export default function ResearchValuationScreen() {
       ) : null}
 
       <View
-        style={
-          styles.hero
-        }
+        style={[
+          styles.hero,
+          windowWidth < 520 && { flexDirection: "column", alignItems: "stretch" }
+        ]}
       >
         <View
           style={

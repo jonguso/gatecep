@@ -58,10 +58,11 @@ const REBALANCE_SECTIONS = [
   { id: "recommendations", title: "Recommendations", description: "Inspect advisory-only rebalance actions and exclusions." }
 ];
 
+// PC-030M20AV3E RESPONSIVE CALIBRATION
 export default function PortfolioRebalancingScreen() {
   const params = useLocalSearchParams();
   const scrollRef = useRef(null);
-  const { height: windowHeight } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const [
     loading,
     setLoading
@@ -356,9 +357,12 @@ export default function PortfolioRebalancingScreen() {
       style={
         styles.screen
       }
-      contentContainerStyle={
-        styles.content
-      }
+      contentContainerStyle={[
+        styles.content,
+        windowWidth >= 720 && { width: "100%", maxWidth: 960, alignSelf: "center" },
+        windowWidth < 720 && { paddingHorizontal: 16, paddingTop: 32, paddingBottom: 128 },
+        windowWidth < 480 && { paddingHorizontal: 12, paddingTop: 24 }
+      ]}
     >
       <Text
         style={
@@ -369,14 +373,16 @@ export default function PortfolioRebalancingScreen() {
       </Text>
 
       <Text
-        style={
-          styles.title
-        }
+        style={[
+          styles.title,
+          windowWidth < 720 && { fontSize: 28, lineHeight: 34 },
+          windowWidth < 480 && { fontSize: 25, lineHeight: 31 }
+        ]}
       >
         Coach G Recommendations
       </Text>
 
-      <View style={styles.headerActions}>
+      <View style={[styles.headerActions, windowWidth < 520 && { flexWrap: "wrap" }]}>
         <Pressable style={styles.parentButton} onPress={() => activeSection ? moveToSection(null) : exitRebalancing()}>
           <Text style={styles.parentButtonText}>{activeSection ? "Overview" : "‹ Back"}</Text>
         </Pressable>
@@ -584,9 +590,10 @@ export default function PortfolioRebalancingScreen() {
         description="A structured assessment of target alignment, diversification, liquidity, and funding readiness."
       >
         <View
-          style={
-            styles.healthHero
-          }
+          style={[
+            styles.healthHero,
+            windowWidth < 520 && { flexDirection: "column", alignItems: "stretch" }
+          ]}
         >
           <View
             style={

@@ -657,16 +657,11 @@ const styles =
         "#020617"
     },
 
-    content: {
-      padding:
+    content: { /* PC-030M20AV3P RESPONSIVE CALIBRATION */ width: "100%", maxWidth: 960, alignSelf: "center", padding:
         22,
 
       paddingTop:
-        70,
-
-      paddingBottom:
-        110
-    },
+        70, paddingBottom: 128 },
 
     center: {
       flex:

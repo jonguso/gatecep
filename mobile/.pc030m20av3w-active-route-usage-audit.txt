@@ -1,0 +1,121 @@
+PC-030M20AV3W — Active Route Usage & Legacy Candidate Audit
+
+This is discovery-only. No application source files are modified.
+
+ACTIVE_REFERENCED — /execution-audit
+  file: app/execution-audit.js
+  responsive: YES
+  referenced from (1):
+    - app/execution-bridge.js
+UNREFERENCED_LEGACY_CANDIDATE — /execution-bridge
+  file: app/execution-bridge.js
+  responsive: YES
+  referenced from: none found by static route scan
+UNREFERENCED_LEGACY_CANDIDATE — /execution-wizard
+  file: app/execution-wizard.js
+  responsive: NO
+  referenced from: none found by static route scan
+ACTIVE_REFERENCED — /import-portfolio
+  file: app/import-portfolio.js
+  responsive: NO
+  referenced from (5):
+    - app/broker-sync.js
+    - app/broker-upload.js
+    - app/brokers.js
+    - app/existing-portal.js
+    - app/portfolio-sync-center.js
+ACTIVE_REFERENCED — /link-broker-account
+  file: app/link-broker-account.js
+  responsive: NO
+  referenced from (1):
+    - app/broker-marketplace.js
+ACTIVE_REFERENCED — /manual-portfolio-entry
+  file: app/manual-portfolio-entry.js
+  responsive: NO
+  referenced from (3):
+    - app/brokers.js
+    - app/menu.js
+    - app/portfolio-sync-center.js
+UNREFERENCED_LEGACY_CANDIDATE — /order-handoff
+  file: app/order-handoff.js
+  responsive: NO
+  referenced from: none found by static route scan
+ACTIVE_REFERENCED — /orders-review
+  file: app/orders-review.js
+  responsive: NO
+  referenced from (7):
+    - app/basket-execution.js
+    - app/broker-routing.js
+    - app/execution-bridge.js
+    - app/execution-wizard.js
+    - app/orders.js
+    - app/queue-manager.js
+    - app/trade-basket.js
+ACTIVE_REFERENCED — /orders
+  file: app/orders.js
+  responsive: NO
+  referenced from (7):
+    - app/basket-execution.js
+    - app/broker-routing.js
+    - app/execution-audit.js
+    - app/execution-bridge.js
+    - app/execution-wizard.js
+    - app/queue-manager.js
+    - app/trade-basket.js
+UNREFERENCED_LEGACY_CANDIDATE — /reconciliation-center
+  file: app/reconciliation-center.js
+  responsive: NO
+  referenced from: none found by static route scan
+ACTIVE_REFERENCED — /reconciliation-conversation
+  file: app/reconciliation-conversation.js
+  responsive: NO
+  referenced from (1):
+    - src/features/wealth-journey/components/CoachGReconciliationCard.js
+ACTIVE_REFERENCED — /review-portfolio-import
+  file: app/review-portfolio-import.js
+  responsive: NO
+  referenced from (1):
+    - app/import-portfolio.js
+ACTIVE_REFERENCED — /trade-basket
+  file: app/trade-basket.js
+  responsive: NO
+  referenced from (3):
+    - app/orders-review.js
+    - app/orders.js
+    - app/queue-manager.js
+ACTIVE_REFERENCED — /trade
+  file: app/trade.js
+  responsive: NO
+  referenced from (12):
+    - app/(tabs)/trading.js
+    - app/basket-execution.js
+    - app/coach-insights.js
+    - app/first-trade.js
+    - app/investor-alert-review.js
+    - app/investor-home.js
+    - app/live-dashboard.js
+    - app/order-book.js
+    - app/orders-review.js
+    - app/orders.js
+    - app/queue-manager.js
+    - src/components/coach/FloatingCoachG.js
+ACTIVE_REFERENCED — /transaction-import
+  file: app/transaction-import.js
+  responsive: NO
+  referenced from (2):
+    - app/broker-upload.js
+    - app/brokers.js
+UNREFERENCED_LEGACY_CANDIDATE — /storage-debug
+  file: app/storage-debug.js
+  responsive: NO
+  referenced from: none found by static route scan
+UNREFERENCED_LEGACY_CANDIDATE — /version-center
+  file: app/version-center.js
+  responsive: NO
+  referenced from: none found by static route scan
+
+Interpretation:
+- ACTIVE_REFERENCED: keep in responsive/UAT scope.
+- UNREFERENCED_LEGACY_CANDIDATE: do not patch automatically; review before retention/removal.
+- Static scan cannot prove a route is unused if it is reached dynamically or externally.
+- No files are deleted by this audit.

@@ -1,0 +1,100 @@
+
+function n(v){const x=Number(v);return Number.isFinite(x)?x:0;}
+function text(v){return String(v??"").trim();}
+function upper(v){return text(v).toUpperCase();}
+function holdingValue(h={}){
+  const direct=n(h?.marketValue??h?.currentValue??h?.value);
+  if(direct>0)return direct;
+  const qty=n(h?.quantity??h?.shares);
+  const px=n(h?.currentPrice??h?.marketPrice??h?.price??h?.lastPrice??h?.averagePrice??h?.averageCost);
+  return qty*px;
+}
+function holdingSector(h={}){return text(h?.sector??h?.industry??"Unknown")||"Unknown";}
+function round(v,d=2){return Number(n(v).toFixed(d));}
+
+export function buildDiversifiedRecoveryPortfolioPreview({
+  holdings=[],allocation=[],recoveryAmount=0,realAvailableCash=0,realNetWorth=null,chargeSummary=null,goalContext={}
+}={}){
+  const currentHoldings=Array.isArray(holdings)?holdings:[];
+  const rows=(Array.isArray(allocation)?allocation:[]).map((row)=>{
+    const price=n(row?.price);
+    const quantity=n(row?.approximateQuantity??row?.quantity);
+    const proposedAmount=n(row?.proposedAmount??row?.amount);
+    const gross=quantity>0&&price>0?quantity*price:proposedAmount;
+    return {
+      symbol:upper(row?.symbol),name:text(row?.name||row?.symbol),sector:text(row?.sector||"Unknown")||"Unknown",
+      proposedAmount,quantity,price,projectedGross:gross,estimatedCharges:row?.estimatedCharges??null,estimatedTotalCost:row?.estimatedTotalCost??null,feeEvidenceAvailable:row?.feeEvidenceAvailable===true,evidenceBeforeDetailedCharges:row?.estimatedCharges==null
+    };
+  }).filter((row)=>row.symbol&&row.projectedGross>0);
+
+  if(rows.length<2)return{available:false,reason:"DIVERSIFIED_ALLOCATION_REQUIRED",advisoryOnly:true};
+
+  const recovery=n(recoveryAmount);
+  const currentHoldingsValue=currentHoldings.reduce((sum,h)=>sum+holdingValue(h),0);
+  const currentCash=n(realAvailableCash);
+  const currentNetWorth=realNetWorth===null||realNetWorth===undefined?currentHoldingsValue+currentCash:n(realNetWorth);
+
+  const currentSectorValues=new Map();
+  for(const h of currentHoldings){
+    const sector=holdingSector(h);
+    currentSectorValues.set(sector,n(currentSectorValues.get(sector))+holdingValue(h));
+  }
+
+  const addedBySector=new Map();
+  for(const row of rows){
+    addedBySector.set(row.sector,n(addedBySector.get(row.sector))+row.projectedGross);
+  }
+
+  const projectedGrossInvested=rows.reduce((sum,row)=>sum+row.projectedGross,0);
+  const verifiedCharges=chargeSummary?.allChargesVerified===true?n(chargeSummary?.estimatedCharges):null;
+  const verifiedTotalCost=chargeSummary?.allChargesVerified===true?n(chargeSummary?.estimatedTotalCost):null;
+  const projectedGrossFundingRemainingBeforeCharges=chargeSummary?.available===true?n(chargeSummary?.grossFundingRemainingBeforeCharges??chargeSummary?.remainingScenarioFunding):Math.max(0,recovery-projectedGrossInvested);
+  const projectedScenarioFundingRemainingAfterCharges=chargeSummary?.allChargesVerified===true?n(chargeSummary?.scenarioFundingRemainingAfterCharges??chargeSummary?.remainingScenarioFunding):null;
+  const projectedScenarioResidualBeforeCharges=projectedGrossFundingRemainingBeforeCharges;
+  const projectedHoldingsValue=currentHoldingsValue+projectedGrossInvested;
+  const projectedScenarioNetWorthBeforeCharges=currentNetWorth+recovery;
+
+  const sectors=new Set([...currentSectorValues.keys(),...addedBySector.keys()]);
+  const sectorProjection=[...sectors].map((sector)=>{
+    const currentValue=n(currentSectorValues.get(sector));
+    const addedValue=n(addedBySector.get(sector));
+    const projectedValue=currentValue+addedValue;
+    return {
+      sector,currentValue:round(currentValue),addedValue:round(addedValue),projectedValue:round(projectedValue),
+      currentWeightPct:currentHoldingsValue>0?round((currentValue/currentHoldingsValue)*100):0,
+      projectedWeightPct:projectedHoldingsValue>0?round((projectedValue/projectedHoldingsValue)*100):0
+    };
+  }).sort((a,b)=>b.projectedWeightPct-a.projectedWeightPct);
+
+  return {
+    available:true,advisoryOnly:true,readOnly:true,scenarioFundingOnly:true,detailedChargesApplied:chargeSummary?.allChargesVerified===true,
+    rows,recoveryAmount:round(recovery),
+    current:{holdingsValue:round(currentHoldingsValue),realAvailableCash:round(currentCash),netWorth:round(currentNetWorth)},
+    projected:{
+      grossInvestedBeforeCharges:round(projectedGrossInvested),
+      scenarioResidualBeforeCharges:round(projectedScenarioResidualBeforeCharges),
+      grossFundingRemainingBeforeCharges:round(projectedGrossFundingRemainingBeforeCharges),
+      scenarioFundingRemainingAfterCharges:projectedScenarioFundingRemainingAfterCharges===null?null:round(projectedScenarioFundingRemainingAfterCharges),
+      estimatedCharges:verifiedCharges===null?null:round(verifiedCharges),
+      estimatedTotalCost:verifiedTotalCost===null?null:round(verifiedTotalCost),
+      allChargesVerified:chargeSummary?.allChargesVerified===true,
+      holdingsValueBeforeCharges:round(projectedHoldingsValue),
+      scenarioNetWorthBeforeCharges:round(projectedScenarioNetWorthBeforeCharges),
+      largestSector:sectorProjection[0]||null
+    },
+    sectorProjection,
+    goal:{
+      goalName:goalContext?.goalName||"Financial Goal",
+      targetAmount:n(goalContext?.targetAmount),
+      targetDate:goalContext?.targetDate||null,
+      monthlyContribution:n(goalContext?.monthlyContribution),
+      projectedValueBeforeRecovery:goalContext?.projectedValueBeforeRecovery==null?null:round(goalContext.projectedValueBeforeRecovery),
+      projectedShortfallBeforeRecovery:goalContext?.projectedShortfallBeforeRecovery==null?null:round(goalContext.projectedShortfallBeforeRecovery),
+      preserveTarget:true,preserveTargetDate:true,preserveContribution:true,trajectoryReclassified:false
+    },
+    safeguards:{
+      realCashMutated:false,realPortfolioMutated:false,practicePortfolioMutated:false,
+      goalMutated:false,investorDNAMutated:false,brokerOrderCreated:false,chargesInvented:false,recoveryBudgetExceeded:chargeSummary?.safeguards?.recoveryBudgetExceeded===true
+    }
+  };
+}

@@ -17,6 +17,7 @@ import {
 
 const STEPS = ["Evidence", "Compare", "Review", "Resolve", "Complete"];
 
+// PC-030M20AV3L RESPONSIVE CALIBRATION
 export default function BrokerReconciliation() {
   const [loading, setLoading] = useState(true);
   const [result, setResult] = useState(null);
@@ -177,7 +178,8 @@ function money(value) { return Number(value || 0).toLocaleString(undefined, { mi
 
 const styles = StyleSheet.create({
   summaryCard: { marginTop: 4, backgroundColor: "#0f172a", borderColor: "#1e293b", borderWidth: 1, borderRadius: 18, overflow: "hidden" },
-  comparisonRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 14, borderBottomColor: "#1e293b", borderBottomWidth: 1 },
+  comparisonRow: { flexDirection: "row",
+    flexWrap: "wrap", alignItems: "center", gap: 12, padding: 14, borderBottomColor: "#1e293b", borderBottomWidth: 1 },
   holdingText: { flex: 1 },
   rowLabel: { color: "white", fontWeight: "900" },
   meta: { color: "#94a3b8", marginTop: 4, fontSize: 12 },

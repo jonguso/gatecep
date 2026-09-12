@@ -67,6 +67,7 @@ async function handleBackfillLedger() {
   }
 }
 
+// PC-030M20AV3M RESPONSIVE CALIBRATION
 export default function BrokerPortfolioImportScreen() {
   const [
     previews,
@@ -681,11 +682,7 @@ const styles =
         "#020617"
     },
 
-    content: {
-      padding: 22,
-      paddingTop: 70,
-      paddingBottom: 110
-    },
+    content: { width: "100%", maxWidth: 960, alignSelf: "center", padding: 22, paddingTop: 70, paddingBottom: 128 },
 
     centerScreen: {
       flex: 1,
@@ -758,6 +755,7 @@ const styles =
 
     cardHeader: {
       flexDirection: "row",
+    flexWrap: "wrap",
       alignItems: "flex-start",
       justifyContent:
         "space-between",

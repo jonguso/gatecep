@@ -4,6 +4,68 @@ import { findBrokerById } from "./brokerRegistry";
 const CDS_PROFILE_KEY = "cdsProfile";
 const BROKER_ACCOUNTS_KEY = "brokerAccounts";
 const DEFAULT_BROKER_KEY = "defaultBrokerProfile";
+const LEGACY_BROKER_PROFILE_KEY = "brokerProfile";
+const LEGACY_BROKER_PROFILES_KEY = "brokerProfiles";
+
+function cleanText(value) { return String(value ?? "").trim(); }
+
+export function resolveCanonicalBrokerId(value = "") {
+  const raw = cleanText(value).toUpperCase();
+  if (!raw) return null;
+  if (["AIB","AIB-AXYS","AIB AXYS"].includes(raw)) return "AIB";
+  if (["ABC","ABC CAPITAL"].includes(raw)) return "ABC";
+  if (["NCBA","NCBA INVESTMENT BANK"].includes(raw)) return "NCBA";
+  if (["DYER","DYER & BLAIR","DYER AND BLAIR"].includes(raw)) return "DYER";
+  if (["FAIDA","FAIDA INVESTMENT BANK"].includes(raw)) return "FAIDA";
+  if (["STANDARD INVESTMENT BANK","SIB"].includes(raw)) return "SIB";
+  if (["GATECEP-DEMO","GATECEP DEMO","SIM"].includes(raw)) return "SIM";
+  return raw.replace(/[^A-Z0-9]+/g, "_");
+}
+
+export async function migrateLegacyBrokerProfileToCanonicalAccounts() {
+  const existing = await loadBrokerAccounts();
+  if (existing.length > 0) return { migrated:false, reason:"CANONICAL_ACCOUNTS_ALREADY_PRESENT", accounts:existing };
+
+  const [legacyRaw, legacyProfilesRaw, defaultRaw] = await Promise.all([
+    userGetItem(LEGACY_BROKER_PROFILE_KEY),
+    userGetItem(LEGACY_BROKER_PROFILES_KEY),
+    userGetItem(DEFAULT_BROKER_KEY)
+  ]);
+
+  let legacy = null;
+  for (const raw of [legacyRaw, defaultRaw]) {
+    if (!raw) continue;
+    try { const parsed=JSON.parse(raw); if (parsed && typeof parsed==="object") { legacy=parsed; break; } } catch {}
+  }
+  if (!legacy && legacyProfilesRaw) {
+    try { const parsed=JSON.parse(legacyProfilesRaw); if (Array.isArray(parsed) && parsed.length) legacy=parsed[0]; } catch {}
+  }
+  if (!legacy) return { migrated:false, reason:"NO_LEGACY_PROFILE", accounts:[] };
+
+  const brokerLabel=cleanText(legacy.broker||legacy.brokerName||legacy.name||legacy.selectedBroker);
+  const brokerId=resolveCanonicalBrokerId(brokerLabel);
+  if (!brokerId) return { migrated:false, reason:"LEGACY_BROKER_ID_UNAVAILABLE", accounts:[] };
+
+  const now=new Date().toISOString();
+  const broker=findBrokerById(brokerId||"SIM");
+  const brokerName=brokerLabel||cleanText(broker?.name)||brokerId;
+  const account={
+    id:brokerId, brokerId, brokerName, broker:brokerName, name:brokerName,
+    shortName:cleanText(broker?.shortName)||brokerId,
+    nickname:cleanText(legacy.nickname)||cleanText(broker?.shortName)||brokerName,
+    accountNumber:cleanText(legacy.accountNumber||legacy.clientNumber),
+    clientNumber:cleanText(legacy.clientNumber||legacy.accountNumber),
+    cdsNumber:cleanText(legacy.cdsNumber), connected:true, linked:true, status:"ACTIVE",
+    connectionMode:legacy.connectionMode||"MIGRATED_LEGACY_PROFILE",
+    apiMode:legacy.apiMode||"PENDING_BROKER_API", defaultBroker:true,
+    feeSchedule:legacy.feeSchedule||null, migrationSource:"LEGACY_BROKER_PROFILE",
+    legacyProfileId:legacy.id||null, createdAt:legacy.createdAt||legacy.updatedAt||now,
+    connectedAt:legacy.connectedAt||legacy.updatedAt||now, updatedAt:now, lastSyncAt:legacy.lastSyncAt||null
+  };
+  const saved=await saveBrokerAccounts([account]);
+  return { migrated:true, reason:"LEGACY_PROFILE_MIGRATED", account, accounts:saved };
+}
+
 
 export async function saveCdsProfile({
   cdsNumber = "",
@@ -165,6 +227,7 @@ export function toDefaultBrokerProfile(account = {}) {
     connectionMode: account.connectionMode,
     apiMode: account.apiMode,
     status: account.status,
+    feeSchedule: account.feeSchedule || null,
     updatedAt: new Date().toISOString()
   };
 }

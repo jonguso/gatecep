@@ -279,10 +279,10 @@ const [historicalSummary, setHistoricalSummary] = useState(null);
   }
 
   return (
-    <ScrollView ref={scrollRef} style={styles.screen} contentContainerStyle={styles.content}>
-      <View style={styles.headerRow}>
+    <ScrollView ref={scrollRef} style={styles.screen} contentContainerStyle={[styles.content, windowWidth >= 720 && styles.av3bContentWide, windowWidth < 720 && styles.av3bContentCompact, windowWidth < 480 && styles.av3bContentNarrow]}>
+      <View style={[styles.headerRow, windowWidth < 720 && styles.av3bHeaderCompact]}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.title}>Performance</Text>
+          <Text style={[styles.title, windowWidth < 720 && styles.av3bTitleCompact, windowWidth < 480 && styles.av3bTitleNarrow]}>Performance</Text>
           <Text style={styles.subtitle}>
             {activeSection
               ? PERFORMANCE_SECTIONS.find((section) => section.id === activeSection)?.title
@@ -290,7 +290,7 @@ const [historicalSummary, setHistoricalSummary] = useState(null);
           </Text>
         </View>
 
-        <View style={styles.headerActions}>
+        <View style={[styles.headerActions, windowWidth < 720 && styles.av3bHeaderActionsCompact]}>
           <Pressable style={styles.dashboardButton} onPress={() => activeSection ? moveToSection(null) : exitPerformance()}>
             <Text style={styles.dashboardText}>{activeSection ? "Overview" : "‹ Back"}</Text>
           </Pressable>
@@ -3482,5 +3482,37 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 17,
     marginTop: 6
+  },
+
+  /* PC-030M20AV3B RESPONSIVE CALIBRATION */
+  av3bContentWide: {
+    width: "100%",
+    maxWidth: 960,
+    alignSelf: "center",
+    paddingHorizontal: 24
+  },
+  av3bContentCompact: {
+    paddingHorizontal: 16,
+    paddingTop: 24,
+    paddingBottom: 128
+  },
+  av3bContentNarrow: {
+    paddingHorizontal: 12
+  },
+  av3bHeaderCompact: {
+    flexWrap: "wrap",
+    alignItems: "stretch"
+  },
+  av3bHeaderActionsCompact: {
+    width: "100%",
+    flexWrap: "wrap"
+  },
+  av3bTitleCompact: {
+    fontSize: 28,
+    lineHeight: 34
+  },
+  av3bTitleNarrow: {
+    fontSize: 25,
+    lineHeight: 31
   }
 });

@@ -83,6 +83,7 @@ const RISK_SECTIONS = [
   }
 ];
 
+// PC-030M20AV3E RESPONSIVE CALIBRATION
 export default function PortfolioRiskScreen() {
   const params = useLocalSearchParams();
   const scrollRef = useRef(null);
@@ -254,11 +255,16 @@ export default function PortfolioRiskScreen() {
   const isCompact = windowWidth < 600;
 
   return (
-    <ScrollView ref={scrollRef} style={styles.screen} contentContainerStyle={styles.content}>
-      <View style={styles.pageHeader}>
+    <ScrollView ref={scrollRef} style={styles.screen} contentContainerStyle={[
+        styles.content,
+        windowWidth >= 720 && { width: "100%", maxWidth: 960, alignSelf: "center" },
+        windowWidth < 720 && { paddingHorizontal: 16, paddingTop: 32, paddingBottom: 128 },
+        windowWidth < 480 && { paddingHorizontal: 12, paddingTop: 24 }
+      ]}>
+      <View style={[styles.pageHeader, windowWidth < 600 && { flexDirection: "column", alignItems: "stretch" }]}>
         <View style={styles.pageHeaderText}>
           <Text style={styles.eyebrow}>PC-020</Text>
-          <Text style={styles.title}>Portfolio Risk</Text>
+          <Text style={[styles.title, windowWidth < 720 && { fontSize: 28, lineHeight: 34 }, windowWidth < 480 && { fontSize: 25, lineHeight: 31 }]}>Portfolio Risk</Text>
           <Text style={styles.subtitle}>
             Review current REAL portfolio risk, then open one focused detail.
           </Text>
@@ -279,7 +285,7 @@ export default function PortfolioRiskScreen() {
         </View>
       ) : null}
 
-      <View style={activeSection ? styles.hidden : styles.hero}>
+      <View style={[activeSection ? styles.hidden : styles.hero, windowWidth < 520 && !activeSection && { flexDirection: "column", alignItems: "stretch" }]}>
         <ScoreCircle value={diversification?.score} color="#f97316" />
         <View style={styles.heroText}>
           <Text style={styles.heroLabel}>Diversification Score</Text>
@@ -915,7 +921,7 @@ export default function PortfolioRiskScreen() {
             ? nextSection ? `Next: ${nextSection.title} ›` : "Finish: Risk Overview"
             : "Back to Previous Page"}
         </Text>
-      </Pressable> : <InvestorJourneyNavigation stage="risk" onRefresh={() => loadData({ showFullLoader: false })} refreshing={refreshing} nextLabel="Continue to Holdings" />}
+      </Pressable> : <InvestorJourneyNavigation stage="risk" onRefresh={() => loadData({ showFullLoader: false })} refreshing={refreshing} nextLabel="Continue to Goals & Wealth Journey" />}
     </ScrollView>
   );
 }

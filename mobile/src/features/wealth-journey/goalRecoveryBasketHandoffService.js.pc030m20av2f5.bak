@@ -1,0 +1,161 @@
+/*
+ * PC-030M20AV2B1 — Basket Handoff Pure Builder Correction
+ *
+ * Build a basketExecutionStore-compatible REVIEW execution without importing
+ * the runtime storage module into Node regression tests. The app still saves
+ * the returned execution through canonical saveBasketExecution(), which
+ * performs the runtime normalization.
+ */
+
+function n(v) {
+  const x = Number(v);
+  return Number.isFinite(x) ? x : 0;
+}
+
+function normalizeReviewOrder(order = {}) {
+  const price = n(order.price || order.limitPrice);
+  const amount = n(order.amount);
+  const quantity =
+    n(order.quantity) > 0
+      ? n(order.quantity)
+      : price > 0 && amount > 0
+      ? Math.floor(amount / price)
+      : 0;
+
+  const gross = quantity * price;
+
+  return {
+    ...order,
+    symbol: String(order.symbol || "").toUpperCase(),
+    side: order.side || "BUY",
+    price,
+    quantity,
+    gross,
+    amount: amount || gross,
+    status: String(order.status || "REVIEW").toUpperCase(),
+    message: order.message || "Pending review"
+  };
+}
+
+function buildReviewExecution(execution = {}) {
+  const orders = Array.isArray(execution.orders)
+    ? execution.orders.map(normalizeReviewOrder)
+    : [];
+
+  return {
+    ...execution,
+    status: "REVIEW",
+    totalOrders: orders.length,
+    activeOrders: orders.length,
+    completedOrders: 0,
+    cancelledOrders: 0,
+    failedOrders: 0,
+    queuedOrders: 0,
+    routedOrders: 0,
+    reviewOrders: orders.length,
+    totalAmount: orders.reduce(
+      (sum, order) => sum + Number(order.amount || order.gross || 0),
+      0
+    ),
+    orders,
+    updatedAt: execution.updatedAt || new Date().toISOString()
+  };
+}
+
+export function buildRecoveryBasketExecution({
+  allocation = [],
+  recoveryAmount = 0,
+  goalContext = {}
+} = {}) {
+  const rows = (Array.isArray(allocation) ? allocation : []).filter(
+    (row) =>
+      String(row?.symbol || "").trim() &&
+      n(row?.proposedAmount) > 0 &&
+      n(row?.price) > 0
+  );
+
+  if (rows.length < 2) {
+    return {
+      ok: false,
+      reason: "DIVERSIFIED_ALLOCATION_REQUIRED",
+      execution: null
+    };
+  }
+
+  const now = new Date().toISOString();
+
+  const orders = rows.map((row, index) =>
+    normalizeReviewOrder({
+      id: `GR-${Date.now()}-${index}`,
+      symbol: row.symbol,
+      name: row.name || row.symbol,
+      sector: row.sector || "Unknown",
+      side: "BUY",
+      amount: n(row.proposedAmount),
+      quantity: n(row.approximateQuantity),
+      price: n(row.price),
+      estimatedCharges: row.estimatedCharges === null || row.estimatedCharges === undefined ? null : n(row.estimatedCharges),
+      estimatedTotalCost: row.estimatedTotalCost === null || row.estimatedTotalCost === undefined ? null : n(row.estimatedTotalCost),
+      feeEvidenceAvailable: row.feeEvidenceAvailable === true,
+      feeEvidenceSource: row.feeEvidenceSource || null,
+      feeVerifiedAt: row.feeVerifiedAt || null,
+      reason:
+        row.rationale ||
+        "Coach G goal-recovery diversification recommendation",
+      status: "REVIEW",
+      message: "Advisory recovery allocation — review before broker handoff",
+      advisoryOnly: true,
+      brokerExecutionConfirmed: false,
+      realPortfolioMutationAllowed: false,
+      practicePortfolioMutationAllowed: false,
+      scenarioFundingOnly: true,
+      source: "COACH_G_RECOVERY",
+      createdAt: now,
+      updatedAt: now
+    })
+  );
+
+  const execution = buildReviewExecution({
+    id: `RECOVERY-EXEC-${Date.now()}`,
+    basketId: `RECOVERY-BASKET-${Date.now()}`,
+    source: "COACH_G_ADVISORY",
+    executionMode: "BROKER_HANDOFF_ONLY",
+    status: "REVIEW",
+    scenarioFunding: {
+      amount: n(recoveryAmount),
+      source: "NEW_RECOVERY_FUNDING",
+      realCashMutationAllowed: false,
+      temporaryOnly: true
+    },
+    goalContext: {
+      ...goalContext,
+      preserveGoal: true,
+      preserveTargetDate: true,
+      preserveContribution: true
+    },
+    advisoryOnly: true,
+    brokerExecutionConfirmed: false,
+    realPortfolioMutationAllowed: false,
+    practicePortfolioMutationAllowed: false,
+    createdAt: now,
+    updatedAt: now,
+    orders
+  });
+
+  return {
+    ok: true,
+    reason: "RECOVERY_BASKET_READY_FOR_REVIEW",
+    execution
+  };
+}
+
+export const RECOVERY_BASKET_HANDOFF_INTEGRITY = Object.freeze({
+  executionMode: "BROKER_HANDOFF_ONLY",
+  advisoryOnly: true,
+  brokerExecutionConfirmed: false,
+  realCashMutationAllowed: false,
+  realPortfolioMutationAllowed: false,
+  practicePortfolioMutationAllowed: false,
+  goalMutationAllowed: false,
+  investorDNAMutationAllowed: false
+});

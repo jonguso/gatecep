@@ -21,6 +21,7 @@ import {
   loadBrokerReconciliationCases
 } from "../src/features/broker-sync/brokerReconciliationCaseStore";
 
+// PC-030M20AV3L RESPONSIVE CALIBRATION
 export default function BrokerReconciliationCases() {
   const [
     loading,
@@ -711,9 +712,12 @@ const styles =
     },
 
     content: {
+      width: "100%",
+      maxWidth: 960,
+      alignSelf: "center",
       padding: 22,
       paddingTop: 70,
-      paddingBottom: 110
+      paddingBottom: 128
     },
 
     center: {
@@ -782,6 +786,8 @@ const styles =
 
     metric: {
       width: "47%",
+      flexGrow: 1,
+      minWidth: 140,
       backgroundColor:
         "#0f172a",
       borderColor:

@@ -1,0 +1,192 @@
+{
+  "generatedAt": "2026-09-12T09:44:04.096Z",
+  "discoveryOnly": true,
+  "roots": [
+    "app/menu.js",
+    "app/(tabs)/dashboard.js",
+    "app/(tabs)/coach.js",
+    "app/(tabs)/markets.js",
+    "app/(tabs)/trading.js",
+    "app/(tabs)/funds.js",
+    "app/(tabs)/calendar.js",
+    "app/(tabs)/news.js",
+    "app/investor-home.js",
+    "app/my-profile.js",
+    "app/portfolio-sync-center.js",
+    "app/broker-marketplace.js",
+    "app/brokers.js",
+    "app/broker-upload.js",
+    "app/basket-execution.js",
+    "app/coach-insights.js",
+    "app/live-dashboard.js",
+    "app/order-book.js",
+    "src/components/coach/FloatingCoachG.js",
+    "src/features/wealth-journey/components/CoachGReconciliationCard.js"
+  ],
+  "rows": [
+    {
+      "route": "/execution-audit",
+      "status": "LEGACY_CHAIN_CANDIDATE",
+      "file": "app/execution-audit.js",
+      "reachableFromCanonicalRoots": false,
+      "incoming": [
+        "app/execution-bridge.js"
+      ]
+    },
+    {
+      "route": "/execution-bridge",
+      "status": "ORPHAN_LEGACY_CANDIDATE",
+      "file": "app/execution-bridge.js",
+      "reachableFromCanonicalRoots": false,
+      "incoming": []
+    },
+    {
+      "route": "/execution-wizard",
+      "status": "ORPHAN_LEGACY_CANDIDATE",
+      "file": "app/execution-wizard.js",
+      "reachableFromCanonicalRoots": false,
+      "incoming": []
+    },
+    {
+      "route": "/import-portfolio",
+      "status": "CANONICALLY_REACHABLE",
+      "file": "app/import-portfolio.js",
+      "reachableFromCanonicalRoots": true,
+      "incoming": [
+        "app/broker-sync.js",
+        "app/broker-upload.js",
+        "app/brokers.js",
+        "app/existing-portal.js",
+        "app/portfolio-sync-center.js"
+      ]
+    },
+    {
+      "route": "/link-broker-account",
+      "status": "CANONICALLY_REACHABLE",
+      "file": "app/link-broker-account.js",
+      "reachableFromCanonicalRoots": true,
+      "incoming": [
+        "app/broker-marketplace.js"
+      ]
+    },
+    {
+      "route": "/manual-portfolio-entry",
+      "status": "CANONICALLY_REACHABLE",
+      "file": "app/manual-portfolio-entry.js",
+      "reachableFromCanonicalRoots": true,
+      "incoming": [
+        "app/brokers.js",
+        "app/menu.js",
+        "app/portfolio-sync-center.js"
+      ]
+    },
+    {
+      "route": "/order-handoff",
+      "status": "ORPHAN_LEGACY_CANDIDATE",
+      "file": "app/order-handoff.js",
+      "reachableFromCanonicalRoots": false,
+      "incoming": []
+    },
+    {
+      "route": "/orders-review",
+      "status": "CANONICALLY_REACHABLE",
+      "file": "app/orders-review.js",
+      "reachableFromCanonicalRoots": true,
+      "incoming": [
+        "app/basket-execution.js",
+        "app/broker-routing.js",
+        "app/execution-bridge.js",
+        "app/execution-wizard.js",
+        "app/orders.js",
+        "app/queue-manager.js",
+        "app/trade-basket.js"
+      ]
+    },
+    {
+      "route": "/orders",
+      "status": "CANONICALLY_REACHABLE",
+      "file": "app/orders.js",
+      "reachableFromCanonicalRoots": true,
+      "incoming": [
+        "app/basket-execution.js",
+        "app/broker-routing.js",
+        "app/execution-audit.js",
+        "app/execution-bridge.js",
+        "app/queue-manager.js"
+      ]
+    },
+    {
+      "route": "/reconciliation-center",
+      "status": "ORPHAN_LEGACY_CANDIDATE",
+      "file": "app/reconciliation-center.js",
+      "reachableFromCanonicalRoots": false,
+      "incoming": []
+    },
+    {
+      "route": "/reconciliation-conversation",
+      "status": "CANONICALLY_REACHABLE",
+      "file": "app/reconciliation-conversation.js",
+      "reachableFromCanonicalRoots": true,
+      "incoming": [
+        "src/features/wealth-journey/components/CoachGReconciliationCard.js"
+      ]
+    },
+    {
+      "route": "/review-portfolio-import",
+      "status": "CANONICALLY_REACHABLE",
+      "file": "app/review-portfolio-import.js",
+      "reachableFromCanonicalRoots": true,
+      "incoming": [
+        "app/import-portfolio.js"
+      ]
+    },
+    {
+      "route": "/trade-basket",
+      "status": "CANONICALLY_REACHABLE",
+      "file": "app/trade-basket.js",
+      "reachableFromCanonicalRoots": true,
+      "incoming": [
+        "app/orders-review.js",
+        "app/orders.js",
+        "app/queue-manager.js"
+      ]
+    },
+    {
+      "route": "/trade",
+      "status": "CANONICALLY_REACHABLE",
+      "file": "app/trade.js",
+      "reachableFromCanonicalRoots": true,
+      "incoming": [
+        "app/(tabs)/trading.js",
+        "app/investor-alert-review.js",
+        "app/live-dashboard.js",
+        "app/order-book.js",
+        "src/components/coach/FloatingCoachG.js"
+      ]
+    },
+    {
+      "route": "/transaction-import",
+      "status": "CANONICALLY_REACHABLE",
+      "file": "app/transaction-import.js",
+      "reachableFromCanonicalRoots": true,
+      "incoming": [
+        "app/broker-upload.js",
+        "app/brokers.js"
+      ]
+    },
+    {
+      "route": "/storage-debug",
+      "status": "ORPHAN_LEGACY_CANDIDATE",
+      "file": "app/storage-debug.js",
+      "reachableFromCanonicalRoots": false,
+      "incoming": []
+    },
+    {
+      "route": "/version-center",
+      "status": "ORPHAN_LEGACY_CANDIDATE",
+      "file": "app/version-center.js",
+      "reachableFromCanonicalRoots": false,
+      "incoming": []
+    }
+  ]
+}

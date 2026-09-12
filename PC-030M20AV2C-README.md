@@ -1,0 +1,1 @@
+AV2C fixes the live UAT gap where Broker Action Plan Review was empty. BROKER_PLAN reads brokerActionPlanStore, while AV2B saved only basketExecutionStore. AV2C bridges the exact diversified recovery basket into the canonical Broker Action Plan store before navigation, reusing the existing screen and preserving the advisory/import-gated boundary.

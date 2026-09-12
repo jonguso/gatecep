@@ -38,6 +38,7 @@ const ANALYTICS_SECTIONS = [
   { id: "operations", title: "Broker & Operations", summary: "Review broker, reconciliation, dividends, income, and rebalance status." }
 ];
 
+// PC-030M20AV3E RESPONSIVE CALIBRATION
 export default function UnifiedPortfolioAnalyticsScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -166,11 +167,16 @@ export default function UnifiedPortfolioAnalyticsScreen() {
   }
 
   return (
-    <ScrollView ref={scrollRef} style={styles.screen} contentContainerStyle={styles.content}>
-      <View style={styles.headerRow}>
+    <ScrollView ref={scrollRef} style={styles.screen} contentContainerStyle={[
+        styles.content,
+        windowWidth >= 720 && { width: "100%", maxWidth: 960, alignSelf: "center" },
+        windowWidth < 720 && { paddingHorizontal: 16, paddingTop: 32, paddingBottom: 128 },
+        windowWidth < 480 && { paddingHorizontal: 12, paddingTop: 24 }
+      ]}>
+      <View style={[styles.headerRow, windowWidth < 600 && { flexDirection: "column", alignItems: "stretch" }]}>
         <View style={{ flex: 1 }}>
           <Text style={styles.eyebrow}>PC-022</Text>
-          <Text style={styles.title}>Portfolio Analysis</Text>
+          <Text style={[styles.title, windowWidth < 720 && { fontSize: 28, lineHeight: 34 }, windowWidth < 480 && { fontSize: 25, lineHeight: 31 }]}>Portfolio Analysis</Text>
           <Text style={styles.subtitle}>{activeSection
             ? ANALYTICS_SECTIONS.find((section) => section.id === activeSection)?.title
             : "Executive health, risk, performance, operations, alerts, and priorities."}</Text>
@@ -191,7 +197,7 @@ export default function UnifiedPortfolioAnalyticsScreen() {
         </View>
       ) : null}
 
-      <View style={[styles.hero, activeSection && styles.hidden]}>
+      <View style={[styles.hero, activeSection && styles.hidden, windowWidth < 520 && !activeSection && { flexDirection: "column", alignItems: "stretch" }]}>
         <View style={styles.scoreCircle}>
           <Text style={styles.scoreValue}>{score}</Text>
           <Text style={styles.scoreMaximum}>/100</Text>

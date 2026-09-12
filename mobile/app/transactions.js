@@ -1,9 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View,
+  useWindowDimensions
+} from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import { loadTransactionLedgerReconciliation } from "../src/features/trading/transactionLedgerReconciliationService";
 
+// PC-030M20AV3D RESPONSIVE CALIBRATION
 export default function Transactions() {
+  const { width: av3dWidth } = useWindowDimensions();
   const params = useLocalSearchParams();
   const requested = String(params.symbol || "").trim().toUpperCase();
   const [report, setReport] = useState(null);
@@ -36,10 +40,19 @@ export default function Transactions() {
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <View style={styles.headerRow}>
+    <ScrollView style={styles.screen} contentContainerStyle={[
+      styles.content,
+      av3dWidth >= 720 && { width: "100%", maxWidth: 960, alignSelf: "center" },
+      av3dWidth < 720 && { paddingHorizontal: 16, paddingTop: 32, paddingBottom: 128 },
+      av3dWidth < 480 && { paddingHorizontal: 12, paddingTop: 24 }
+    ]}>
+      <View style={[styles.headerRow, av3dWidth < 600 && { flexDirection: "column", alignItems: "stretch" }]}>
         <View style={{ flex: 1 }}>
-          <Text style={styles.title}>Transaction Reconciliation</Text>
+          <Text style={[
+      styles.title,
+      av3dWidth < 720 && { fontSize: 28, lineHeight: 34 },
+      av3dWidth < 480 && { fontSize: 25, lineHeight: 31 }
+    ]}>Transaction Reconciliation</Text>
           <Text style={styles.subtitle}>Read-only broker evidence audit with source-aware date normalization and CDSC anchor-window reconciliation. Raw imported dates are preserved; normalized dates are used only for analysis.</Text>
         </View>
         <Pressable style={styles.dashboardButton} onPress={() => router.replace("/(tabs)/dashboard")}>
@@ -55,7 +68,7 @@ export default function Transactions() {
       </View>
 
       <View style={styles.card}>
-        <View style={styles.sectionHeader}>
+        <View style={[styles.sectionHeader, av3dWidth < 520 && { flexDirection: "column", alignItems: "stretch" }]}>
           <Text style={styles.cardTitle}>Authoritative Position Anchors</Text>
           <Pressable style={styles.filterButton} onPress={() => router.push("/cdsc-position-register")}>
             <Text style={styles.filterText}>CDSC Register</Text>
@@ -83,7 +96,7 @@ export default function Transactions() {
       </View>
 
       <View style={styles.card}>
-        <View style={styles.sectionHeader}>
+        <View style={[styles.sectionHeader, av3dWidth < 520 && { flexDirection: "column", alignItems: "stretch" }]}>
           <Text style={styles.cardTitle}>Portfolio Reconciliation</Text>
           <Pressable style={[styles.filterButton, showOnlyGaps && styles.filterActive]} onPress={() => setShowOnlyGaps((value) => !value)}>
             <Text style={styles.filterText}>{showOnlyGaps ? "Show All" : "Show Gaps Only"}</Text>

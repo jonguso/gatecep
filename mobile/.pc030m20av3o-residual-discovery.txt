@@ -1,0 +1,555 @@
+PC-030M20AV3O — Residual Screen Discovery & Wave Classification
+
+READ_MOSTLY_INVESTOR: 13
+  - app/alerts.js
+  - app/analysis-ready.js
+  - app/behavior-analytics.js
+  - app/corporate-actions.js
+  - app/dividend-center.js
+  - app/investor-home.js
+  - app/investor-timeline.js
+  - app/live-dashboard.js
+  - app/monthly-review.js
+  - app/portfolio-activity.js
+  - app/progress.js
+  - app/recommendation-history.js
+  - app/security/[symbol].js
+GENERAL_INVESTOR: 7
+  - app/dna-update-review.js
+  - app/existing-portal.js
+  - app/index.js
+  - app/investor-alert-review.js
+  - app/my-profile.js
+  - app/portfolio-simulator.js
+  - app/queue-manager.js
+CONSEQUENTIAL_WORKFLOW: 15
+  - app/execution-audit.js
+  - app/execution-bridge.js
+  - app/execution-wizard.js
+  - app/import-portfolio.js
+  - app/link-broker-account.js
+  - app/manual-portfolio-entry.js
+  - app/order-handoff.js
+  - app/orders-review.js
+  - app/orders.js
+  - app/reconciliation-center.js
+  - app/reconciliation-conversation.js
+  - app/review-portfolio-import.js
+  - app/trade-basket.js
+  - app/trade.js
+  - app/transaction-import.js
+EDIT_OR_PLANNING: 3
+  - app/goal-details-edit.js
+  - app/goal-recovery-options.js
+  - app/investor-profile-edit.js
+DEV_ADMIN_UTILITY: 2
+  - app/storage-debug.js
+  - app/version-center.js
+
+Risk counts:
+LOW: 0
+MEDIUM: 25
+  - app/alerts.js
+  - app/analysis-ready.js
+  - app/behavior-analytics.js
+  - app/corporate-actions.js
+  - app/dividend-center.js
+  - app/dna-update-review.js
+  - app/existing-portal.js
+  - app/goal-details-edit.js
+  - app/goal-recovery-options.js
+  - app/index.js
+  - app/investor-alert-review.js
+  - app/investor-home.js
+  - app/investor-profile-edit.js
+  - app/investor-timeline.js
+  - app/live-dashboard.js
+  - app/monthly-review.js
+  - app/my-profile.js
+  - app/portfolio-activity.js
+  - app/portfolio-simulator.js
+  - app/progress.js
+  - app/queue-manager.js
+  - app/recommendation-history.js
+  - app/security/[symbol].js
+  - app/storage-debug.js
+  - app/version-center.js
+HIGH: 15
+  - app/execution-audit.js
+  - app/execution-bridge.js
+  - app/execution-wizard.js
+  - app/import-portfolio.js
+  - app/link-broker-account.js
+  - app/manual-portfolio-entry.js
+  - app/order-handoff.js
+  - app/orders-review.js
+  - app/orders.js
+  - app/reconciliation-center.js
+  - app/reconciliation-conversation.js
+  - app/review-portfolio-import.js
+  - app/trade-basket.js
+  - app/trade.js
+  - app/transaction-import.js
+
+Recommendation:
+- Patch READ_MOSTLY_INVESTOR low/medium-risk screens first.
+- Keep CONSEQUENTIAL_WORKFLOW screens in separate contract-verified waves.
+- Keep DEV_ADMIN_UTILITY screens separate from investor UAT.
+- Do not patch auth/onboarding/setup in this residual series.
+
+=== app/alerts.js ===
+CATEGORY: READ_MOSTLY_INVESTOR
+RISK: MEDIUM (3) — mutation-like call; financial/portfolio boundary terms
+LINES: 247
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { padding: 22, paddingTop: 70, paddingBottom: 110 }
+ROUTES: router.push({ pathname: "/investor-alert-review", params: { alert: JSON.stringify(item.payload) | router.push(item.route) | router.replace("/(tabs)
+MUTATION-LIKE CALLS: setAlerts( | saveAlerts( | create(
+BOUNDARY IMPORTS: none detected
+ACTION WORDS: IMPORT
+
+=== app/analysis-ready.js ===
+CATEGORY: READ_MOSTLY_INVESTOR
+RISK: MEDIUM (3) — mutation-like call; financial/portfolio boundary terms
+LINES: 209
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { padding: 22, paddingTop: 70, paddingBottom: 90 }
+ROUTES: router.replace("/(tabs) | router.push("/(tabs) | router.push("/portfolio-sync-center")
+MUTATION-LIKE CALLS: setBroker( | create(
+BOUNDARY IMPORTS: none detected
+ACTION WORDS: IMPORT, TRADE
+
+=== app/behavior-analytics.js ===
+CATEGORY: READ_MOSTLY_INVESTOR
+RISK: MEDIUM (3) — mutation-like call; financial/portfolio boundary terms
+LINES: 939
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { padding: 22, paddingTop: 70, paddingBottom: 110 }
+ROUTES: router.push(
+            "/investor-timeline"
+          ) | router.replace(
+            "/(tabs)
+MUTATION-LIKE CALLS: setLoading( | setError( | setAnalytics( | create(
+BOUNDARY IMPORTS: none detected
+ACTION WORDS: IMPORT
+
+=== app/corporate-actions.js ===
+CATEGORY: READ_MOSTLY_INVESTOR
+RISK: MEDIUM (3) — mutation-like call; financial/portfolio boundary terms
+LINES: 1173
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { padding: 22, paddingTop: 70, paddingBottom: 110 }
+ROUTES: router.replace("/")
+MUTATION-LIKE CALLS: setLoading( | setError( | setExperience( | create(
+BOUNDARY IMPORTS: none detected
+ACTION WORDS: IMPORT
+
+=== app/dividend-center.js ===
+CATEGORY: READ_MOSTLY_INVESTOR
+RISK: MEDIUM (3) — mutation-like call; financial/portfolio boundary terms
+LINES: 3012
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { padding: 22, paddingTop: 70, paddingBottom: 110 }
+ROUTES: router.replace(
+              "/(tabs)
+MUTATION-LIKE CALLS: setLoading( | setError( | setRecords( | setForecast( | setHoldings( | setEditingId( | setForm( | setModalVisible( | setSaving( | saveDividendRecord( | confirmDelete( | confirm( | removeRecord( | deleteDividendRecord( | confirmReceiveDividend( | setReceivingId(
+BOUNDARY IMPORTS: none detected
+ACTION WORDS: IMPORT, SAVE, DELETE, CONFIRM
+
+=== app/dna-update-review.js ===
+CATEGORY: GENERAL_INVESTOR
+RISK: MEDIUM (3) — mutation-like call; financial/portfolio boundary terms
+LINES: 472
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { padding: 18, paddingBottom: 40 }
+ROUTES: router.back()
+MUTATION-LIKE CALLS: setLoading( | setReview( | setFields( | updateField( | confirmInvestorDNAReviewField( | submit( | setSubmitting( | setMessage( | submitInvestorDNAReviewConfirmation( | setConfirmAll( | create(
+BOUNDARY IMPORTS: none detected
+ACTION WORDS: IMPORT, SUBMIT, SAVE, UPDATE, CONFIRM, APPROVE, TRADE
+
+=== app/execution-audit.js ===
+CATEGORY: CONSEQUENTIAL_WORKFLOW
+RISK: HIGH (7) — consequential workflow filename; mutation-like call; financial/portfolio boundary terms
+LINES: 308
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { padding: 22, paddingTop: 70, paddingBottom: 110 }
+ROUTES: router.replace("/(tabs) | router.push("/(tabs) | router.push("/orders")
+MUTATION-LIKE CALLS: setEvents( | clearTrail( | clearExecutionAuditTrail( | create(
+BOUNDARY IMPORTS: none detected
+ACTION WORDS: IMPORT, TRADE
+
+=== app/execution-bridge.js ===
+CATEGORY: CONSEQUENTIAL_WORKFLOW
+RISK: HIGH (7) — consequential workflow filename; mutation-like call; financial/portfolio boundary terms
+LINES: 176
+COMPONENTS: ScrollView
+CONTENT STYLE: content:{padding:22,paddingTop:70,paddingBottom:120}
+ROUTES: router.push("/orders-review") | router.push("/(tabs) | router.push("/orders") | router.push("/execution-audit")
+MUTATION-LIKE CALLS: setBridge( | create(
+BOUNDARY IMPORTS: none detected
+ACTION WORDS: IMPORT
+
+=== app/execution-wizard.js ===
+CATEGORY: CONSEQUENTIAL_WORKFLOW
+RISK: HIGH (7) — consequential workflow filename; mutation-like call; financial/portfolio boundary terms
+LINES: 272
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { padding: 22, paddingTop: 70, paddingBottom: 120 }
+ROUTES: router.push("/broker-marketplace") | router.push("/orders-review")
+MUTATION-LIKE CALLS: setReadiness( | create(
+BOUNDARY IMPORTS: none detected
+ACTION WORDS: IMPORT, TRADE
+
+=== app/existing-portal.js ===
+CATEGORY: GENERAL_INVESTOR
+RISK: MEDIUM (3) — mutation-like call; financial/portfolio boundary terms
+LINES: 146
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { padding: 22, paddingTop: 70, paddingBottom: 40 }
+ROUTES: router.push("/import-portfolio") | router.push("/investor-home")
+MUTATION-LIKE CALLS: create(
+BOUNDARY IMPORTS: none detected
+ACTION WORDS: IMPORT, UPLOAD
+
+=== app/goal-details-edit.js ===
+CATEGORY: EDIT_OR_PLANNING
+RISK: MEDIUM (3) — mutation-like call; financial/portfolio boundary terms
+LINES: 227
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { width: "100%", maxWidth: 680, alignSelf: "center", padding: 20, paddingTop: 70, paddingBottom: 100 }
+ROUTES: router.replace("/wealth-journey")
+MUTATION-LIKE CALLS: setName( | setTargetAmount( | setTargetDate( | setLoading( | save( | setSaving( | saveCanonicalGoalDetails( | create(
+BOUNDARY IMPORTS: none detected
+ACTION WORDS: IMPORT, SAVE
+
+=== app/goal-recovery-options.js ===
+CATEGORY: EDIT_OR_PLANNING
+RISK: MEDIUM (3) — mutation-like call; financial/portfolio boundary terms
+LINES: 333
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { width: "100%", maxWidth: 720, alignSelf: "center", padding: 18, paddingTop: 64, paddingBottom: 100 }
+ROUTES: router.replace("/wealth-journey")
+MUTATION-LIKE CALLS: setError( | setLoading( | setIndex( | create(
+BOUNDARY IMPORTS: none detected
+ACTION WORDS: IMPORT, TRADE
+
+=== app/import-portfolio.js ===
+CATEGORY: CONSEQUENTIAL_WORKFLOW
+RISK: HIGH (7) — consequential workflow filename; mutation-like call; financial/portfolio boundary terms
+LINES: 680
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { padding: 22, paddingTop: 70, paddingBottom: 100 }
+ROUTES: router.replace("/portfolio-sync-center") | router.push({
+        pathname: "/review-portfolio-import",
+        params: {
+          mode: reconciliationMode ? "RECONCILE" : "INITIAL"
+        }
+      }) | router.replace("/(tabs)
+MUTATION-LIKE CALLS: setCdsNumber( | setStoredCdsNumber( | setConnectedRealBroker( | setStatus( | saveCdsProfile( | create(
+BOUNDARY IMPORTS: import { buildSyncStatus } from "../src/portfolio/syncStatus"; | import { loadBrokerAccounts, saveCdsProfile } from "../src/services/brokers/brokerAccountStore"; | import { hasConnectedRealBrokerAccount } from "../src/features/broker-sync/brokerCashEvidencePolicy"; | import { extractBrokerPdf } from "../src/services/brokers/brokerPdfExtractionApi";
+ACTION WORDS: IMPORT, RECONCILE, UPLOAD, APPROVE
+
+=== app/index.js ===
+CATEGORY: GENERAL_INVESTOR
+RISK: MEDIUM (3) — mutation-like call; financial/portfolio boundary terms
+LINES: 329
+COMPONENTS: none detected
+CONTENT STYLE: none detected
+ROUTES: router.replace("/login") | router.replace("/(tabs) | router.replace("/onboarding/name") | router.replace("/new-investor") | router.replace("/starter-plan")
+MUTATION-LIKE CALLS: setTimeout( | saveProfile(
+BOUNDARY IMPORTS: none detected
+ACTION WORDS: IMPORT
+
+=== app/investor-alert-review.js ===
+CATEGORY: GENERAL_INVESTOR
+RISK: MEDIUM (3) — mutation-like call; financial/portfolio boundary terms
+LINES: 52
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { padding: 20, paddingTop: 54, paddingBottom: 120, gap: 16 }
+ROUTES: router.replace("/(tabs) | router.back() | router.push("/goal-scenario-planner") | router.push({ pathname: "/trade", params: { symbol: alert.symbol, mode: "AVERAGE_COST" } }) | router.push(`/security/${alert.symbol}`)
+MUTATION-LIKE CALLS: create(
+BOUNDARY IMPORTS: none detected
+ACTION WORDS: IMPORT, BUY, TRADE
+
+=== app/investor-home.js ===
+CATEGORY: READ_MOSTLY_INVESTOR
+RISK: MEDIUM (3) — mutation-like call; financial/portfolio boundary terms
+LINES: 199
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { padding: 22, paddingTop: 70, paddingBottom: 40 }
+ROUTES: router.push("/broker-upload") | router.push("/new-investor") | router.push("/(tabs) | router.push("/holding-details") | router.push("/order-book") | router.push("/trade-history") | router.push("/brokers")
+MUTATION-LIKE CALLS: create(
+BOUNDARY IMPORTS: none detected
+ACTION WORDS: IMPORT, UPLOAD, TRADE
+
+=== app/investor-profile-edit.js ===
+CATEGORY: EDIT_OR_PLANNING
+RISK: MEDIUM (3) — mutation-like call; financial/portfolio boundary terms
+LINES: 309
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { padding: 22, paddingTop: 70, paddingBottom: 120 }
+ROUTES: router.replace("/my-profile")
+MUTATION-LIKE CALLS: setName( | setGoal( | setRisk( | setExperience( | setTimeHorizon( | setContribution( | setMarketDrop( | setAmount( | save( | setSaving( | setSaveStatus( | saveInvestorProfile( | create(
+BOUNDARY IMPORTS: import { useAuth } from "../src/features/auth/hooks/useAuth";
+ACTION WORDS: IMPORT, SELL, BUY, SAVE, UPDATE
+
+=== app/investor-timeline.js ===
+CATEGORY: READ_MOSTLY_INVESTOR
+RISK: MEDIUM (3) — mutation-like call; financial/portfolio boundary terms
+LINES: 898
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { padding: 22, paddingTop: 70, paddingBottom: 110 }
+ROUTES: router.push({
+            pathname: "/monthly-review",
+            params: { returnTo: "timeline" }
+          }) | router.replace(
+            "/(tabs)
+MUTATION-LIKE CALLS: setLoading( | setError( | setTimeline( | setFilter( | create(
+BOUNDARY IMPORTS: none detected
+ACTION WORDS: IMPORT
+
+=== app/link-broker-account.js ===
+CATEGORY: CONSEQUENTIAL_WORKFLOW
+RISK: HIGH (7) — consequential workflow filename; mutation-like call; financial/portfolio boundary terms
+LINES: 69
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { padding: 22, paddingTop: 70, paddingBottom: 100 }
+ROUTES: router.replace("/broker-accounts")
+MUTATION-LIKE CALLS: save( | create(
+BOUNDARY IMPORTS: import { upsertBrokerAccount } from "../src/brokers/brokerAccountStore";
+ACTION WORDS: IMPORT, SAVE
+
+=== app/live-dashboard.js ===
+CATEGORY: READ_MOSTLY_INVESTOR
+RISK: MEDIUM (3) — mutation-like call; financial/portfolio boundary terms
+LINES: 393
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { padding: 22, paddingTop: 70, paddingBottom: 120 }
+ROUTES: router.replace("/(tabs) | router.push(route)
+MUTATION-LIKE CALLS: setMarketIntel( | setLoading( | setBrokers( | setLastUpdated( | setEvents( | create(
+BOUNDARY IMPORTS: import { getMarketSocket } from "../src/features/market/api/marketSocket"; | import { getMarketIntelligenceHome } from "../src/features/market/api/marketIntelligenceApi"; | import { getUserBrokers } from "../src/features/brokers/api/userBrokerApi";
+ACTION WORDS: IMPORT, UPDATE, TRADE
+
+=== app/manual-portfolio-entry.js ===
+CATEGORY: CONSEQUENTIAL_WORKFLOW
+RISK: HIGH (7) — consequential workflow filename; mutation-like call; financial/portfolio boundary terms
+LINES: 371
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { padding: 22, paddingTop: 70, paddingBottom: 40 }
+ROUTES: router.replace("/portfolio-sync-center") | router.push("/(tabs)
+MUTATION-LIKE CALLS: setConnectedRealBroker( | addRow( | setRows( | setQuantity( | setAvgPrice( | removeRow( | submitPortfolio( | savePortfolio( | create(
+BOUNDARY IMPORTS: import { savePortfolio } from "../src/portfolio/portfolioStore"; | import { buildSyncStatus } from "../src/portfolio/syncStatus"; | import { loadBrokerAccounts } from "../src/services/brokers/brokerAccountStore"; | import { hasConnectedRealBrokerAccount } from "../src/features/broker-sync/brokerCashEvidencePolicy";
+ACTION WORDS: IMPORT, CONFIRM, SUBMIT
+
+=== app/monthly-review.js ===
+CATEGORY: READ_MOSTLY_INVESTOR
+RISK: MEDIUM (3) — mutation-like call; financial/portfolio boundary terms
+LINES: 1112
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { padding: 22, paddingTop: 70, paddingBottom: 110 }
+ROUTES: router.replace(returnsToTimeline ? "/investor-timeline" : "/(tabs)
+MUTATION-LIKE CALLS: setLoading( | setError( | setReview( | setSavedSnapshot( | saveCurrentReview( | setSavingSnapshot( | saveMonthlyReview( | create(
+BOUNDARY IMPORTS: none detected
+ACTION WORDS: IMPORT, SAVE, UPDATE
+
+=== app/my-profile.js ===
+CATEGORY: GENERAL_INVESTOR
+RISK: MEDIUM (3) — mutation-like call; financial/portfolio boundary terms
+LINES: 299
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { padding: 22, paddingTop: 70, paddingBottom: 100 }
+ROUTES: router.replace("/login") | router.replace("/(tabs) | router.push("/account-edit") | router.push("/investor-profile-edit") | router.push("/broker-accounts") | router.push("/portfolio-hub") | router.push("/portfolio-sync-center")
+MUTATION-LIKE CALLS: setProfile( | setBroker( | setCash( | setPortfolioValue( | setActiveSection( | create(
+BOUNDARY IMPORTS: import { useAuth } from "../src/features/auth/hooks/useAuth"; | import { getInvestorProfile } from "../src/features/profile/api/investorProfileApi"; | import { loadUnifiedPortfolio } from "../src/portfolio/unifiedPortfolioApi"; | import { getUserCash } from "../src/features/cash/api/userCashApi"; | import { getUserBrokers } from "../src/features/brokers/api/userBrokerApi"; | import { logout } from "../src/auth/authStore";
+ACTION WORDS: IMPORT, UPDATE
+
+=== app/order-handoff.js ===
+CATEGORY: CONSEQUENTIAL_WORKFLOW
+RISK: HIGH (7) — consequential workflow filename; mutation-like call; financial/portfolio boundary terms
+LINES: 156
+COMPONENTS: ScrollView
+CONTENT STYLE: content:{padding:22,paddingTop:70}
+ROUTES: router.replace("/(tabs)
+MUTATION-LIKE CALLS: setPack( | setStringAsync( | saveAndReturn( | create(
+BOUNDARY IMPORTS: none detected
+ACTION WORDS: IMPORT, SAVE
+
+=== app/orders-review.js ===
+CATEGORY: CONSEQUENTIAL_WORKFLOW
+RISK: HIGH (7) — consequential workflow filename; mutation-like call; financial/portfolio boundary terms
+LINES: 565
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { padding: 22, paddingTop: 70, paddingBottom: 110 }
+ROUTES: router.push("/(tabs) | router.push("/trade-basket") | router.replace("/(tabs)
+MUTATION-LIKE CALLS: createBasketExecution( | setExecution( | updateOrder( | updateExecutionOrder( | deleteOrder( | deleteExecutionOrder( | create(
+BOUNDARY IMPORTS: import { ORDER_STATUS } from "../src/trade/orderLifecycle";
+ACTION WORDS: IMPORT, TRADE, DELETE, SUBMIT, BUY, SELL
+
+=== app/orders.js ===
+CATEGORY: CONSEQUENTIAL_WORKFLOW
+RISK: HIGH (7) — consequential workflow filename; mutation-like call; financial/portfolio boundary terms
+LINES: 580
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { padding: 22, paddingTop: 70, paddingBottom: 110 }
+ROUTES: router.push("/trade-basket") | router.replace("/(tabs) | router.push("/orders-review") | router.push("/basket-execution")
+MUTATION-LIKE CALLS: createBasketExecution( | setExecution( | setTimeout( | updateOrder( | updateExecutionOrder( | setTab( | create(
+BOUNDARY IMPORTS: import { ORDER_STATUS, isClosedOrder } from "../src/trade/orderLifecycle";
+ACTION WORDS: IMPORT, TRADE
+
+=== app/portfolio-activity.js ===
+CATEGORY: READ_MOSTLY_INVESTOR
+RISK: MEDIUM (3) — mutation-like call; financial/portfolio boundary terms
+LINES: 286
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { padding: 20, paddingTop: 60, paddingBottom: 120 }
+ROUTES: router.replace("/(tabs)
+MUTATION-LIKE CALLS: setLoading( | setEvents( | create(
+BOUNDARY IMPORTS: import { loadCanonicalRealTransactionHistory } from "../src/features/wealth-journey/canonicalRealBehaviorHistoryService";
+ACTION WORDS: IMPORT, UPLOAD, BUY, SELL, SAVE
+
+=== app/portfolio-simulator.js ===
+CATEGORY: GENERAL_INVESTOR
+RISK: MEDIUM (3) — mutation-like call; financial/portfolio boundary terms
+LINES: 382
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { padding: 22, paddingTop: 70, paddingBottom: 100 }
+ROUTES: router.replace("/(tabs) | router.replace("/starter-plan")
+MUTATION-LIKE CALLS: setHoldings( | setCash( | setResult( | saveScenario( | setSelectedScenario( | setCustomMonthly( | create(
+BOUNDARY IMPORTS: none detected
+ACTION WORDS: IMPORT, SAVE
+
+=== app/progress.js ===
+CATEGORY: READ_MOSTLY_INVESTOR
+RISK: MEDIUM (3) — mutation-like call; financial/portfolio boundary terms
+LINES: 236
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { padding: 22, paddingTop: 70, paddingBottom: 40 }
+ROUTES: router.push(item.route) | router.push("/demo")
+MUTATION-LIKE CALLS: setState( | create(
+BOUNDARY IMPORTS: none detected
+ACTION WORDS: IMPORT, UPLOAD
+
+=== app/queue-manager.js ===
+CATEGORY: GENERAL_INVESTOR
+RISK: MEDIUM (3) — mutation-like call; financial/portfolio boundary terms
+LINES: 549
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { padding: 22, paddingTop: 70, paddingBottom: 110 }
+ROUTES: router.push("/trade-basket") | router.replace("/(tabs) | router.push("/orders-review") | router.push("/(tabs) | router.push("/orders") | router.push("/basket-execution")
+MUTATION-LIKE CALLS: createBasketExecution( | setExecution( | updateExecutionOrder( | create(
+BOUNDARY IMPORTS: import { ORDER_STATUS } from "../src/trade/orderLifecycle";
+ACTION WORDS: IMPORT, TRADE
+
+=== app/recommendation-history.js ===
+CATEGORY: READ_MOSTLY_INVESTOR
+RISK: MEDIUM (3) — mutation-like call; financial/portfolio boundary terms
+LINES: 343
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { padding: 22, paddingTop: 70, paddingBottom: 90 }
+ROUTES: router.replace("/(tabs)
+MUTATION-LIKE CALLS: setHistory( | create(
+BOUNDARY IMPORTS: none detected
+ACTION WORDS: IMPORT
+
+=== app/reconciliation-center.js ===
+CATEGORY: CONSEQUENTIAL_WORKFLOW
+RISK: HIGH (7) — consequential workflow filename; mutation-like call; financial/portfolio boundary terms
+LINES: 151
+COMPONENTS: ScrollView
+CONTENT STYLE: content:{padding:22,paddingTop:70,paddingBottom:120}
+ROUTES: router.replace("/(tabs)
+MUTATION-LIKE CALLS: setResult( | create(
+BOUNDARY IMPORTS: import { runPositionReconciliation } from "../src/reconciliation/positionReconciliation";
+ACTION WORDS: IMPORT, RECONCILE
+
+=== app/reconciliation-conversation.js ===
+CATEGORY: CONSEQUENTIAL_WORKFLOW
+RISK: HIGH (7) — consequential workflow filename; mutation-like call; financial/portfolio boundary terms
+LINES: 459
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { padding: 18, paddingBottom: 40 }
+ROUTES: router.back() | router.push("/dna-update-review")
+MUTATION-LIKE CALLS: setLoading( | setResult( | submit( | setSubmitting( | setSavedMessage( | submitCoachGReconciliationClarification( | setSelectedType( | setResponseText( | create(
+BOUNDARY IMPORTS: none detected
+ACTION WORDS: IMPORT, SUBMIT, SAVE, UPDATE
+
+=== app/review-portfolio-import.js ===
+CATEGORY: CONSEQUENTIAL_WORKFLOW
+RISK: HIGH (9) — consequential workflow filename; mutation-like call; storage mutation; financial/portfolio boundary terms
+LINES: 703
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { padding: 22, paddingTop: 70, paddingBottom: 40 }
+ROUTES: router.replace("/portfolio-sync-center") | router.replace("/login") | router.replace("/broker-upload")
+MUTATION-LIKE CALLS: setConnectedRealBroker( | setFileInfo( | setRows( | setEditingIndex( | setEditingRow( | saveEdit( | setItem( | addHolding( | removeHolding( | confirmPortfolio( | saveVerifiedUploadedBrokerMirror( | removeItem( | savePortfolio( | syncHoldingsToCloud( | create(
+BOUNDARY IMPORTS: import { getStoredAccessToken } from "../src/features/auth/storage/authStorage"; | import { uploadConfirmedPortfolio } from "../src/portfolio/uploadPortfolioApi"; | import { syncHoldingsToCloud } from "../src/features/portfolio/api/portfolioSyncApi"; | import { getCurrentSession } from "../src/auth/authStore"; | import { loadBrokerAccounts } from "../src/services/brokers/brokerAccountStore"; | import { hasConnectedRealBrokerAccount } from "../src/features/broker-sync/brokerCashEvidencePolicy";
+ACTION WORDS: IMPORT, UPLOAD, RECONCILE, CONFIRM, SAVE
+
+=== app/security/[symbol].js ===
+CATEGORY: READ_MOSTLY_INVESTOR
+RISK: MEDIUM (3) — mutation-like call; financial/portfolio boundary terms
+LINES: 662
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { padding: 22, paddingTop: 70, paddingBottom: 120 }
+ROUTES: router.push("/watchlist") | router.back() | router.replace("/(tabs) | router.push("/fundamental-data-hub")
+MUTATION-LIKE CALLS: setFundamentals( | setWatchlists( | addToWatchlist( | saveWatchlists( | create(
+BOUNDARY IMPORTS: import useMarketData from "../../src/services/markets/useMarketData"; | import { loadFundamentalRecord } from "../../src/features/fundamentals/fundamentalRepository"; | import { buildSecurityEducationModel, explainMetric } from "../../src/services/markets/securityEducationService";
+ACTION WORDS: IMPORT, CONFIRM
+
+=== app/storage-debug.js ===
+CATEGORY: DEV_ADMIN_UTILITY
+RISK: MEDIUM (3) — mutation-like call; financial/portfolio boundary terms
+LINES: 605
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { padding: 22, paddingTop: 70, paddingBottom: 100 }
+ROUTES: none detected
+MUTATION-LIKE CALLS: setLoading( | setReport( | setRepairing( | create(
+BOUNDARY IMPORTS: none detected
+ACTION WORDS: IMPORT, RECONCILE
+
+=== app/trade-basket.js ===
+CATEGORY: CONSEQUENTIAL_WORKFLOW
+RISK: HIGH (7) — consequential workflow filename; mutation-like call; financial/portfolio boundary terms
+LINES: 269
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { padding: 22, paddingTop: 70, paddingBottom: 110 }
+ROUTES: router.push("/orders-review") | router.replace("/(tabs) | router.push("/coach-insights")
+MUTATION-LIKE CALLS: setBasket( | removeItem( | clearBasket( | saveTradeBasket( | clearTradeBasket( | create(
+BOUNDARY IMPORTS: none detected
+ACTION WORDS: IMPORT, TRADE, BUY
+
+=== app/trade.js ===
+CATEGORY: CONSEQUENTIAL_WORKFLOW
+RISK: HIGH (10) — consequential workflow filename; execute* call; mutation-like call; financial/portfolio boundary terms
+LINES: 2514
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { padding: 22, paddingTop: 70, paddingBottom: 100 }
+ROUTES: router.push({
+      pathname: "/basket-execution",
+      params: { mode: "BROKER_PLAN" }
+    }) | router.replace("/(tabs) | router.push("/basket-execution") | router.push({ pathname: "/transactions", params: { symbol: selectedStock.symbol } }) | router.push("/trade-history") | router.replace({ pathname: "/basket-execution", params: { mode: "BROKER_PLAN" } }) | router.replace("/basket-execution")
+MUTATION-LIKE CALLS: setSide( | setSelectedStock( | setLimitPrice( | setConfirmedTrade( | setPortfolio( | setCash( | setRealHoldings( | setRealTransactions( | setGoalEvidence( | setActiveExecution( | setQuantity( | setSecurityPickerOpen( | addToBrokerActionPlan( | addBrokerActionPlanOrder( | persistTrade( | savePracticePortfolio(
+BOUNDARY IMPORTS: import useMarketData from "../src/services/markets/useMarketData"; | import { savePracticePortfolio } from "../src/features/investor/investorContextStore"; | import { buildHistoricalSecurityLotLedger } from "../src/features/trading/historicalSecurityLotLedgerService"; | import { loadUnifiedPortfolioRuntime } from "../src/portfolio/unifiedPortfolioApi"; | import { addBrokerActionPlanOrder } from "../src/services/trade/brokerActionPlanStore"; | import { loadBrokerLotHistoryEvidence } from "../src/features/trading/brokerLotHistoryEvidenceService"; | import { buildProjectedImpactReview } from "../src/features/trading/coachGProjectedImpactService"; | import { loadRealCurrentInvestorWealthJourney } from "../src/features/wealth-journey/realWealthJourneyRuntime"; | import { buildGoalRiskStressImpact, extractVerifiedGoalEvidence } from "../src/features/trading/coachGGoalRiskStressImpactService"; | import { canonicalSecuritySymbol } from "../src/features/trading/securityIdentityService"; | import { deriveApproximateScenarioQuantity } from "../src/features/trading/decisionAmountQuantityService";
+ACTION WORDS: IMPORT, TRADE, BUY, SELL, EXECUTE, RECONCILE, CONFIRM, SAVE
+
+=== app/transaction-import.js ===
+CATEGORY: CONSEQUENTIAL_WORKFLOW
+RISK: HIGH (7) — consequential workflow filename; mutation-like call; financial/portfolio boundary terms
+LINES: 592
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { padding: 22, paddingTop: 70, paddingBottom: 100 }
+ROUTES: router.replace("/portfolio-sync-center") | router.replace("/broker-upload")
+MUTATION-LIKE CALLS: setStatus( | setSelectedFile( | setTransactions( | addTransaction( | setForm( | saveTransactions( | create(
+BOUNDARY IMPORTS: import { buildSyncStatus } from "../src/portfolio/syncStatus"; | import { rebuildCanonicalPortfolioLedger } from "../src/features/trading/canonicalPortfolioLedgerService"; | import { partitionBrokerExecutionEvidence } from "../src/features/broker-sync/brokerExecutionEvidencePolicy"; | import { extractBrokerPdf } from "../src/services/brokers/brokerPdfExtractionApi";
+ACTION WORDS: IMPORT, BUY, SELL, TRADE, UPLOAD
+
+=== app/version-center.js ===
+CATEGORY: DEV_ADMIN_UTILITY
+RISK: MEDIUM (3) — mutation-like call; financial/portfolio boundary terms
+LINES: 178
+COMPONENTS: ScrollView
+CONTENT STYLE: content: { padding: 22, paddingTop: 70, paddingBottom: 100 }
+ROUTES: router.replace("/(tabs)
+MUTATION-LIKE CALLS: create(
+BOUNDARY IMPORTS: none detected
+ACTION WORDS: IMPORT, TRADE
+

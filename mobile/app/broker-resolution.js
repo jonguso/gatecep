@@ -14,6 +14,7 @@ import {
 
 const STEPS = ["Evidence", "Compare", "Review", "Resolve", "Complete"];
 
+// PC-030M20AV3L RESPONSIVE CALIBRATION
 export default function BrokerResolution() {
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState(null);
@@ -156,7 +157,8 @@ function RouteButton({ label, onPress }) {
 function friendly(value) { return String(value || "Unknown").replaceAll("_", " "); }
 
 const styles = StyleSheet.create({
-  issueHeader: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  issueHeader: { flexDirection: "row",
+    flexWrap: "wrap", alignItems: "flex-start", gap: 12 },
   flex: { flex: 1 },
   issueTitle: { color: "white", fontSize: 18, fontWeight: "900" },
   issueType: { color: "#fbbf24", fontSize: 11, fontWeight: "900", marginTop: 5 },
@@ -164,7 +166,8 @@ const styles = StyleSheet.create({
   open: { color: "#fbbf24", fontWeight: "900", fontSize: 11 },
   description: { color: "#cbd5e1", lineHeight: 20, marginTop: 12 },
   chooseLabel: { color: "#94a3b8", fontWeight: "900", marginTop: 18, marginBottom: 7 },
-  option: { flexDirection: "row", alignItems: "flex-start", gap: 11, backgroundColor: "#020617", borderColor: "#334155", borderWidth: 1, borderRadius: 14, padding: 13, marginTop: 8, minHeight: 58 },
+  option: { flexDirection: "row",
+    flexWrap: "wrap", alignItems: "flex-start", gap: 11, backgroundColor: "#020617", borderColor: "#334155", borderWidth: 1, borderRadius: 14, padding: 13, marginTop: 8, minHeight: 58 },
   optionSelected: { backgroundColor: "rgba(16,185,129,.10)", borderColor: "#10b981" },
   radio: { width: 18, height: 18, borderRadius: 9, borderColor: "#64748b", borderWidth: 2, marginTop: 2 },
   radioSelected: { borderColor: "#34d399", backgroundColor: "#34d399" },
@@ -173,7 +176,8 @@ const styles = StyleSheet.create({
   optionDescription: { color: "#94a3b8", lineHeight: 18, marginTop: 4, fontSize: 12 },
   saving: { marginTop: 14 },
   protectionText: { color: "#fde68a", lineHeight: 21 },
-  routeButton: { marginTop: 9, backgroundColor: "#020617", padding: 14, borderRadius: 14, flexDirection: "row", alignItems: "center", minHeight: 48 },
+  routeButton: { marginTop: 9, backgroundColor: "#020617", padding: 14, borderRadius: 14, flexDirection: "row",
+    flexWrap: "wrap", alignItems: "center", minHeight: 48 },
   routeText: { color: "white", fontWeight: "900", flex: 1 },
   arrow: { color: "#c084fc", fontSize: 24, fontWeight: "900" }
 });

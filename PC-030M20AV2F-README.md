@@ -1,0 +1,1 @@
+PC-030M20AV2F makes the diversified recovery basket charges-aware using only verified broker fee schedules. Each BUY must fit inside its AV2 allocation including verified charges. Missing fee evidence stays unavailable. The same adjusted quantities and fee evidence flow into Projected Portfolio and Broker Action Plan.

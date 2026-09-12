@@ -25,6 +25,7 @@ import { BROKERS } from "../src/constants/brokers";
 import { ContainedPanel } from "../src/components/mobile/MobileUI";
 
 
+// PC-030M20AV3K RESPONSIVE CALIBRATION
 export default function BrokerAccountCenter() {
   const [broker, setBroker] = useState(null);
   const [profile, setProfile] = useState(null);
@@ -173,9 +174,9 @@ setBroker(brokerList.length ? brokerList[0] : null);
 
       <Pressable
         style={styles.secondary}
-        onPress={() => router.push("/broker-profile")}
+        onPress={() => router.push("/broker-accounts")}
       >
-        <Text style={styles.secondaryText}>Open Broker Profile</Text>
+        <Text style={styles.secondaryText}>Open Broker Accounts</Text>
       </Pressable>
     </ScrollView>
   );
@@ -192,9 +193,10 @@ function Info({ label, value }) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#020617" },
-  content: { padding: 22, paddingTop: 70, paddingBottom: 100 },
+  content: { width: "100%", maxWidth: 960, alignSelf: "center", padding: 22, paddingTop: 70, paddingBottom: 128 },
   headerRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     alignItems: "center",
     gap: 12
@@ -224,7 +226,8 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     marginBottom: 12
   },
-  panelTabs: { flexDirection: "row", gap: 8, marginTop: 18 },
+  panelTabs: { flexDirection: "row",
+    flexWrap: "wrap", gap: 8, marginTop: 18 },
   panelTab: { flex: 1, minHeight: 44, borderRadius: 14, backgroundColor: "#1e293b", alignItems: "center", justifyContent: "center", paddingHorizontal: 8 },
   panelTabActive: { backgroundColor: "#9333ea" },
   panelTabText: { color: "#94a3b8", fontWeight: "900", fontSize: 12 },

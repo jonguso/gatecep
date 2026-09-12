@@ -10,7 +10,8 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  View
+  View,
+  useWindowDimensions
 } from "react-native";
 
 import {
@@ -50,7 +51,9 @@ import InvestorJourneyNavigation from "../src/components/mobile/InvestorJourneyN
  * ============================================================
  */
 
+// PC-030M20AV3C RESPONSIVE CALIBRATION
 export default function WealthJourneyScreen() {
+  const { width: av3cWidth } = useWindowDimensions();
   const [
     loading,
     setLoading
@@ -206,9 +209,7 @@ export default function WealthJourneyScreen() {
       style={
         styles.screen
       }
-      contentContainerStyle={
-        styles.content
-      }
+      contentContainerStyle={[styles.content, av3cWidth >= 720 && { width: "100%", maxWidth: 960, alignSelf: "center" }, av3cWidth < 720 && { paddingHorizontal: 16, paddingBottom: 128 }, av3cWidth < 480 && { paddingHorizontal: 12 }]}
     >
       <Text
         style={
@@ -219,9 +220,7 @@ export default function WealthJourneyScreen() {
       </Text>
 
       <Text
-        style={
-          styles.title
-        }
+        style={[styles.title, av3cWidth < 720 && { fontSize: 28, lineHeight: 34 }, av3cWidth < 480 && { fontSize: 25, lineHeight: 31 }]}
       >
         Your Wealth Journey
       </Text>

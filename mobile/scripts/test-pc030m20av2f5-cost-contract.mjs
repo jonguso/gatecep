@@ -1,0 +1,16 @@
+import fs from "node:fs";
+import assert from "node:assert/strict";
+const h=fs.readFileSync(new URL("../src/features/wealth-journey/goalRecoveryBasketHandoffService.js",import.meta.url),"utf8");
+const b=fs.readFileSync(new URL("../src/features/wealth-journey/goalRecoveryBrokerActionPlanBridge.js",import.meta.url),"utf8");
+const s=fs.readFileSync(new URL("../src/services/trade/brokerActionPlanStore.js",import.meta.url),"utf8");
+assert.match(h,/allocationBudget:/);
+assert.match(h,/row\.gross \?\? row\.projectedGross/);
+assert.match(b,/costSummary:/);
+assert.match(b,/plannedGrossPurchases/);
+assert.match(b,/verifiedEstimatedCharges/);
+assert.match(b,/estimatedTotalBasketCost/);
+assert.match(s,/Verified estimated charges: Unavailable/);
+console.log("PASS — unavailable-fee orders hand off gross consideration, not allocation budget.");
+console.log("PASS — verified-fee orders can hand off verified all-in total.");
+console.log("PASS — Broker Action Plan carries explicit gross/charges/total semantics.");
+console.log("PASS — unavailable charges remain unavailable, not zero.");

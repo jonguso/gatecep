@@ -1,0 +1,1 @@
+PC-030M20AV2F4 converges legacy brokerProfile/defaultBrokerProfile into canonical brokerAccounts. Migration occurs only when canonical brokerAccounts is empty; existing canonical data wins. Legacy Broker Profile remains for compatibility, but investor-facing navigation moves to /broker-accounts. AV2F fee logic is unchanged.\n

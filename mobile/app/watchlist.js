@@ -6,7 +6,8 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View
+  View,
+  useWindowDimensions
 } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 
@@ -15,7 +16,9 @@ import useMarketData from "../src/services/markets/useMarketData";
 
 const WATCHLIST_KEY = "marketWatchlist";
 
+// PC-030M20AV3F RESPONSIVE CALIBRATION
 export default function WatchlistManager() {
+  const { width: windowWidth } = useWindowDimensions();
   const [selected, setSelected] = useState([]);
   const [query, setQuery] = useState("");
   const market = useMarketData();
@@ -60,13 +63,18 @@ export default function WatchlistManager() {
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <View style={styles.headerRow}>
+    <ScrollView style={styles.screen} contentContainerStyle={[
+      styles.content,
+      windowWidth >= 720 && { width: "100%", maxWidth: 960, alignSelf: "center" },
+      windowWidth < 720 && { paddingHorizontal: 16, paddingTop: 32, paddingBottom: 128 },
+      windowWidth < 480 && { paddingHorizontal: 12, paddingTop: 24 }
+    ]}>
+      <View style={[styles.headerRow, windowWidth < 480 && { flexWrap: "wrap" }]}>
         <Pressable style={styles.backButton} onPress={() => router.back()}>
           <Text style={styles.backText}>‹</Text>
         </Pressable>
 
-        <Text style={styles.title}>My Watchlist</Text>
+        <Text style={[styles.title, windowWidth < 480 && { fontSize: 25 }]}>My Watchlist</Text>
 
         <Pressable style={styles.saveButton} onPress={save}>
           <Text style={styles.saveText}>Save</Text>

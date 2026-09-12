@@ -175,7 +175,7 @@ const displayName =
 
         <Pressable
           style={styles.secondary}
-          onPress={() => router.push("/broker-profile")}
+          onPress={() => router.push("/broker-accounts")}
         >
           <Text style={styles.secondaryText}>Update Broker Profile</Text>
         </Pressable>
@@ -225,7 +225,7 @@ function money(value) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#020617" },
-  content: { padding: 22, paddingTop: 70, paddingBottom: 100 },
+  content: { /* PC-030M20AV3R RESPONSIVE CALIBRATION */ width: "100%", maxWidth: 960, alignSelf: "center", padding: 22, paddingTop: 70, paddingBottom: 128 },
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",

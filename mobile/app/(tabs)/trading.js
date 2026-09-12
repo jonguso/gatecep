@@ -1,5 +1,8 @@
+import RecoveryRecommendationSelector from "../../src/components/coach/RecoveryRecommendationSelector";
 import React, { useCallback, useState } from "react";
-import { Pressable, ScrollView, StyleSheet, Text, View, Modal, TextInput } from "react-native";
+import { Pressable, ScrollView, StyleSheet, Text, View, Modal, TextInput,
+  useWindowDimensions
+} from "react-native";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import ActiveUserBanner from "../../src/components/ActiveUserBanner";
 import { loadTradingHubData } from "../../src/services/trade/tradingHubStore";
@@ -31,7 +34,13 @@ import { startDecisionConversation } from "../../src/features/trading/coachGDeci
 const TABS = ["Account", "Orders", "Depth", "Activity"];
 
 /* PC-030M20AQ2 Decision Lab Home — PC-030M20AR conversational extension. */
-function DecisionLabHome({ data, entryParams }) { // PC-030M20AR9 action-aware controls
+function DecisionLabHome({ data, entryParams }) {
+  const { width: decisionWidth } = useWindowDimensions();
+  const [recoveryOwnWhatIf, setRecoveryOwnWhatIf] = useState(false); // PC-030M20AU recommendation selector
+
+  const recoveryRecommendationEntry =
+    String(entryParams?.decisionSource || "").toUpperCase() === "COACH_G_RECOVERY";
+ // PC-030M20AR9 action-aware controls
   const [conversationOpen, setConversationOpen] = React.useState(false);
   const [ideaSource, setIdeaSource] = React.useState(DECISION_SOURCES.DIRECT);
   const [ideaSide, setIdeaSide] = React.useState("BUY");
@@ -176,14 +185,24 @@ function DecisionLabHome({ data, entryParams }) { // PC-030M20AR9 action-aware c
       {evidenceAvailable ? <><Text style={ui.body}>Holdings: {baseline.holdingsCount} • Portfolio evidence: KES {money(baseline.holdingsValue)}</Text><Text style={ui.body}>Available cash: KES {money(baseline.availableCash)}</Text><Text style={ui.body}>Largest position: {baseline.largestHolding || "N/A"}{baseline.largestHolding ? ` • ${baseline.largestHoldingWeight}%` : ""}</Text></> : <Text style={ui.body}>REAL portfolio evidence is unavailable. Coach G will not present missing evidence as a zero portfolio.</Text>}
       <Text style={ui.note}>Detailed scenarios compare CURRENT vs PROJECTED. Projected values never overwrite REAL holdings.</Text></View>
 
-    <View style={ui.card}><Text style={ui.cardTitle}>Risk & Recovery — what “Aggressive” means</Text><Text style={ui.body}>Coach G explains risk from concentration, liquidity, goal impact and downside. Recovery percentages are mathematical stress tests, not return forecasts.</Text>{recoveryStress.map(row=><View key={row.lossPercent} style={ui.recoveryRow}><Text style={ui.recoveryLoss}>-{row.lossPercent}% loss</Text><Text style={ui.recoveryNeed}>needs +{row.recoveryPercent}% to recover</Text></View>)}<Pressable style={ui.link} onPress={()=>router.push("/wealth-journey")}><Text style={ui.linkText}>Review Goal & Recovery Context</Text></Pressable></View>
+    <View style={ui.card}><Text style={ui.cardTitle}>Risk & Recovery — what “Aggressive” means</Text><Text style={ui.body}>Coach G explains risk from concentration, liquidity, goal impact and downside. Recovery percentages are mathematical stress tests, not return forecasts.</Text>{recoveryStress.map(row=><View key={row.lossPercent} style={[ui.recoveryRow, decisionWidth < 480 && { flexDirection: "column" }]}><Text style={ui.recoveryLoss}>-{row.lossPercent}% loss</Text><Text style={[ui.recoveryNeed, decisionWidth < 480 && { textAlign: "left" }]}>needs +{row.recoveryPercent}% to recover</Text></View>)}<Pressable style={ui.link} onPress={()=>router.push("/wealth-journey")}><Text style={ui.linkText}>Review Goal & Recovery Context</Text></Pressable></View>
     <View style={ui.card}><Text style={ui.cardTitle}>Decision path</Text><Text style={ui.body}>Discuss → simulate → explore alternatives → compare → investor decides → save preferred scenario → Broker Action Plan.</Text><Pressable style={ui.link} onPress={()=>router.push({pathname:"/basket-execution",params:{mode:"BROKER_PLAN"}})}><Text style={ui.linkText}>Review Broker Action Plan</Text></Pressable></View>
 
-    <Modal visible={conversationOpen} transparent animationType="slide" onRequestClose={()=>setConversationOpen(false)}><View style={ui.modalShade}><ScrollView style={ui.modal} contentContainerStyle={{paddingBottom:30}}>
+    <Modal visible={conversationOpen} transparent animationType="slide" onRequestClose={()=>setConversationOpen(false)}><View style={ui.modalShade}><ScrollView style={[ui.modal, decisionWidth >= 720 && { width: "100%", maxWidth: 760, alignSelf: "center" }]} contentContainerStyle={{paddingBottom:30}}>
       <Text style={ui.eyebrow}>COACH G DECISION CONVERSATION</Text><Text style={ui.title}>Tell me what you are considering.</Text>
       <Text style={ui.body}>I will keep your reason, priority and source of the idea with the scenario so you do not have to start over.</Text>
       <View style={ui.transcript}>{dialogueTurns.map(turn=><View key={turn.id} style={turn.role==="INVESTOR"?ui.bubbleInvestor:ui.bubbleCoach}><Text style={ui.bubbleRole}>{turn.role==="INVESTOR"?"YOU":"COACH G"}</Text><Text style={ui.body}>{turn.text}</Text>{turn.question?<Text style={ui.question}>{turn.question}</Text>:null}</View>)}</View>
-      <Text style={[ui.body,{marginTop:12}]}>Action</Text><View style={ui.chipRow}>{["BUY","SELL"].map(x=><Pressable key={x} style={[ui.chip,ideaSide===x&&ui.chipOn]} onPress={()=>setIdeaSide(x)}><Text style={ui.chipText}>{x}</Text></Pressable>)}</View>
+      {recoveryRecommendationEntry && !recoveryOwnWhatIf ? (
+          <RecoveryRecommendationSelector
+            onCreateOwnWhatIf={() => setRecoveryOwnWhatIf(true)}
+          
+              onConversationStarted={() => setConversationOpen(false)}
+            />
+        ) : null}
+
+        {(!recoveryRecommendationEntry || recoveryOwnWhatIf) ? (
+          <>
+        <Text style={[ui.body,{marginTop:12}]}>Action</Text><View style={ui.chipRow}>{["BUY","SELL"].map(x=><Pressable key={x} style={[ui.chip,ideaSide===x&&ui.chipOn]} onPress={()=>setIdeaSide(x)}><Text style={ui.chipText}>{x}</Text></Pressable>)}</View>
       <Text style={[ui.body,{marginTop:12}]}>Security (optional for open what-if)</Text>
       <Pressable accessibilityRole="button" accessibilityLabel="Select NSE security" onPress={toggleSecurityDropdown} style={[ui.input,{flexDirection:"row",alignItems:"center",justifyContent:"space-between"}]}>
         <Text style={{color:selectedSecurity?"#fff":"#94a3b8",fontWeight:selectedSecurity?"800":"500",flex:1}}>{selectedSecurity ? `${selectedSecurity.symbol} — ${selectedSecurity.name}` : "Select NSE security"}</Text>
@@ -200,6 +219,9 @@ function DecisionLabHome({ data, entryParams }) { // PC-030M20AR9 action-aware c
       <Text style={[ui.body,{marginTop:12}]}>Why are you considering it?</Text><View style={ui.chipRow}>{[["GROWTH","Growth"],["INCOME","Income / dividend"],["UNDERVALUED","Undervalued"],["REDUCE_CONCENTRATION","Reduce concentration"],["RAISE_CASH","Raise cash"],["FRIEND_OR_MARKET_IDEA","Friend / market idea"],["JUST_EXPLORING","Just exploring"]].map(([v,l])=><Pressable key={v} style={[ui.chip,ideaReason===v&&ui.chipOn]} onPress={()=>setIdeaReason(v)}><Text style={ui.chipText}>{l}</Text></Pressable>)}</View>
       <Text style={[ui.body,{marginTop:12}]}>What matters most?</Text><View style={ui.chipRow}>{[["CAPITAL_GROWTH","Capital growth"],["GOAL_PROGRESS","Goal progress"],["INCOME","Income"],["LOWER_RISK","Lower risk"],["DIVERSIFICATION","Diversification"],["LIQUIDITY","Liquidity"]].map(([v,l])=><Pressable key={v} style={[ui.chip,ideaPriority===v&&ui.chipOn]} onPress={()=>setIdeaPriority(v)}><Text style={ui.chipText}>{l}</Text></Pressable>)}</View>
       <Text style={[ui.body,{marginTop:12}]}>Anything else you want Coach G to know?</Text><TextInput value={ideaNotes} onChangeText={setIdeaNotes} multiline placeholder="Optional note" placeholderTextColor="#64748b" style={[ui.input,{minHeight:70,textAlignVertical:"top"}]}/>
+          </>
+        ) : null}
+        
       {accommodation ? <View style={ui.chipRow}><Pressable style={[ui.chip,showAlternatives&&ui.chipOn]} onPress={()=>{setShowAlternatives(true);addDialogueTurn(buildAlternativeDialogue(accommodation));}}><Text style={ui.chipText}>{accommodation?.isSell ? "Explore released cash" : "Yes — show me options"}</Text></Pressable>
           <Pressable style={ui.chip} onPress={continueSimulation}><Text style={ui.chipText}>{accommodation?.isSell ? "Keep original reduction" : "Keep original idea"}</Text></Pressable>
           <Pressable style={ui.chip} onPress={()=>{setShowAlternatives(true);addDialogueTurn(buildAlternativeDialogue(accommodation));}}><Text style={ui.chipText}>{accommodation?.isSell ? "Compare uses of cash" : "Compare alternatives"}</Text></Pressable></View> : null}
@@ -216,14 +238,21 @@ function DecisionLabHome({ data, entryParams }) { // PC-030M20AR9 action-aware c
   </>);
 }
 
+// PC-030M20AV3D RESPONSIVE CALIBRATION
 export default function Trading() {
+  const { width: av3dWidth } = useWindowDimensions();
   const entryParams=useLocalSearchParams();
   const [tab,setTab]=useState("Account"), [data,setData]=useState(null), [error,setError]=useState("");
   const load=useCallback(async()=>{try{setError("");setData(await loadTradingHubData());}catch(e){setData(null);setError(e?.message||"Verified broker information is unavailable.");}},[]);
   useFocusEffect(useCallback(()=>{load();},[load]));
   const broker=data?.broker, cash=Number(data?.cash||0);
-  return <ScrollView style={s.screen} contentContainerStyle={s.content}>
-    <View style={s.header}><View style={{flex:1}}><Text style={s.title}>Trading</Text><Text style={s.subtitle}>Test investment decisions against your portfolio, goals and risk before you act.</Text></View><Pressable style={s.headerButton} onPress={()=>router.replace("/(tabs)/dashboard")}><Text style={s.headerButtonText}>Home</Text></Pressable></View>
+  return <ScrollView style={s.screen} contentContainerStyle={[
+      s.content,
+      av3dWidth >= 720 && { width: "100%", maxWidth: 960, alignSelf: "center" },
+      av3dWidth < 720 && { paddingHorizontal: 16, paddingTop: 32, paddingBottom: 128 },
+      av3dWidth < 480 && { paddingHorizontal: 12, paddingTop: 24 }
+    ]}>
+    <View style={[s.header, av3dWidth < 600 && { flexDirection: "column", alignItems: "stretch" }]}><View style={{flex:1}}><Text style={[s.title, av3dWidth < 720 && { fontSize: 28, lineHeight: 34 }, av3dWidth < 480 && { fontSize: 25, lineHeight: 31 }]}>Trading</Text><Text style={s.subtitle}>Test investment decisions against your portfolio, goals and risk before you act.</Text></View><Pressable style={s.headerButton} onPress={()=>router.replace("/(tabs)/dashboard")}><Text style={s.headerButtonText}>Home</Text></Pressable></View>
           {/* PC-030M20AQ3 UI consolidation — account context first; legacy broker evidence UI removed. */}
       <ActiveUserBanner />
 

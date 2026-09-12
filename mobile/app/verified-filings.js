@@ -13,7 +13,8 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View
+  View,
+  useWindowDimensions
 } from "react-native";
 
 import {
@@ -95,7 +96,9 @@ const DETAIL_TABS = [
   "AUDIT"
 ];
 
+// PC-030M20AV3F RESPONSIVE CALIBRATION
 export default function VerifiedFilingsScreen() {
+  const { width: windowWidth } = useWindowDimensions();
   const {
     filingId:
       routeFilingId
@@ -676,9 +679,12 @@ export default function VerifiedFilingsScreen() {
       style={
         styles.screen
       }
-      contentContainerStyle={
-        styles.content
-      }
+      contentContainerStyle={[
+        styles.content,
+        windowWidth >= 720 && { width: "100%", maxWidth: 960, alignSelf: "center" },
+        windowWidth < 720 && { paddingHorizontal: 16, paddingTop: 32, paddingBottom: 128 },
+        windowWidth < 480 && { paddingHorizontal: 12, paddingTop: 24 }
+      ]}
       keyboardShouldPersistTaps="handled"
     >
       <Text
@@ -690,9 +696,11 @@ export default function VerifiedFilingsScreen() {
       </Text>
 
       <Text
-        style={
-          styles.title
-        }
+        style={[
+          styles.title,
+          windowWidth < 720 && { fontSize: 28, lineHeight: 34 },
+          windowWidth < 480 && { fontSize: 25, lineHeight: 31 }
+        ]}
       >
         Verified Filing Review
       </Text>
@@ -751,9 +759,10 @@ export default function VerifiedFilingsScreen() {
       ) : null}
 
       <View
-        style={
-          styles.hero
-        }
+        style={[
+          styles.hero,
+          windowWidth < 520 && { flexDirection: "column", alignItems: "stretch" }
+        ]}
       >
         <View
           style={

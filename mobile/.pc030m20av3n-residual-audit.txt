@@ -1,0 +1,135 @@
+PC-030M20AV3N — Post-AV3 Residual Responsive Audit
+
+Active route-like files scanned: 125
+Investor-facing files considered: 119
+Files with AV3 responsive markers: 54
+Explicit legacy exclusions: 1
+Auth/onboarding/setup surfaces reported separately: 5
+Residual investor-facing candidates: 52
+
+=== RESIDUAL INVESTOR-FACING CANDIDATES ===
+app/alerts.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/analysis-ready.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/behavior-analytics.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/corporate-actions.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/dividend-center.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/dna-update-review.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/execution-audit.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/execution-bridge.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/execution-wizard.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/existing-portal.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/goal-details-edit.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/goal-recovery-options.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/import-portfolio.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/index.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/investor-alert-review.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/investor-home.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/investor-profile-edit.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/investor-timeline.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/link-broker-account.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/live-dashboard.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/manual-portfolio-entry.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/monthly-review.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/my-profile.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/onboarding/broker-question.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/onboarding/connect-broker.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/onboarding/experience.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/onboarding/goal.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/onboarding/horizon.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/onboarding/name.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/onboarding/recommend-broker.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/onboarding/risk.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/onboarding/smart-portfolio.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/onboarding/upload-portfolio.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/onboarding/welcome.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/order-handoff.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/orders-review.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/orders.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/portfolio-activity.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/portfolio-simulator.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/progress.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/queue-manager.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/recommendation-history.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/reconciliation-center.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/reconciliation-conversation.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/review-portfolio-import.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/security/[symbol].js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/signup.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/storage-debug.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/trade-basket.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/trade.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/transaction-import.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+app/version-center.js :: missing desktop containment + bottom clearance/shell :: MobileScreen=false max960=false bottom128=false contentWide=false reexport=false
+
+=== AUTH / ONBOARDING / SETUP SURFACES (SEPARATE CLASSIFICATION) ===
+app/demo.js :: contained=false bottomSafe=false MobileScreen=false max960=false bottom128=false
+app/first-trade.js :: contained=false bottomSafe=false MobileScreen=false max960=false bottom128=false
+app/login.js :: contained=false bottomSafe=false MobileScreen=false max960=false bottom128=false
+app/new-investor.js :: contained=true bottomSafe=true MobileScreen=false max960=false bottom128=false
+app/register.js :: contained=false bottomSafe=false MobileScreen=false max960=false bottom128=false
+
+=== EXPLICIT LEGACY EXCLUSIONS ===
+app/watchlist-old.js
+
+=== CALIBRATED AV3 SURFACES ===
+app/(tabs)/calendar.js :: PC-030M20AV3J RESPONSIVE CALIBRATION
+app/(tabs)/coach.js :: PC-030M20AV3B RESPONSIVE CALIBRATION
+app/(tabs)/funds.js :: PC-030M20AV3J RESPONSIVE CALIBRATION
+app/(tabs)/markets.js :: PC-030M20AV3F RESPONSIVE CALIBRATION
+app/(tabs)/news.js :: PC-030M20AV3J RESPONSIVE CALIBRATION
+app/(tabs)/trading.js :: PC-030M20AV3D RESPONSIVE CALIBRATION
+app/basket-execution.js :: PC-030M20AV3C RESPONSIVE CALIBRATION
+app/broker-account-center.js :: PC-030M20AV3K RESPONSIVE CALIBRATION
+app/broker-accounts.js :: PC-030M20AV3K RESPONSIVE CALIBRATION
+app/broker-marketplace.js :: PC-030M20AV3I RESPONSIVE CALIBRATION
+app/broker-portfolio-import.js :: PC-030M20AV3M RESPONSIVE CALIBRATION
+app/broker-profile.js :: PC-030M20AV3K RESPONSIVE CALIBRATION
+app/broker-reconciliation-actions.js :: PC-030M20AV3L RESPONSIVE CALIBRATION
+app/broker-reconciliation-case.js :: PC-030M20AV3L RESPONSIVE CALIBRATION
+app/broker-reconciliation-cases.js :: PC-030M20AV3L RESPONSIVE CALIBRATION
+app/broker-reconciliation-insight.js :: PC-030M20AV3L RESPONSIVE CALIBRATION
+app/broker-reconciliation.js :: PC-030M20AV3L RESPONSIVE CALIBRATION
+app/broker-resolution-ledger.js :: PC-030M20AV3L RESPONSIVE CALIBRATION
+app/broker-resolution.js :: PC-030M20AV3L RESPONSIVE CALIBRATION
+app/broker-routing.js :: PC-030M20AV3M RESPONSIVE CALIBRATION
+app/broker-status.js :: PC-030M20AV3K RESPONSIVE CALIBRATION
+app/broker-sync-history.js :: PC-030M20AV3L RESPONSIVE CALIBRATION
+app/broker-sync.js :: PC-030M20AV3M RESPONSIVE CALIBRATION
+app/broker-upload.js :: PC-030M20AV3K RESPONSIVE CALIBRATION
+app/brokers.js :: PC-030M20AV3K RESPONSIVE CALIBRATION
+app/coach-insights.js :: PC-030M20AV3B RESPONSIVE CALIBRATION
+app/filing-extraction.js :: PC-030M20AV3G RESPONSIVE CALIBRATION
+app/filing-import-bridge.js :: PC-030M20AV3G RESPONSIVE CALIBRATION
+app/filing-submission-history.js :: PC-030M20AV3G RESPONSIVE CALIBRATION
+app/fundamental-data-hub.js :: PC-030M20AV3F RESPONSIVE CALIBRATION
+app/fundamental-import.js :: PC-030M20AV3G RESPONSIVE CALIBRATION
+app/fundamental-operations-center.js :: PC-030M20AV3G RESPONSIVE CALIBRATION
+app/goal-recovery-allocation.js :: PC-030M20AV3C RESPONSIVE CALIBRATION
+app/goal-recovery-choice.js :: PC-030M20AV3C RESPONSIVE CALIBRATION
+app/goal-recovery-preview.js :: PC-030M20AV3C RESPONSIVE CALIBRATION
+app/goal-scenario-planner.js :: PC-030M20AV3B RESPONSIVE CALIBRATION
+app/holding-details.js :: PC-030M20AV3E RESPONSIVE CALIBRATION
+app/intelligence-center.js :: PC-030M20AV3F RESPONSIVE CALIBRATION
+app/investment-intelligence.js :: PC-030M20AV3I RESPONSIVE CALIBRATION
+app/market-price-import.js :: PC-030M20AV3I RESPONSIVE CALIBRATION
+app/multi-period-filing-extraction.js :: PC-030M20AV3H RESPONSIVE CALIBRATION
+app/order-book.js :: PC-030M20AV3D RESPONSIVE CALIBRATION
+app/performance.js :: PC-030M20AV3B RESPONSIVE CALIBRATION
+app/portfolio-rebalancing.js :: PC-030M20AV3E RESPONSIVE CALIBRATION
+app/portfolio-risk.js :: PC-030M20AV3E RESPONSIVE CALIBRATION
+app/portfolio-sync-center.js :: PC-030M20AV3D RESPONSIVE CALIBRATION
+app/research-valuation.js :: PC-030M20AV3F RESPONSIVE CALIBRATION
+app/trade-history.js :: PC-030M20AV3D RESPONSIVE CALIBRATION
+app/transactions-upload.js :: PC-030M20AV3D RESPONSIVE CALIBRATION
+app/transactions.js :: PC-030M20AV3D RESPONSIVE CALIBRATION
+app/unified-portfolio-analytics.js :: PC-030M20AV3E RESPONSIVE CALIBRATION
+app/verified-filings.js :: PC-030M20AV3F RESPONSIVE CALIBRATION
+app/watchlist.js :: PC-030M20AV3F RESPONSIVE CALIBRATION
+app/wealth-journey.js :: PC-030M20AV3C RESPONSIVE CALIBRATION
+
+Audit rules:
+- Desktop containment passes with maxWidth:960, canonical MobileScreen, contentWide, or a thin re-export wrapper.
+- Bottom safety passes with paddingBottom:128, canonical MobileScreen/StickyActionBar, or a thin re-export wrapper.
+- Auth/onboarding/setup screens are reported separately and are not auto-classified as residual investor surfaces.
+- watchlist-old.js is intentionally treated as legacy.
+- This audit is structural only. It does not modify files and does not claim business-logic correctness.

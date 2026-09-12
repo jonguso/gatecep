@@ -14,6 +14,7 @@ import {
 import { buildSyncStatus } from "../src/portfolio/syncStatus";
 import { ContainedPanel } from "../src/components/mobile/MobileUI";
 
+// PC-030M20AV3K RESPONSIVE CALIBRATION
 export default function BrokerUpload() {
   const [portfolioUploaded, setPortfolioUploaded] = useState(false);
   const [cashUploaded, setCashUploaded] = useState(false);
@@ -157,13 +158,10 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#020617"
   },
-  content: {
-    padding: 22,
-    paddingTop: 70,
-    paddingBottom: 90
-  },
+  content: { width: "100%", maxWidth: 960, alignSelf: "center", padding: 22, paddingTop: 70, paddingBottom: 128 },
   headerRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     alignItems: "center",
     gap: 12
@@ -213,7 +211,8 @@ const styles = StyleSheet.create({
     fontSize: 18,
     marginBottom: 12
   },
-  panelTabs: { flexDirection: "row", gap: 10, marginTop: 20 },
+  panelTabs: { flexDirection: "row",
+    flexWrap: "wrap", gap: 10, marginTop: 20 },
   panelTab: { flex: 1, minHeight: 44, borderRadius: 14, backgroundColor: "#1e293b", alignItems: "center", justifyContent: "center" },
   panelTabActive: { backgroundColor: "#9333ea" },
   panelTabText: { color: "#94a3b8", fontWeight: "900" },

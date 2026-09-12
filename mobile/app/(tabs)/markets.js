@@ -23,8 +23,9 @@ import {
 } from "../../src/markets/marketHubData";
 import useMarketData from "../../src/services/markets/useMarketData";
 
+// PC-030M20AV3F RESPONSIVE CALIBRATION
 export default function Markets() {
-  const { height: windowHeight } = useWindowDimensions();
+  const { width: windowWidth, height: windowHeight } = useWindowDimensions();
   const [tab, setTab] = useState("Equities");
   const [search, setSearch] = useState("");
   const [activePanel, setActivePanel] = useState("market");
@@ -73,9 +74,18 @@ async function loadWatchlist() {
   return (
     <ScrollView
       style={styles.screen}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[
+        styles.content,
+        windowWidth >= 720 && { width: "100%", maxWidth: 960, alignSelf: "center" },
+        windowWidth < 720 && { paddingHorizontal: 16, paddingTop: 32, paddingBottom: 128 },
+        windowWidth < 480 && { paddingHorizontal: 12, paddingTop: 24 }
+      ]}
     >
-      <Text style={styles.title}>Markets</Text>
+      <Text style={[
+        styles.title,
+        windowWidth < 720 && { fontSize: 28, lineHeight: 34 },
+        windowWidth < 480 && { fontSize: 25, lineHeight: 31 }
+      ]}>Markets</Text>
 
       <Text style={styles.subtitle}>
         Market intelligence center
@@ -87,7 +97,7 @@ async function loadWatchlist() {
 
       <ActiveUserBanner />
 
-      <View style={styles.marketStatus}>
+      <View style={[styles.marketStatus, windowWidth < 520 && { flexDirection: "column", alignItems: "stretch" }]}>
         <View style={{ flex: 1 }}>
           <Text style={styles.marketStatusTitle}>
             {market.loading
@@ -191,7 +201,7 @@ async function loadWatchlist() {
             {rows.map((row) => (
               <Pressable
                 key={row.symbol}
-                style={styles.stockRow}
+                style={[styles.stockRow, windowWidth < 480 && { flexWrap: "wrap" }]}
                 onPress={() => router.push(`/security/${row.symbol}`)}
                 accessibilityRole="button"
                 accessibilityLabel={`Explore ${row.symbol} company`}
@@ -326,7 +336,7 @@ async function loadWatchlist() {
   return (
     <Pressable
   key={symbol}
-  style={styles.watchlistCard}
+  style={[styles.watchlistCard, windowWidth < 480 && { flexDirection: "column", alignItems: "stretch", gap: 10 }]}
   onPress={() => stock.symbol && router.push(`/security/${stock.symbol}`)}
   accessibilityRole="button"
   accessibilityLabel={`Explore ${symbol} company`}

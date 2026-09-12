@@ -10,6 +10,7 @@ import {
 
 const STEPS = ["Evidence", "Compare", "Review", "Resolve", "Complete"];
 
+// PC-030M20AV3L RESPONSIVE CALIBRATION
 export default function BrokerReconciliationCase() {
   const [loading, setLoading] = useState(true);
   const [workflow, setWorkflow] = useState(null);
@@ -124,11 +125,13 @@ function formatDate(value) { const date = new Date(value); return value && !Numb
 
 const styles = StyleSheet.create({
   valueCard: { marginTop: 2, backgroundColor: "#0f172a", borderColor: "#1e293b", borderWidth: 1, borderRadius: 18, overflow: "hidden", paddingHorizontal: 14 },
-  row: { minHeight: 48, paddingVertical: 11, flexDirection: "row", alignItems: "center", gap: 12, borderBottomColor: "#1e293b", borderBottomWidth: 1 },
+  row: { minHeight: 48, paddingVertical: 11, flexDirection: "row",
+    flexWrap: "wrap", alignItems: "center", gap: 12, borderBottomColor: "#1e293b", borderBottomWidth: 1 },
   rowLabel: { color: "#94a3b8", flex: 1, fontSize: 12 },
   rowValue: { color: "white", flex: 1, textAlign: "right", fontWeight: "900" },
   rowWarning: { color: "#fbbf24", flex: 1, textAlign: "right", fontWeight: "900" },
-  issueHeader: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
+  issueHeader: { flexDirection: "row",
+    flexWrap: "wrap", alignItems: "center", marginBottom: 8 },
   flex: { flex: 1 },
   issueTitle: { color: "white", fontSize: 18, fontWeight: "900" },
   issueType: { color: "#fbbf24", fontSize: 11, fontWeight: "900", marginTop: 4 },

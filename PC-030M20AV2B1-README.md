@@ -1,0 +1,1 @@
+AV2B1 removes the Node-test dependency on runtime basketExecutionStore imports. The handoff service now builds a compatible REVIEW execution purely; the app still persists it through canonical saveBasketExecution(). No runtime behavior or integrity boundary is weakened.

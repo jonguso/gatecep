@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View
 } from "react-native";
 import { router, useFocusEffect } from "expo-router";
@@ -25,6 +26,7 @@ import {
 } from "../src/auth/userStorage";
 
 export default function Coach() {
+  const { width: viewportWidth } = useWindowDimensions();
   const [portfolio, setPortfolio] = useState([]);
   const [dashboardContext, setDashboardContext] = useState(null);
   const [recommendationHistory, setRecommendationHistory] = useState([]);
@@ -330,9 +332,9 @@ router.push("/(tabs)/trading");
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <View style={styles.headerRow}>
-        <Text style={styles.title}>Practice Coach G Lab</Text>
+    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, viewportWidth >= 720 && styles.av3bContentWide, viewportWidth < 720 && styles.av3bContentCompact, viewportWidth < 480 && styles.av3bContentNarrow]}>
+      <View style={[styles.headerRow, viewportWidth < 720 && styles.av3bHeaderCompact]}>
+        <Text style={[styles.title, viewportWidth < 720 && styles.av3bTitleCompact, viewportWidth < 480 && styles.av3bTitleNarrow]}>Practice Coach G Lab</Text>
 
         <Pressable
           style={styles.dashboardButton}
@@ -1084,5 +1086,37 @@ const styles = StyleSheet.create({
     borderColor: "#9333ea",
     borderWidth: 1,
     maxHeight: "88%"
+  },
+
+  /* PC-030M20AV3B RESPONSIVE CALIBRATION */
+  av3bContentWide: {
+    width: "100%",
+    maxWidth: 960,
+    alignSelf: "center",
+    paddingHorizontal: 24
+  },
+  av3bContentCompact: {
+    paddingHorizontal: 16,
+    paddingTop: 24,
+    paddingBottom: 128
+  },
+  av3bContentNarrow: {
+    paddingHorizontal: 12
+  },
+  av3bHeaderCompact: {
+    flexWrap: "wrap",
+    alignItems: "stretch"
+  },
+  av3bHeaderActionsCompact: {
+    width: "100%",
+    flexWrap: "wrap"
+  },
+  av3bTitleCompact: {
+    fontSize: 28,
+    lineHeight: 34
+  },
+  av3bTitleNarrow: {
+    fontSize: 25,
+    lineHeight: 31
   }
 });

@@ -14,6 +14,42 @@ export async function loadBrokerActionPlan() {
   }
 }
 
+export async function saveBrokerActionPlan(plan = {}) {
+  const now = new Date().toISOString();
+  const orders = Array.isArray(plan?.orders)
+    ? plan.orders.map((order, index) => normalizeOrder({
+        ...order,
+        id: order.id || `BAP-${Date.now()}-${index}`,
+        status: "REVIEW",
+        message: order.message || "Prepared for manual broker review; not executed",
+        advisoryOnly: true,
+        brokerExecutionConfirmed: false,
+        realPortfolioMutationAllowed: false,
+        practicePortfolioMutationAllowed: false,
+        createdAt: order.createdAt || now,
+        updatedAt: now
+      }))
+    : [];
+
+  const saved = {
+    ...plan,
+    id: plan.id || `BROKER-PLAN-${Date.now()}`,
+    executionMode: "BROKER_HANDOFF_ONLY",
+    source: "COACH_G_ADVISORY",
+    status: "REVIEW",
+    advisoryOnly: true,
+    brokerExecutionConfirmed: false,
+    realPortfolioMutationAllowed: false,
+    practicePortfolioMutationAllowed: false,
+    createdAt: plan.createdAt || now,
+    updatedAt: now,
+    orders
+  };
+
+  await userSetItem(BROKER_ACTION_PLAN_KEY, JSON.stringify(saved));
+  return saved;
+}
+
 export async function addBrokerActionPlanOrder(input = {}) {
   const existing = await loadBrokerActionPlan();
   const now = new Date().toISOString();
@@ -59,7 +95,13 @@ export function buildBrokerActionPlanText(plan = {}) {
   (plan.orders || []).forEach((order, index) => {
     rows.push("");
     rows.push(`${index + 1}. ${order.side} ${order.symbol} — Qty ${order.quantity} @ limit KES ${Number(order.price || 0).toFixed(2)}`);
-    rows.push(`Estimated charges: KES ${Number(order.estimatedCharges || 0).toFixed(2)}`);
+    rows.push(
+      order.feeEvidenceAvailable === true &&
+      order.estimatedCharges !== null &&
+      order.estimatedCharges !== undefined
+        ? `Verified estimated charges: KES ${Number(order.estimatedCharges).toFixed(2)}`
+        : "Verified estimated charges: Unavailable"
+    );
     if (order.guardPrice) rows.push(`${order.side === "SELL" ? "Minimum net break-even limit" : "Maximum no-average-increase limit"}: KES ${Number(order.guardPrice).toFixed(2)}`);
     if (order.side === "SELL" && order.costBasisMethod) rows.push(`Cost-basis method: ${order.costBasisMethod}`);
     if (order.side === "SELL" && order.soldCostPerShare) rows.push(`Expected cost of shares removed: KES ${Number(order.soldCostPerShare).toFixed(2)} per share`);

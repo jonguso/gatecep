@@ -11,7 +11,8 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  View
+  View,
+  useWindowDimensions
 } from "react-native";
 
 import {
@@ -152,7 +153,9 @@ const OPERATION_ROUTES = [
   }
 ];
 
+// PC-030M20AV3G RESPONSIVE CALIBRATION
 export default function FundamentalOperationsCenterScreen() {
+  const { width: windowWidth } = useWindowDimensions();
   const [
     loading,
     setLoading
@@ -468,9 +471,12 @@ export default function FundamentalOperationsCenterScreen() {
       style={
         styles.screen
       }
-      contentContainerStyle={
-        styles.content
-      }
+      contentContainerStyle={[
+        styles.content,
+        windowWidth >= 720 && { width: "100%", maxWidth: 960, alignSelf: "center" },
+        windowWidth < 720 && { paddingHorizontal: 16, paddingTop: 32, paddingBottom: 128 },
+        windowWidth < 480 && { paddingHorizontal: 12, paddingTop: 24 }
+      ]}
     >
       <Text
         style={
@@ -481,9 +487,11 @@ export default function FundamentalOperationsCenterScreen() {
       </Text>
 
       <Text
-        style={
-          styles.title
-        }
+        style={[
+          styles.title,
+          windowWidth < 720 && { fontSize: 28, lineHeight: 34 },
+          windowWidth < 480 && { fontSize: 25, lineHeight: 31 }
+        ]}
       >
         Fundamental Data Operations Center
       </Text>
@@ -515,9 +523,10 @@ export default function FundamentalOperationsCenterScreen() {
       ) : null}
 
       <View
-        style={
-          styles.hero
-        }
+        style={[
+          styles.hero,
+          windowWidth < 520 && { flexDirection: "column", alignItems: "stretch" }
+        ]}
       >
         <View
           style={

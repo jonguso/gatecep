@@ -18,6 +18,8 @@ export const MENU_SECTIONS = [
     initiallyOpen: true,
     items: [
       { title: "Home", detail: "Portfolio value, allocation, and holdings", route: "/(tabs)/dashboard" },
+      { title: "Holdings", detail: "Review REAL holdings and security-level details", route: "/holding-details" },
+      { title: "Portfolio Rebalancing", detail: "Review allocation drift, targets, funding readiness, and advisory rebalance actions", route: "/portfolio-rebalancing" },
       { title: "Markets", detail: "NSE prices and market movement", route: "/(tabs)/markets" },
       { title: "Trading", detail: "Review and place investor-directed orders", route: "/(tabs)/trading" },
       { title: "Coach G", detail: "Personalized portfolio and wealth guidance", route: "/(tabs)/coach" }
@@ -39,7 +41,7 @@ export const MENU_SECTIONS = [
     items: [
       { title: "Sync & Reconcile", detail: "Upload broker evidence, compare REAL holdings and cash, and review corrections", route: "/portfolio-sync-center" },
       { title: "Market Price Import", detail: "Restricted temporary import of licensed myStocks CSV prices", route: "/market-price-import" },
-      { title: "Broker Profile", detail: "Review the connected broker account profile", route: "/broker-profile" },
+      { title: "Broker Accounts", detail: "Manage linked brokers, fee evidence and execution readiness", route: "/broker-accounts" },
       { title: "Manual Portfolio Entry", detail: "Create or correct investor-entered REAL holdings", route: "/manual-portfolio-entry" }
     ]
   },

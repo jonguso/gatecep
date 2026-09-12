@@ -13,6 +13,8 @@ import { router, useFocusEffect } from "expo-router";
 import ActiveUserBanner from "../src/components/ActiveUserBanner";
 import { ContainedPanel } from "../src/components/mobile/MobileUI";
 import { userGetItem, userSetItem } from "../src/auth/userStorage";
+import { loadBrokerAccounts, saveBrokerAccounts, migrateLegacyBrokerProfileToCanonicalAccounts } from "../src/services/brokers/brokerAccountStore";
+import { buildBrokerFeeSchedule, describeBrokerFeeSchedule } from "../src/services/brokers/brokerFeeScheduleManagementService";
 
 const BROKER_ACCOUNTS_KEY = "brokerAccounts";
 const DEFAULT_BROKER_KEY = "defaultBrokerProfile";
@@ -50,6 +52,7 @@ const AVAILABLE_BROKERS = [
   }
 ];
 
+// PC-030M20AV3K RESPONSIVE CALIBRATION
 export default function BrokerAccounts() {
   const [accounts, setAccounts] = useState([]);
   const [activePanel, setActivePanel] = useState("connected");
@@ -57,7 +60,15 @@ export default function BrokerAccounts() {
   const [form, setForm] = useState({
     accountNumber: "",
     cdsNumber: "",
-    nickname: ""
+    nickname: "",
+    commissionRatePct: "",
+    otherChargesRatePct: "",
+    minimumCommission: "",
+    fixedCharges: "",
+    feeCurrency: "KES",
+    feeSource: "",
+    feeVerifiedAt: "",
+    feeVerificationConfirmed: false
   });
 
   useFocusEffect(
@@ -67,10 +78,12 @@ export default function BrokerAccounts() {
   );
 
   async function load() {
-    const raw = await userGetItem(BROKER_ACCOUNTS_KEY);
-    const parsed = raw ? JSON.parse(raw) : [];
-
-    setAccounts(Array.isArray(parsed) ? parsed : []);
+    let canonical = await loadBrokerAccounts();
+    if (!canonical.length) {
+      const migration = await migrateLegacyBrokerProfileToCanonicalAccounts();
+      canonical = migration?.accounts || [];
+    }
+    setAccounts(Array.isArray(canonical) ? canonical : []);
   }
 
   const connectedIds = useMemo(() => {
@@ -95,14 +108,45 @@ export default function BrokerAccounts() {
     setForm({
       accountNumber: existing?.accountNumber || "",
       cdsNumber: existing?.cdsNumber || "",
-      nickname: existing?.nickname || broker.shortName || broker.name
+      nickname: existing?.nickname || broker.shortName || broker.name,
+      commissionRatePct: existing?.feeSchedule?.commissionRatePct != null ? String(existing.feeSchedule.commissionRatePct) : "",
+      otherChargesRatePct: existing?.feeSchedule?.otherChargesRatePct != null ? String(existing.feeSchedule.otherChargesRatePct) : "",
+      minimumCommission: existing?.feeSchedule?.minimumCommission != null ? String(existing.feeSchedule.minimumCommission) : "",
+      fixedCharges: existing?.feeSchedule?.fixedCharges != null ? String(existing.feeSchedule.fixedCharges) : "",
+      feeCurrency: existing?.feeSchedule?.currency || "KES",
+      feeSource: existing?.feeSchedule?.source || "",
+      feeVerifiedAt: existing?.feeSchedule?.verifiedAt || "",
+      feeVerificationConfirmed: existing?.feeSchedule?.verified === true
     });
   }
 
   async function saveBrokerConnection() {
     if (!editingBroker) return;
 
+    const existing = accounts.find((item) => item.id === editingBroker.id);
     const now = new Date().toISOString();
+
+    const hasAnyFeeInput = Boolean(
+      String(form.commissionRatePct || "").trim() ||
+      String(form.otherChargesRatePct || "").trim() ||
+      String(form.minimumCommission || "").trim() ||
+      String(form.fixedCharges || "").trim() ||
+      String(form.feeSource || "").trim() ||
+      String(form.feeVerifiedAt || "").trim()
+    );
+
+    const feeSchedule = hasAnyFeeInput
+      ? buildBrokerFeeSchedule({
+          commissionRatePct: form.commissionRatePct,
+          otherChargesRatePct: form.otherChargesRatePct,
+          minimumCommission: form.minimumCommission,
+          fixedCharges: form.fixedCharges,
+          currency: form.feeCurrency || "KES",
+          source: form.feeSource,
+          verifiedAt: form.feeVerifiedAt,
+          verificationConfirmed: form.feeVerificationConfirmed === true
+        })
+      : (existing?.feeSchedule || null);
 
     const nextAccount = {
       id: editingBroker.id,
@@ -123,7 +167,8 @@ export default function BrokerAccounts() {
       defaultBroker: accounts.length === 0,
       connectedAt: now,
       updatedAt: now,
-      lastSyncAt: null
+      lastSyncAt: existing?.lastSyncAt || null,
+      feeSchedule
     };
 
     const without = accounts.filter((item) => item.id !== editingBroker.id);
@@ -142,7 +187,15 @@ export default function BrokerAccounts() {
     setForm({
       accountNumber: "",
       cdsNumber: "",
-      nickname: ""
+      nickname: "",
+      commissionRatePct: "",
+      otherChargesRatePct: "",
+      minimumCommission: "",
+      fixedCharges: "",
+      feeCurrency: "KES",
+      feeSource: "",
+      feeVerifiedAt: "",
+      feeVerificationConfirmed: false
     });
 
     Alert.alert("Broker Connected", `${editingBroker.name} profile saved.`);
@@ -185,7 +238,7 @@ export default function BrokerAccounts() {
   }
 
   async function persistAccounts(next) {
-    await userSetItem(BROKER_ACCOUNTS_KEY, JSON.stringify(next));
+    await saveBrokerAccounts(next);
 
     const defaultAccount =
       next.find((item) => item.defaultBroker) || next[0] || null;
@@ -208,6 +261,7 @@ export default function BrokerAccounts() {
           connectionMode: defaultAccount.connectionMode,
           apiMode: defaultAccount.apiMode,
           status: defaultAccount.status,
+          feeSchedule: defaultAccount.feeSchedule || null,
           updatedAt: new Date().toISOString()
         })
       );
@@ -281,6 +335,38 @@ export default function BrokerAccounts() {
             style={styles.input}
           />
 
+          <View style={styles.feePanel}>
+            <Text style={styles.feeTitle}>Broker Fee Schedule</Text>
+            <Text style={styles.small}>Optional. GateCEP only uses these charges when you confirm they were checked against broker-published evidence.</Text>
+
+            <Text style={styles.label}>Commission Rate (%)</Text>
+            <TextInput value={form.commissionRatePct} onChangeText={(value) => setForm({ ...form, commissionRatePct: value })} keyboardType="decimal-pad" placeholder="e.g. 1.30" placeholderTextColor="#64748b" style={styles.input} />
+
+            <Text style={styles.label}>Other Charges Rate (%)</Text>
+            <TextInput value={form.otherChargesRatePct} onChangeText={(value) => setForm({ ...form, otherChargesRatePct: value })} keyboardType="decimal-pad" placeholder="e.g. 0.34" placeholderTextColor="#64748b" style={styles.input} />
+
+            <Text style={styles.label}>Minimum Commission (KES)</Text>
+            <TextInput value={form.minimumCommission} onChangeText={(value) => setForm({ ...form, minimumCommission: value })} keyboardType="decimal-pad" placeholder="0" placeholderTextColor="#64748b" style={styles.input} />
+
+            <Text style={styles.label}>Fixed Charges (KES)</Text>
+            <TextInput value={form.fixedCharges} onChangeText={(value) => setForm({ ...form, fixedCharges: value })} keyboardType="decimal-pad" placeholder="0" placeholderTextColor="#64748b" style={styles.input} />
+
+            <Text style={styles.label}>Evidence Source</Text>
+            <TextInput value={form.feeSource} onChangeText={(value) => setForm({ ...form, feeSource: value })} placeholder="Broker-published tariff / statement reference" placeholderTextColor="#64748b" style={styles.input} />
+
+            <Text style={styles.label}>Verified Date</Text>
+            <TextInput value={form.feeVerifiedAt} onChangeText={(value) => setForm({ ...form, feeVerifiedAt: value })} placeholder="YYYY-MM-DD" placeholderTextColor="#64748b" style={styles.input} />
+
+            <Pressable style={[styles.verifyRow, form.feeVerificationConfirmed && styles.verifyRowActive]} onPress={() => setForm({ ...form, feeVerificationConfirmed: !form.feeVerificationConfirmed })}>
+              <Text style={styles.verifyMark}>{form.feeVerificationConfirmed ? "✓" : "○"}</Text>
+              <Text style={styles.verifyText}>I verified these fee values against the evidence source above.</Text>
+            </Pressable>
+
+            {form.feeVerificationConfirmed && (!String(form.feeSource || "").trim() || !String(form.feeVerifiedAt || "").trim()) ? (
+              <Text style={styles.feeWarning}>Evidence source and verified date are required before GateCEP can mark this fee schedule verified.</Text>
+            ) : null}
+          </View>
+
           <Pressable style={styles.primary} onPress={saveBrokerConnection}>
             <Text style={styles.primaryText}>Save Broker Profile</Text>
           </Pressable>
@@ -346,6 +432,11 @@ export default function BrokerAccounts() {
               <Text style={styles.detail}>
                 API Mode: {account.apiMode || "PENDING_BROKER_API"}
               </Text>
+
+              <Text style={styles.detail}>Fee Evidence: {describeBrokerFeeSchedule(account.feeSchedule).label}</Text>
+              {account?.feeSchedule?.verified === true ? (
+                <Text style={styles.detail}>Verified: {account.feeSchedule.verifiedAt || "N/A"} - {account.feeSchedule.source || "N/A"}</Text>
+              ) : null}
 
               <View style={styles.buttonRow}>
                 {!account.defaultBroker ? (
@@ -422,10 +513,18 @@ function Metric({ label, value }) {
 }
 
 const styles = StyleSheet.create({
+  feePanel: { marginTop: 18, backgroundColor: "#020617", borderColor: "#334155", borderWidth: 1, borderRadius: 16, padding: 14 },
+  feeTitle: { color: "#67e8f9", fontWeight: "900", fontSize: 16 },
+  verifyRow: { marginTop: 16, flexDirection: "row", gap: 10, alignItems: "center", backgroundColor: "#0f172a", borderColor: "#334155", borderWidth: 1, borderRadius: 14, padding: 12 },
+  verifyRowActive: { borderColor: "#22c55e", backgroundColor: "rgba(34,197,94,.10)" },
+  verifyMark: { color: "#67e8f9", fontSize: 18, fontWeight: "900" },
+  verifyText: { color: "#cbd5e1", flex: 1, lineHeight: 18 },
+  feeWarning: { color: "#fde68a", marginTop: 10, lineHeight: 18, fontSize: 12 },
   screen: { flex: 1, backgroundColor: "#020617" },
-  content: { padding: 22, paddingTop: 70, paddingBottom: 110 },
+  content: { width: "100%", maxWidth: 960, alignSelf: "center", padding: 22, paddingTop: 70, paddingBottom: 128 },
   headerRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     alignItems: "center",
     gap: 12
@@ -454,6 +553,8 @@ const styles = StyleSheet.create({
   },
   metric: {
     width: "47%",
+    flexGrow: 1,
+    minWidth: 140,
     backgroundColor: "#020617",
     borderColor: "#334155",
     borderWidth: 1,
@@ -481,7 +582,8 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     marginBottom: 12
   },
-  panelTabs: { flexDirection: "row", gap: 10, marginTop: 20 },
+  panelTabs: { flexDirection: "row",
+    flexWrap: "wrap", gap: 10, marginTop: 20 },
   panelTab: { flex: 1, minHeight: 44, borderRadius: 14, backgroundColor: "#1e293b", alignItems: "center", justifyContent: "center", paddingHorizontal: 10 },
   panelTabActive: { backgroundColor: "#9333ea" },
   panelTabText: { color: "#94a3b8", fontWeight: "900", fontSize: 12 },

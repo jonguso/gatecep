@@ -311,9 +311,9 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#020617"
   },
-  content: {
+  content: { /* PC-030M20AV3S RESPONSIVE CALIBRATION */ width: "100%", maxWidth: 960, alignSelf: "center",
     padding: 18,
-    paddingBottom: 40
+    paddingBottom: 128
   },
   center: {
     flex: 1,

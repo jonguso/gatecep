@@ -1,5 +1,7 @@
 import React, { useCallback, useState } from "react";
-import { Modal, Pressable, StyleSheet, Text, View } from "react-native";
+import { Modal, Pressable, StyleSheet, Text, View,
+  useWindowDimensions
+} from "react-native";
 import { router, useFocusEffect } from "expo-router";
 
 import { userGetItem } from "../src/auth/userStorage";
@@ -24,7 +26,9 @@ import {
 
 const STEPS = ["Verify", "Confirm", "Complete"];
 
+// PC-030M20AV3D RESPONSIVE CALIBRATION
 export default function PortfolioSyncCenter() {
+  const { width: av3dWidth } = useWindowDimensions();
   const [state, setState] = useState({ loading: true, saving: false, error: "", holdingsCount: 0, portfolioValue: 0, cash: 0, source: "", mirror: null, preview: null, connectedRealBroker: false, lotHistory: null });
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [activePanel, setActivePanel] = useState("evidence");
@@ -145,6 +149,7 @@ export default function PortfolioSyncCenter() {
 
       {activePanel === "evidence" ? <ContainedPanel title="Required Broker Evidence" subtitle="Complete all three records before confirmation" testID="real-sync-evidence-panel">
         <EvidenceRow
+          compact={av3dWidth < 520}
           label="Portfolio Valuation"
           ready={valuationReady}
           value={valuationReady ? `${state.mirror.holdings?.length || 0} holdings • ${state.mirror.accountName || state.mirror.broker}` : "Required"}
@@ -152,6 +157,7 @@ export default function PortfolioSyncCenter() {
           onPress={() => router.push("/import-portfolio?mode=RECONCILE")}
         />
         <EvidenceRow
+          compact={av3dWidth < 520}
           label="Cash / Ledger Statement"
           ready={cashEvidenceReady}
           value={cashEvidenceReady ? `KES ${money(state.mirror.cashBalance)}` : valuationReady ? "Required to complete comparison" : "Upload valuation first"}
@@ -160,6 +166,7 @@ export default function PortfolioSyncCenter() {
           onPress={() => router.push("/(tabs)/funds?mode=RECONCILE")}
         />
         <EvidenceRow
+          compact={av3dWidth < 520}
           label="Transaction / Lot History"
           ready={transactionHistoryReady}
           value={transactionHistoryReady ? `${state.lotHistory.completedCount} completed executions • ${state.lotHistory.symbols.length} securities` : "Required for FIFO lots, realized results, and post-sale WAP"}
@@ -210,7 +217,7 @@ export default function PortfolioSyncCenter() {
               {state.preview?.next?.holdingsCount || 0} holdings (KES {money(state.preview?.next?.holdingsValue)}) and KES {money(state.preview?.next?.cash)} cash will replace GateCEP's current REAL record.
             </Text>
             <Text style={styles.protection}>Broker quantities, cost basis, and cash become authoritative. Daily market prices may change valuation only.</Text>
-            <View style={styles.modalActions}>
+            <View style={[styles.modalActions, av3dWidth < 480 && { flexDirection: "column" }]}>
               <Pressable
                 style={[styles.modalButton, styles.cancelButton]}
                 disabled={state.saving}
@@ -234,15 +241,15 @@ export default function PortfolioSyncCenter() {
   );
 }
 
-function EvidenceRow({ label, ready, value, actionLabel, onPress, disabled = false }) {
+function EvidenceRow({ label, ready, value, actionLabel, onPress, disabled = false, compact = false }) {
   return (
-    <View style={styles.evidenceRow}>
+    <View style={[styles.evidenceRow, compact && { flexDirection: "column", alignItems: "stretch" }]}>
       <View style={styles.evidenceText}>
         <Text style={styles.evidenceLabel}>{label}</Text>
         {value ? <Text style={styles.evidenceValue}>{value}</Text> : null}
         <Text style={ready ? styles.ready : styles.required}>{ready ? "READY" : "REQUIRED"}</Text>
       </View>
-      <Pressable style={[styles.smallButton, disabled && styles.disabled]} disabled={disabled} onPress={onPress}>
+      <Pressable style={[styles.smallButton, compact && { alignSelf: "stretch", alignItems: "center" }, disabled && styles.disabled]} disabled={disabled} onPress={onPress}>
         <Text style={styles.smallButtonText}>{actionLabel}</Text>
       </Pressable>
     </View>

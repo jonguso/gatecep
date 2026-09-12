@@ -15,6 +15,7 @@ import {
 } from "../src/auth/userStorage";
 import { addUserBroker } from "../src/features/brokers/api/userBrokerApi";
 import { BROKERS, getDefaultBroker } from "../src/constants/brokers";
+import { upsertBrokerAccount, resolveCanonicalBrokerId } from "../src/services/brokers/brokerAccountStore";
 import { ContainedPanel } from "../src/components/mobile/MobileUI";
 
 const brokers = [
@@ -27,6 +28,7 @@ const brokers = [
 "Other"
 ];
 
+// PC-030M20AV3K RESPONSIVE CALIBRATION
 export default function BrokerProfile() {
   const [form, setForm] = useState({
     broker: getDefaultBroker().code,
@@ -98,6 +100,15 @@ await userSetItem(
   JSON.stringify(cloudBroker)
 );
 
+      await upsertBrokerAccount({
+        brokerId: resolveCanonicalBrokerId(baseProfile.broker),
+        brokerName: baseProfile.brokerName,
+        clientNumber: baseProfile.clientNumber,
+        nickname: baseProfile.nickname,
+        defaultBroker: true, status: "ACTIVE",
+        connectionMode: "MANUAL_PROFILE", apiMode: "PENDING_BROKER_API"
+      });
+
       const verify = await userGetItem("brokerProfile");
 
       if (!verify) {
@@ -135,8 +146,8 @@ await userSetItem(
       </View>
 
       <Text style={styles.subtitle}>
-        This does not connect to your broker yet. It helps Gatecep match your
-        uploaded valuation or statement to the correct broker profile.
+        Compatibility profile for statement matching. Linked broker accounts,
+        fee evidence and execution readiness are managed in Broker Accounts.
       </Text>
 
       <ContainedPanel title="Broker Identity" subtitle="Scroll to review and save broker matching details" minHeight={420} maxHeight={610} heightRatio={0.66} testID="broker-profile-form-panel">
@@ -258,9 +269,10 @@ function Input({ label, ...props }) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#020617" },
-  content: { padding: 22, paddingTop: 70, paddingBottom: 60 },
+  content: { width: "100%", maxWidth: 960, alignSelf: "center", padding: 22, paddingTop: 70, paddingBottom: 128 },
   headerRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     alignItems: "center",
     gap: 12

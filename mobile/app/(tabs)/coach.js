@@ -7,6 +7,7 @@ import {
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View
 } from "react-native";
 import { router, useFocusEffect } from "expo-router";
@@ -26,6 +27,7 @@ import { loadCanonicalRealTransactionHistory } from "../../src/features/wealth-j
 import InvestorJourneyNavigation from "../../src/components/mobile/InvestorJourneyNavigation";
 
 export default function Coach() {
+  const { width: viewportWidth } = useWindowDimensions();
   const [portfolio, setPortfolio] = useState([]);
   const [dashboardContext, setDashboardContext] = useState(null);
   const [transactionsUploaded, setTransactionsUploaded] = useState(false);
@@ -379,10 +381,10 @@ export default function Coach() {
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <View style={styles.headerRow}>
-        <Text style={styles.title}>Coach G Insights</Text>
-        <View style={styles.headerActions}>
+    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, viewportWidth >= 720 && styles.av3bContentWide, viewportWidth < 720 && styles.av3bContentCompact, viewportWidth < 480 && styles.av3bContentNarrow]}>
+      <View style={[styles.headerRow, viewportWidth < 720 && styles.av3bHeaderCompact]}>
+        <Text style={[styles.title, viewportWidth < 720 && styles.av3bTitleCompact, viewportWidth < 480 && styles.av3bTitleNarrow]}>Coach G Insights</Text>
+        <View style={[styles.headerActions, viewportWidth < 720 && styles.av3bHeaderActionsCompact]}>
           <Pressable style={styles.headerButton} onPress={() => router.canGoBack?.() ? router.back() : router.replace("/(tabs)/dashboard")}><Text style={styles.headerButtonText}>‹ Back</Text></Pressable>
           <Pressable style={styles.headerButton} onPress={() => router.replace("/(tabs)/dashboard")}><Text style={styles.headerButtonText}>Home</Text></Pressable>
         </View>
@@ -1085,5 +1087,37 @@ const styles = StyleSheet.create({
     borderColor: "#9333ea",
     borderWidth: 1,
     maxHeight: "88%"
+  },
+
+  /* PC-030M20AV3B RESPONSIVE CALIBRATION */
+  av3bContentWide: {
+    width: "100%",
+    maxWidth: 960,
+    alignSelf: "center",
+    paddingHorizontal: 24
+  },
+  av3bContentCompact: {
+    paddingHorizontal: 16,
+    paddingTop: 24,
+    paddingBottom: 128
+  },
+  av3bContentNarrow: {
+    paddingHorizontal: 12
+  },
+  av3bHeaderCompact: {
+    flexWrap: "wrap",
+    alignItems: "stretch"
+  },
+  av3bHeaderActionsCompact: {
+    width: "100%",
+    flexWrap: "wrap"
+  },
+  av3bTitleCompact: {
+    fontSize: 28,
+    lineHeight: 34
+  },
+  av3bTitleNarrow: {
+    fontSize: 25,
+    lineHeight: 31
   }
 });

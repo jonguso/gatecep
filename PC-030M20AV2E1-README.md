@@ -1,0 +1,1 @@
+AV2E1 fixes the runtime ReferenceError in openProjectedPortfolioPreview. AV2E used an undefined local variable named projectedShortfall. The hotfix reads the already-carried shortfall from route params instead and also forwards projectedValue when available.

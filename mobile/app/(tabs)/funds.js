@@ -48,6 +48,7 @@ import {
 import { normalizeBrokerCashStatementEvents } from "../../src/features/trading/cashLedgerEvidenceService";
 import { rebuildCanonicalPortfolioLedger } from "../../src/features/trading/canonicalPortfolioLedgerService";
 
+// PC-030M20AV3J RESPONSIVE CALIBRATION
 export default function Funds() {
   const params = useLocalSearchParams();
   const reconciliationMode =
@@ -543,7 +544,7 @@ function money(v) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#020617" },
-  content: { padding: 22, paddingTop: 70, paddingBottom: 90 },
+  content: { width: "100%", maxWidth: 960, alignSelf: "center", padding: 22, paddingTop: 70, paddingBottom: 128 },
   title: { color: "white", fontSize: 34, fontWeight: "900" },
   subtitle: { color: "#94a3b8", marginTop: 10, lineHeight: 22 },
   card: {
@@ -608,6 +609,7 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     alignItems: "center",
     gap: 12

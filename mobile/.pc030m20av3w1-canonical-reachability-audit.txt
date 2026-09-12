@@ -1,0 +1,135 @@
+PC-030M20AV3W1 — Canonical Reachability & Legacy-Chain Audit
+
+Discovery-only. No application source files are modified.
+
+Canonical roots:
+  - app/menu.js
+  - app/(tabs)/dashboard.js
+  - app/(tabs)/coach.js
+  - app/(tabs)/markets.js
+  - app/(tabs)/trading.js
+  - app/(tabs)/funds.js
+  - app/(tabs)/calendar.js
+  - app/(tabs)/news.js
+  - app/investor-home.js
+  - app/my-profile.js
+  - app/portfolio-sync-center.js
+  - app/broker-marketplace.js
+  - app/brokers.js
+  - app/broker-upload.js
+  - app/basket-execution.js
+  - app/coach-insights.js
+  - app/live-dashboard.js
+  - app/order-book.js
+  - src/components/coach/FloatingCoachG.js
+  - src/features/wealth-journey/components/CoachGReconciliationCard.js
+
+LEGACY_CHAIN_CANDIDATE — /execution-audit
+  file: app/execution-audit.js
+  reachable from canonical roots: NO
+  incoming references (1):
+    - app/execution-bridge.js
+ORPHAN_LEGACY_CANDIDATE — /execution-bridge
+  file: app/execution-bridge.js
+  reachable from canonical roots: NO
+  incoming references: none
+ORPHAN_LEGACY_CANDIDATE — /execution-wizard
+  file: app/execution-wizard.js
+  reachable from canonical roots: NO
+  incoming references: none
+CANONICALLY_REACHABLE — /import-portfolio
+  file: app/import-portfolio.js
+  reachable from canonical roots: YES
+  incoming references (5):
+    - app/broker-sync.js
+    - app/broker-upload.js
+    - app/brokers.js
+    - app/existing-portal.js
+    - app/portfolio-sync-center.js
+CANONICALLY_REACHABLE — /link-broker-account
+  file: app/link-broker-account.js
+  reachable from canonical roots: YES
+  incoming references (1):
+    - app/broker-marketplace.js
+CANONICALLY_REACHABLE — /manual-portfolio-entry
+  file: app/manual-portfolio-entry.js
+  reachable from canonical roots: YES
+  incoming references (3):
+    - app/brokers.js
+    - app/menu.js
+    - app/portfolio-sync-center.js
+ORPHAN_LEGACY_CANDIDATE — /order-handoff
+  file: app/order-handoff.js
+  reachable from canonical roots: NO
+  incoming references: none
+CANONICALLY_REACHABLE — /orders-review
+  file: app/orders-review.js
+  reachable from canonical roots: YES
+  incoming references (7):
+    - app/basket-execution.js
+    - app/broker-routing.js
+    - app/execution-bridge.js
+    - app/execution-wizard.js
+    - app/orders.js
+    - app/queue-manager.js
+    - app/trade-basket.js
+CANONICALLY_REACHABLE — /orders
+  file: app/orders.js
+  reachable from canonical roots: YES
+  incoming references (5):
+    - app/basket-execution.js
+    - app/broker-routing.js
+    - app/execution-audit.js
+    - app/execution-bridge.js
+    - app/queue-manager.js
+ORPHAN_LEGACY_CANDIDATE — /reconciliation-center
+  file: app/reconciliation-center.js
+  reachable from canonical roots: NO
+  incoming references: none
+CANONICALLY_REACHABLE — /reconciliation-conversation
+  file: app/reconciliation-conversation.js
+  reachable from canonical roots: YES
+  incoming references (1):
+    - src/features/wealth-journey/components/CoachGReconciliationCard.js
+CANONICALLY_REACHABLE — /review-portfolio-import
+  file: app/review-portfolio-import.js
+  reachable from canonical roots: YES
+  incoming references (1):
+    - app/import-portfolio.js
+CANONICALLY_REACHABLE — /trade-basket
+  file: app/trade-basket.js
+  reachable from canonical roots: YES
+  incoming references (3):
+    - app/orders-review.js
+    - app/orders.js
+    - app/queue-manager.js
+CANONICALLY_REACHABLE — /trade
+  file: app/trade.js
+  reachable from canonical roots: YES
+  incoming references (5):
+    - app/(tabs)/trading.js
+    - app/investor-alert-review.js
+    - app/live-dashboard.js
+    - app/order-book.js
+    - src/components/coach/FloatingCoachG.js
+CANONICALLY_REACHABLE — /transaction-import
+  file: app/transaction-import.js
+  reachable from canonical roots: YES
+  incoming references (2):
+    - app/broker-upload.js
+    - app/brokers.js
+ORPHAN_LEGACY_CANDIDATE — /storage-debug
+  file: app/storage-debug.js
+  reachable from canonical roots: NO
+  incoming references: none
+ORPHAN_LEGACY_CANDIDATE — /version-center
+  file: app/version-center.js
+  reachable from canonical roots: NO
+  incoming references: none
+
+Interpretation:
+- CANONICALLY_REACHABLE: keep in responsive/UAT scope.
+- LEGACY_CHAIN_CANDIDATE: referenced only inside a chain not reachable from canonical roots; review before more patching.
+- ORPHAN_LEGACY_CANDIDATE: no incoming route references found; review before retention/removal.
+- This is static analysis; deep links/external navigation can still make a route reachable.
+- No route is deleted or modified by AV3W1.

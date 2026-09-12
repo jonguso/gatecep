@@ -5,7 +5,8 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  View
+  View,
+  useWindowDimensions
 } from "react-native";
 import { router } from "expo-router";
 import { buildCoachGInvestmentAdvice } from "../src/features/investment-intelligence/investmentAdvisorService";
@@ -31,7 +32,9 @@ const INSIGHT_FILTERS = [
   "INFO"
 ];
 
+// PC-030M20AV3I RESPONSIVE CALIBRATION
 export default function InvestmentIntelligenceScreen() {
+  const { width: windowWidth } = useWindowDimensions();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [advice, setAdvice] = useState(null);
@@ -87,9 +90,25 @@ export default function InvestmentIntelligenceScreen() {
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={[
+        styles.content,
+        windowWidth >= 720 && { width: "100%", maxWidth: 960, alignSelf: "center" },
+        windowWidth < 720 && { paddingHorizontal: 16, paddingTop: 32, paddingBottom: 128 },
+        windowWidth < 480 && { paddingHorizontal: 12, paddingTop: 24 }
+      ]}
+    >
       <Text style={styles.eyebrow}>PC-023A</Text>
-      <Text style={styles.title}>Coach G Investment Intelligence</Text>
+      <Text
+        style={[
+          styles.title,
+          windowWidth < 720 && { fontSize: 28, lineHeight: 34 },
+          windowWidth < 480 && { fontSize: 25, lineHeight: 31 }
+        ]}
+      >
+        Coach G Investment Intelligence
+      </Text>
       <Text style={styles.subtitle}>
         Explainable portfolio ratings, holding recommendations, cash deployment,
         capital allocation, dividend reinvestment, and executive investment priorities.
@@ -101,7 +120,12 @@ export default function InvestmentIntelligenceScreen() {
         </View>
       ) : null}
 
-      <View style={styles.hero}>
+      <View
+        style={[
+          styles.hero,
+          windowWidth < 520 && { flexDirection: "column", alignItems: "stretch" }
+        ]}
+      >
         <View style={styles.scoreCircle}>
           <Text style={styles.scoreValue}>{advice?.intelligenceScore || 0}</Text>
           <Text style={styles.scoreMaximum}>/100</Text>
@@ -119,7 +143,12 @@ export default function InvestmentIntelligenceScreen() {
         </View>
       </View>
 
-      <View style={styles.metricGrid}>
+      <View
+        style={[
+          styles.metricGrid,
+          windowWidth < 420 && { flexDirection: "column" }
+        ]}
+      >
         <Metric label="Portfolio Value" value={`KES ${money(advice?.portfolio?.totalValue)}`} />
         <Metric label="Available Cash" value={`KES ${money(advice?.portfolio?.availableCash)}`} />
         <Metric
@@ -741,6 +770,8 @@ const styles = StyleSheet.create({
   metricGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 14 },
   metricCard: {
     width: "47%",
+    flexGrow: 1,
+    minWidth: 140,
     backgroundColor: "#020617",
     borderColor: "#1e293b",
     borderWidth: 1,
@@ -760,7 +791,7 @@ const styles = StyleSheet.create({
   sectionTitle: { color: "#67e8f9", fontSize: 19, fontWeight: "900" },
   sectionDescription: { color: "#94a3b8", lineHeight: 20, marginTop: 7, marginBottom: 5 },
   componentGrid: { flexDirection: "row", flexWrap: "wrap", gap: 10, marginTop: 13 },
-  scoreMetric: { width: "47%", backgroundColor: "#020617", borderRadius: 14, padding: 13 },
+  scoreMetric: { width: "47%", flexGrow: 1, minWidth: 140, backgroundColor: "#020617", borderRadius: 14, padding: 13 },
   scoreMetricValue: { color: "white", fontSize: 22, fontWeight: "900" },
   scoreMetricUnavailable: { color: "#64748b", fontSize: 22, fontWeight: "900" },
   scoreMetricMaximum: { color: "#64748b", fontSize: 10 },
@@ -774,7 +805,7 @@ const styles = StyleSheet.create({
   },
   progressFill: { height: "100%", backgroundColor: "#22c55e", borderRadius: 8 },
   summaryCard: { backgroundColor: "#020617", borderRadius: 15, padding: 14, marginTop: 13 },
-  row: { flexDirection: "row", justifyContent: "space-between", gap: 14, marginTop: 10 },
+  row: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between", gap: 14, marginTop: 10 },
   rowLabel: { color: "#94a3b8", flex: 1 },
   rowValue: { color: "white", fontWeight: "900", textAlign: "right", flex: 1 },
   narrativeCard: {
@@ -808,6 +839,7 @@ const styles = StyleSheet.create({
   },
   cardHeader: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     alignItems: "flex-start",
     gap: 12

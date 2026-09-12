@@ -4,13 +4,16 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  View
+  View,
+  useWindowDimensions
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { ContainedPanel } from "../src/components/mobile/MobileUI";
 
+// PC-030M20AV3D RESPONSIVE CALIBRATION
 export default function TradeHistory() {
+  const { width: av3dWidth } = useWindowDimensions();
   const [trades, setTrades] = useState([]);
 
   useEffect(() => {
@@ -36,9 +39,18 @@ export default function TradeHistory() {
   }, [trades]);
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-             <View style={styles.headerRow}>
-  <Text style={styles.title}>Trade History</Text>
+    <ScrollView style={styles.screen} contentContainerStyle={[
+      styles.content,
+      av3dWidth >= 720 && { width: "100%", maxWidth: 960, alignSelf: "center" },
+      av3dWidth < 720 && { paddingHorizontal: 16, paddingTop: 32, paddingBottom: 128 },
+      av3dWidth < 480 && { paddingHorizontal: 12, paddingTop: 24 }
+    ]}>
+             <View style={[styles.headerRow, av3dWidth < 600 && { flexDirection: "column", alignItems: "stretch" }]}>
+  <Text style={[
+      styles.title,
+      av3dWidth < 720 && { fontSize: 28, lineHeight: 34 },
+      av3dWidth < 480 && { fontSize: 25, lineHeight: 31 }
+    ]}>Trade History</Text>
 
   <Pressable
     style={styles.dashboardButton}
@@ -69,7 +81,7 @@ export default function TradeHistory() {
       >
       {trades.length === 0 ? null : (
           trades.map((trade, index) => (
-            <View key={`${trade.symbol}-${trade.tradedAt}-${index}`} style={styles.tradeRow}>
+            <View key={`${trade.symbol}-${trade.tradedAt}-${index}`} style={[styles.tradeRow, av3dWidth < 520 && { flexDirection: "column" }]}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.symbol}>
                   {trade.side} {trade.symbol}
@@ -88,7 +100,7 @@ export default function TradeHistory() {
                 </Text>
               </View>
 
-              <View style={styles.right}>
+              <View style={[styles.right, av3dWidth < 520 && { alignItems: "flex-start", minWidth: 0 }]}>
                 <Text style={trade.side === "BUY" ? styles.buy : styles.sell}>
                   KES {money(trade.gross)}
                 </Text>

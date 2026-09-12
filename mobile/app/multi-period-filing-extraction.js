@@ -9,7 +9,8 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View
+  View,
+  useWindowDimensions
 } from "react-native";
 
 import {
@@ -138,7 +139,9 @@ const SAMPLE_PERIODS = [
   }
 ];
 
+// PC-030M20AV3H RESPONSIVE CALIBRATION
 export default function MultiPeriodFilingExtractionScreen() {
+  const { width: windowWidth } = useWindowDimensions();
   const [
     symbol,
     setSymbol
@@ -417,9 +420,12 @@ export default function MultiPeriodFilingExtractionScreen() {
       style={
         styles.screen
       }
-      contentContainerStyle={
-        styles.content
-      }
+      contentContainerStyle={[
+        styles.content,
+        windowWidth >= 720 && { width: "100%", maxWidth: 960, alignSelf: "center" },
+        windowWidth < 720 && { paddingHorizontal: 16, paddingTop: 32, paddingBottom: 128 },
+        windowWidth < 480 && { paddingHorizontal: 12, paddingTop: 24 }
+      ]}
       keyboardShouldPersistTaps="handled"
     >
       <Text
@@ -431,9 +437,11 @@ export default function MultiPeriodFilingExtractionScreen() {
       </Text>
 
       <Text
-        style={
-          styles.title
-        }
+        style={[
+          styles.title,
+          windowWidth < 720 && { fontSize: 28, lineHeight: 34 },
+          windowWidth < 480 && { fontSize: 25, lineHeight: 31 }
+        ]}
       >
         Multi-Period Filing Extraction
       </Text>
@@ -589,9 +597,10 @@ export default function MultiPeriodFilingExtractionScreen() {
             description="Multi-period validation, completeness, and source coverage."
           >
             <View
-              style={
-                styles.metricGrid
-              }
+              style={[
+                styles.metricGrid,
+                windowWidth < 380 && { flexDirection: "column" }
+              ]}
             >
               <Metric
                 label="Status"
@@ -1550,6 +1559,12 @@ const styles =
       width:
         "47%",
 
+      flexGrow:
+        1,
+
+      minWidth:
+        140,
+
       backgroundColor:
         "#020617",
 
@@ -1635,6 +1650,9 @@ const styles =
     row: {
       flexDirection:
         "row",
+
+      flexWrap:
+        "wrap",
 
       justifyContent:
         "space-between",

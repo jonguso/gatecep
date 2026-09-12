@@ -1,0 +1,1 @@
+AV2B2 corrects only the verifier. AV2B1 is already passing its functional regression. The prior verifier falsely matched the phrase 'basketExecutionStore-compatible' in a comment. AV2B2 checks only for a real JavaScript import statement.

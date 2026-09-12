@@ -48,13 +48,23 @@ const BROKER_EVIDENCED_FEE_POLICY = {
 };
 
 export default function Trade() {
-  const { symbol: requestedSymbol, mode, side: requestedSide /* PC-030M20AQ2 requestedSide */, decisionAmount: requestedDecisionAmount, decisionLab: decisionLabParam } = useLocalSearchParams();
+  const { symbol: requestedSymbol, mode, side: requestedSide /* PC-030M20AQ2 requestedSide */, decisionAmount: requestedDecisionAmount, decisionLab: decisionLabParam, proposedAmount: requestedProposedAmount, amount: requestedAmount } = useLocalSearchParams();
 
   // PC-030M20AT2A route-contract correction
-  const decisionAmountParam = Number(
-    Array.isArray(requestedDecisionAmount)
-      ? requestedDecisionAmount[0]
-      : requestedDecisionAmount || 0
+  // PC-030M20AT2C buy-auto-quantity correction
+  const firstRouteNumber = (...values) => {
+    for (const value of values) {
+      const raw = Array.isArray(value) ? value[0] : value;
+      const parsed = Number(raw || 0);
+      if (Number.isFinite(parsed) && parsed > 0) return parsed;
+    }
+    return 0;
+  };
+
+  const decisionAmountParam = firstRouteNumber(
+    requestedDecisionAmount,
+    requestedProposedAmount,
+    requestedAmount
   );
   const decisionLabHandoff =
     String(
@@ -131,53 +141,7 @@ export default function Trade() {
     setConfirmedTrade(null);
   }, [stocks, requestedSymbol]);
 
-  useEffect(() => {
-    if (!decisionLabHandoff) return;
-    if (!(decisionAmountParam > 0)) return;
-    if (quantityManuallyEdited) return;
 
-    const currentScenarioPrice = Number(
-      selectedStock?.price ||
-      selectedStock?.lastPrice ||
-      selectedStock?.currentPrice ||
-      0
-    );
-
-    if (!(currentScenarioPrice > 0)) return;
-
-    const derived = deriveApproximateScenarioQuantity({
-      side,
-      decisionAmount: decisionAmountParam,
-      currentPrice: currentScenarioPrice,
-      availableQuantity: Number(
-        existingHolding?.quantity ||
-        existingHolding?.shares ||
-        0
-      ),
-      percentChargeRate:
-        side === "BUY"
-          ? (Number(BROKER_EVIDENCED_FEE_POLICY.commissionRatePct || 0) +
-             Number(BROKER_EVIDENCED_FEE_POLICY.otherChargesRatePct || 0)) / 100
-          : 0,
-      fixedCharges: Number(scenarioExtraCharges || 0),
-      existingQuantityText: ""
-    });
-
-    if (derived.available && derived.quantity > 0) {
-      setQuantity(String(derived.quantity));
-      setConfirmedTrade(null);
-    }
-  }, [
-    decisionLabHandoff,
-    decisionAmountParam,
-    side,
-    selectedStock?.symbol,
-    selectedStock?.price,
-    existingHolding?.quantity,
-    existingHolding?.shares,
-    scenarioExtraCharges,
-    quantityManuallyEdited
-  ]);
 
   async function load() {
     const practiceRaw = await userGetItem("practicePortfolio");
@@ -326,6 +290,59 @@ export default function Trade() {
     : existingHolding
     ? "REAL READ-ONLY"
     : "NOT HELD";
+
+  // PC-030M20AT2B initialization-order hotfix
+  // Must stay after existingHolding is initialized.
+  useEffect(() => {
+    if (!decisionLabHandoff) return;
+    if (!(decisionAmountParam > 0)) return;
+    if (quantityManuallyEdited) return;
+
+    const currentScenarioPrice = Number(
+      selectedStock?.price ||
+      selectedStock?.lastPrice ||
+      selectedStock?.currentPrice ||
+      0
+    );
+
+    if (!(currentScenarioPrice > 0)) return;
+
+    const derived = deriveApproximateScenarioQuantity({
+      side,
+      decisionAmount: decisionAmountParam,
+      currentPrice: currentScenarioPrice,
+      availableQuantity:
+        side === "SELL"
+          ? Number(
+              existingHolding?.quantity ||
+              existingHolding?.shares ||
+              0
+            )
+          : null,
+      percentChargeRate:
+        side === "BUY"
+          ? (Number(BROKER_EVIDENCED_FEE_POLICY.commissionRatePct || 0) +
+             Number(BROKER_EVIDENCED_FEE_POLICY.otherChargesRatePct || 0)) / 100
+          : 0,
+      fixedCharges: Number(scenarioExtraCharges || 0),
+      existingQuantityText: ""
+    });
+
+    if (derived.available && derived.quantity > 0) {
+      setQuantity(String(derived.quantity));
+      setConfirmedTrade(null);
+    }
+  }, [
+    decisionLabHandoff,
+    decisionAmountParam,
+    side,
+    selectedStock?.symbol,
+    selectedStock?.price,
+    existingHolding?.quantity,
+    existingHolding?.shares,
+    scenarioExtraCharges,
+    quantityManuallyEdited
+  ]);
 
   const fifoEvidence = useMemo(
     () =>
@@ -1279,6 +1296,9 @@ export default function Trade() {
             Approx. {Number(quantity).toLocaleString()} shares from KES{" "}
             {decisionAmountParam.toLocaleString()} at KES{" "}
             {Number(selectedStock.price).toFixed(2)}.
+            {side === "BUY"
+              ? " Known percentage charges are included in the quantity estimate."
+              : ""}
             {" "}Editable; scenario estimate only.
           </Text>
         ) : null}
