@@ -1,48 +1,34 @@
-\# GateCEP Architecture
+# GateCEP Architecture
 
+Updated: 2026-09-12
 
+## Status
 
-\## Purpose
+ACTIVE — UAT / release stabilization baseline.
 
+## Purpose
 
+This folder describes the current GateCEP system architecture. `docs/` owns governance, roadmap, UAT status, release evidence and technical-debt reconciliation. `architecture/` owns platform boundaries, canonical domains, data flows and integrity contracts.
 
-This folder explains how GateCEP is designed as a platform.
+## Current Architecture Rule
 
+- Backend APIs own authenticated production data and external integration boundaries.
+- Mobile/web are presentation clients and orchestration surfaces.
+- Reusable business logic belongs in canonical shared/domain services.
+- Transitional compatibility bridges may remain until their replacement package/runtime boundary is proven.
+- Current runtime evidence takes precedence over stale historical status headers.
+- During UAT, avoid broad architecture changes unless a reproduced defect requires them.
 
+## Canonical Investor Domains
 
-`docs/` explains project governance, releases, status, health, and decisions.
+Dashboard = snapshot; Portfolio Hub = portfolio facts; Coach G = advice; Performance = history/analytics; Transactions = audit trail; Goals = wealth planning; Trading = execution; Profile = user management; Broker Sync/Reconciliation = broker evidence and resolution.
 
+## Integrity Boundaries
 
+REAL historical performance is evidence-based and must never be fabricated. Practice-only activity cannot create REAL performance history.
 
-`architecture/` explains system design, domains, engines, data flow, APIs, database, security, broker integration, market integration, and Coach G.
+Historical security lots are execution-derived. Only completed broker executions (`FULLY TRADED`, `FILLED`, `COMPLETED`, `SETTLED`) may create/consume lots. Rejected/refused/non-executed orders do not alter FIFO history.
 
+## Responsive Baseline
 
-
-\## Architecture Files
-
-
-
-| File | Purpose |
-
-|---|---|
-
-| 01-platform.md | Overall platform architecture |
-
-| 02-domains.md | Domain ownership and module IDs |
-
-| 03-engines.md | Shared engine architecture |
-
-| 04-data-flow.md | Backend, web, mobile, shared data flow |
-
-| 05-api-map.md | API ownership and consumers |
-
-| 06-database.md | Database ownership and tables |
-
-| 07-security.md | Auth, tokens, access control |
-
-| 08-broker-integration.md | Broker profile, routing, future APIs |
-
-| 09-live-market.md | Market feed and pricing architecture |
-
-| 10-coachg.md | Coach G intelligence architecture |
-
+PC-030M20AV3AQ closed responsive UAT on 2026-09-12: 98 active screens accounted for, 27 non-active/review routes excluded, `REMAINING_UAT_VERIFY: 0`, Expo web bundle smoke PASS.

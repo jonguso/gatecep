@@ -1,10 +1,19 @@
-# GATECEP Legal Site
+# GateCEP Legal Site
 
-Deploy this folder to Vercel, Netlify, or GitHub Pages.
+Updated: 2026-09-12
 
-Example Vercel:
+Static legal-information site for GateCEP.
 
-```bash
-npm install -g vercel
-vercel --prod
-```
+Current state: UAT / release stabilization.
+
+Pages:
+- `index.html`
+- `privacy.html`
+- `terms.html`
+- `risk.html`
+
+The legal copy has been expanded to reflect Practice vs REAL behavior, Coach G informational use, broker/market-data dependencies, historical-evidence rules and UAT status.
+
+**Production requirement:** legal/privacy/compliance counsel should review the documents for the jurisdictions, broker relationships, market-data licenses and regulated activities applicable at launch.
+
+Deployment configuration remains intentionally minimal.
