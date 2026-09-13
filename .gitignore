@@ -9,3 +9,5 @@ build/
 npm-debug.log*backend/_archive/
 mobile/node_modules/
 mobile/.expo/
+
+.vercel
