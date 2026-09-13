@@ -11,6 +11,8 @@ import {
 import { router } from "expo-router";
 
 import { validateOrder } from "../src/utils/orderValidator";
+import { useMarketData } from "../src/services/markets/useMarketData";
+
 import {
   loadInvestorContext,
   savePracticePortfolio
@@ -25,47 +27,80 @@ const STOCKS = [
     symbol: "SCOM",
     name: "Safaricom",
     sector: "Telecom",
-    price: 30.6,
+    price: null,
     reason: "Beginner-friendly telecom and mobile money exposure."
   },
   {
     symbol: "KCB",
     name: "KCB Group",
     sector: "Banking",
-    price: 45,
+    price: null,
     reason: "Large banking exposure with regional presence."
   },
   {
     symbol: "EQT",
     name: "Equity Group",
     sector: "Banking",
-    price: 48,
+    price: null,
     reason: "Strong retail and regional banking franchise."
   },
   {
     symbol: "COOP",
     name: "Co-operative Bank",
     sector: "Banking",
-    price: 16,
+    price: null,
     reason: "Lower-priced banking exposure for starter portfolios."
   },
   {
     symbol: "EABL",
     name: "East African Breweries",
     sector: "Mfg. and Allied",
-    price: 248,
+    price: null,
     reason: "Defensive consumer income exposure."
   },
   {
     symbol: "BAT",
     name: "BAT Kenya",
     sector: "Mfg. and Allied",
-    price: 520,
+    price: null,
     reason: "High dividend defensive stock."
   }
 ];
 
 export default function FirstTrade() {
+  const marketRuntime = useMarketData();
+  const marketRows =
+    marketRuntime?.data ||
+    marketRuntime?.quotes ||
+    marketRuntime?.stocks ||
+    marketRuntime?.marketData ||
+    [];
+
+  const quoteBySymbol = new Map(
+    (Array.isArray(marketRows) ? marketRows : [])
+      .filter((row) => row?.symbol)
+      .map((row) => [String(row.symbol).toUpperCase(), row])
+  );
+
+  const liveStocks = liveStocks.map((stock) => {
+    const quote = quoteBySymbol.get(String(stock.symbol).toUpperCase());
+    const resolvedPrice = Number(
+      quote?.price ?? quote?.lastPrice ?? quote?.currentPrice ?? NaN
+    );
+
+    return {
+      ...stock,
+      price: Number.isFinite(resolvedPrice) ? resolvedPrice : null,
+      priceSource: quote?.source || quote?.provider || quote?.priceSource || null,
+      priceAsOf:
+        quote?.asOf ||
+        quote?.marketDate ||
+        quote?.updatedAt ||
+        quote?.timestamp ||
+        null,
+    };
+  });
+
   const [portfolio, setPortfolio] = useState([]);
   const [cash, setCash] = useState(0);
   const [selectedStock, setSelectedStock] = useState(STOCKS[0]);
@@ -343,7 +378,7 @@ export default function FirstTrade() {
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Choose Security</Text>
 
-        {STOCKS.map((stock) => (
+        {liveStocks.map((stock) => (
           <Pressable
             key={stock.symbol}
             style={[
@@ -520,13 +555,15 @@ function money(value) {
   });
 }
 
+// PC-030M20AV3AQ — Final Responsive UAT Closure: First Trade calibrated for compact and desktop widths
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#020617" },
-  content: { padding: 22, paddingTop: 70, paddingBottom: 100 },
+  content: { padding: 22, paddingTop: 70, paddingBottom: 128, width: "100%", maxWidth: 960, alignSelf: "center" },
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    flexWrap: "wrap",
     gap: 12
   },
   title: { color: "white", fontSize: 30, fontWeight: "900", flex: 1 },
@@ -556,6 +593,8 @@ const styles = StyleSheet.create({
   },
   metric: {
     width: "47%",
+    minWidth: 140,
+    flexGrow: 1,
     backgroundColor: "#020617",
     borderColor: "#334155",
     borderWidth: 1,
@@ -586,6 +625,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: 14,
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 12,
     justifyContent: "space-between"
   },
@@ -597,7 +637,7 @@ const styles = StyleSheet.create({
   small: { color: "#94a3b8", marginTop: 4 },
   reason: { color: "#cbd5e1", marginTop: 6, lineHeight: 19, fontSize: 12 },
   price: { color: "#86efac", fontWeight: "900", marginTop: 2 },
-  sideRow: { flexDirection: "row", gap: 10 },
+  sideRow: { flexDirection: "row", flexWrap: "wrap", gap: 10 },
   sideChip: {
     flex: 1,
     padding: 14,

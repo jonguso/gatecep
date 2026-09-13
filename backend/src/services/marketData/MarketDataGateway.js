@@ -77,22 +77,7 @@ async function loadAdapter(provider) {
     const module = await import("./VerifiedHttpMarketDataAdapter.js");
     return module.default;
   }
-  if (provider === "SIMULATED") {
-    const module = await import("./SimulatedDataAdapter.js");
-    return module.default;
-  }
-
-  if (provider === "DELAYED_PUBLIC") {
-    const module = await import("./DelayedPublicDataAdapter.js");
-    return module.default;
-  }
-
-  if (provider === "LICENSED_NSE") {
-    const module = await import("./LicensedNseVendorAdapter.js");
-    return module.default;
-  }
-
-  return null;
+return null;
 }
 
 class MarketDataGateway {

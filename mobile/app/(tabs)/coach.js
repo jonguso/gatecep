@@ -28,6 +28,8 @@ import InvestorJourneyNavigation from "../../src/components/mobile/InvestorJourn
 
 export default function Coach() {
   const { width: viewportWidth } = useWindowDimensions();
+  const isCompactViewport = viewportWidth < 720;
+  const isNarrowViewport = viewportWidth < 480;
   const [portfolio, setPortfolio] = useState([]);
   const [dashboardContext, setDashboardContext] = useState(null);
   const [transactionsUploaded, setTransactionsUploaded] = useState(false);
@@ -381,12 +383,12 @@ export default function Coach() {
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, viewportWidth >= 720 && styles.av3bContentWide, viewportWidth < 720 && styles.av3bContentCompact, viewportWidth < 480 && styles.av3bContentNarrow]}>
-      <View style={[styles.headerRow, viewportWidth < 720 && styles.av3bHeaderCompact]}>
-        <Text style={[styles.title, viewportWidth < 720 && styles.av3bTitleCompact, viewportWidth < 480 && styles.av3bTitleNarrow]}>Coach G Insights</Text>
-        <View style={[styles.headerActions, viewportWidth < 720 && styles.av3bHeaderActionsCompact]}>
-          <Pressable style={styles.headerButton} onPress={() => router.canGoBack?.() ? router.back() : router.replace("/(tabs)/dashboard")}><Text style={styles.headerButtonText}>‹ Back</Text></Pressable>
-          <Pressable style={styles.headerButton} onPress={() => router.replace("/(tabs)/dashboard")}><Text style={styles.headerButtonText}>Home</Text></Pressable>
+    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, styles.av3agContent, !isCompactViewport && styles.av3agContentWide, isCompactViewport && styles.av3agContentCompact, isNarrowViewport && styles.av3agContentNarrow]}>
+      <View style={[styles.headerRow, isCompactViewport && styles.av3agHeaderCompact]}>
+        <Text style={[styles.title, isCompactViewport && styles.av3agTitleCompact, isNarrowViewport && styles.av3agTitleNarrow]}>Coach G Insights</Text>
+        <View style={[styles.headerActions, isCompactViewport && styles.av3agHeaderActionsCompact]}>
+          <Pressable style={[styles.headerButton, isCompactViewport && styles.av3agHeaderButtonCompact]} onPress={() => router.canGoBack?.() ? router.back() : router.replace("/(tabs)/dashboard")}><Text style={styles.headerButtonText}>‹ Back</Text></Pressable>
+          <Pressable style={[styles.headerButton, isCompactViewport && styles.av3agHeaderButtonCompact]} onPress={() => router.replace("/(tabs)/dashboard")}><Text style={styles.headerButtonText}>Home</Text></Pressable>
         </View>
       </View>
 
@@ -395,7 +397,7 @@ export default function Coach() {
       <View style={styles.card}>
         <Text style={styles.section}>Explore Your Portfolio</Text>
         <Text style={styles.body}>Start with the complete analysis, then open a focused detail only when you need it.</Text>
-        <View style={styles.quickGrid}>
+        <View style={[styles.quickGrid, isCompactViewport && styles.av3agQuickGridCompact]}>
           <QuickCard step="1" title="Portfolio Analysis" desc="Review the consolidated portfolio health and priorities" route="/unified-portfolio-analytics" />
           <QuickCard step="2" title="Performance" desc="Track genuine portfolio history and goal progress" route="/performance" />
           <QuickCard step="3" title="Portfolio Risk" desc="Understand concentration, diversification, and stress evidence" route="/portfolio-risk" />
@@ -465,8 +467,12 @@ export default function Coach() {
 }
 
 function QuickCard({ step, title, desc, route }) {
+  const { width } = useWindowDimensions();
+  const compact = width < 720;
+  const narrow = width < 480;
+
   return (
-    <Pressable style={styles.quickCard} onPress={() => router.push(route)}>
+    <Pressable style={[styles.quickCard, compact && styles.av3agQuickCardCompact, narrow && styles.av3agQuickCardNarrow]} onPress={() => router.push(route)}>
       <View style={styles.quickStep}><Text style={styles.quickStepText}>{step}</Text></View>
       <View style={{ flex: 1 }}><Text style={styles.quickTitle}>{title}</Text><Text style={styles.quickDesc}>{desc}</Text></View>
       <Text style={styles.quickArrow}>›</Text>
@@ -497,13 +503,17 @@ function SimulatorModal({
   saveRecommendation,
   setSelectedSector
 }) {
+  const { width } = useWindowDimensions();
+  const compact = width < 720;
+  const narrow = width < 480;
+
   return (
     <Modal visible={visible} transparent animationType="fade">
-      <View style={styles.overlay}>
-        <View style={styles.simulatorModal}>
-          <View style={styles.popupHeader}>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.popupTitle}>Coach G Investment Simulator</Text>
+      <View style={[styles.overlay, compact && styles.av3agOverlayCompact]}>
+        <View style={[styles.simulatorModal, styles.av3agModalFrame, compact && styles.av3agModalCompact, narrow && styles.av3agModalNarrow]}>
+          <View style={[styles.popupHeader, compact && styles.av3agPopupHeaderCompact]}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[styles.popupTitle, narrow && styles.av3agPopupTitleNarrow]}>Coach G Investment Simulator</Text>
               <Text style={styles.body}>
                 Test how new money could improve your portfolio.
               </Text>
@@ -514,7 +524,7 @@ function SimulatorModal({
             </Pressable>
           </View>
 
-          <View style={styles.dropdownRow}>
+          <View style={[styles.dropdownRow, compact && styles.av3agStackCompact]}>
             <View style={styles.dropdownHalf}>
               <Dropdown
                 label="Investment Goal"
@@ -554,12 +564,13 @@ function SimulatorModal({
 
           <Text style={styles.inputLabel}>Rebalance Intensity: {intensity}%</Text>
 
-          <View style={styles.sliderRow}>
+          <View style={[styles.sliderRow, narrow && styles.av3agSliderWrap]}>
             {[25, 50, 75, 100].map((level) => (
               <Pressable
                 key={level}
                 style={[
                   styles.sliderChip,
+                  narrow && styles.av3agSliderChipNarrow,
                   intensity === level && styles.sliderChipActive
                 ]}
                 onPress={() => setIntensity(level)}
@@ -588,10 +599,10 @@ function SimulatorModal({
           </Pressable>
 
           <Modal visible={showResults} transparent animationType="fade">
-            <View style={styles.resultOverlay}>
-              <View style={styles.resultModal}>
-                <View style={styles.popupHeader}>
-                  <Text style={styles.popupTitle}>Simulation Results</Text>
+            <View style={[styles.resultOverlay, compact && styles.av3agOverlayCompact]}>
+              <View style={[styles.resultModal, styles.av3agModalFrame, compact && styles.av3agModalCompact, narrow && styles.av3agModalNarrow]}>
+                <View style={[styles.popupHeader, compact && styles.av3agPopupHeaderCompact]}>
+                  <Text style={[styles.popupTitle, narrow && styles.av3agPopupTitleNarrow]}>Simulation Results</Text>
 
                   <Pressable onPress={() => setShowResults(false)}>
                     <Text style={styles.gray}>Close</Text>
@@ -678,14 +689,17 @@ function SectorDetailsModal({ sector, onClose, buildSectorDetails }) {
   if (!sector) return null;
 
   const details = buildSectorDetails(sector);
+  const { width } = useWindowDimensions();
+  const compact = width < 720;
+  const narrow = width < 480;
 
   return (
     <Modal visible transparent animationType="fade">
-      <View style={styles.overlay}>
-        <View style={styles.popup}>
-          <View style={styles.popupHeader}>
-            <View>
-              <Text style={styles.popupTitle}>{sector.sector}</Text>
+      <View style={[styles.overlay, compact && styles.av3agOverlayCompact]}>
+        <View style={[styles.popup, styles.av3agModalFrame, compact && styles.av3agModalCompact, narrow && styles.av3agModalNarrow]}>
+          <View style={[styles.popupHeader, compact && styles.av3agPopupHeaderCompact]}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[styles.popupTitle, narrow && styles.av3agPopupTitleNarrow]}>{sector.sector}</Text>
               <Text style={styles.body}>Allocation: KES {money(sector.amount)}</Text>
               <Text style={styles.section}>
                 Holdings ({details.holdings.length} securities)
@@ -699,14 +713,14 @@ function SectorDetailsModal({ sector, onClose, buildSectorDetails }) {
 
           <ScrollView style={{ maxHeight: 320 }}>
             {details.holdings.map((h) => (
-              <View key={h.symbol} style={styles.stockRow}>
+              <View key={h.symbol} style={[styles.stockRow, narrow && styles.av3agStockRowNarrow]}>
                 <View style={styles.stockLeft}>
                   <Text style={styles.stockSymbol}>{h.symbol}</Text>
                   <Text style={styles.stockName}>{h.name}</Text>
                   <Text style={styles.stockReason}>{h.reason}</Text>
                 </View>
 
-                <View style={styles.stockRight}>
+                <View style={[styles.stockRight, narrow && styles.av3agStockRightNarrow]}>
                   <Text style={styles.stockShares}>{h.qty} shares</Text>
                   <Text style={styles.marketPrice}>@ KES {money(h.price)}</Text>
                   <Text style={styles.stockValue}>KES {money(h.invested)}</Text>
@@ -715,7 +729,7 @@ function SectorDetailsModal({ sector, onClose, buildSectorDetails }) {
             ))}
           </ScrollView>
 
-          <View style={styles.summaryStrip}>
+          <View style={[styles.summaryStrip, narrow && styles.av3agSummaryStripNarrow]}>
             <SummaryItem label="Invested" value={`KES ${money(details.investedTotal)}`} />
             <SummaryItem label="Unused" value={`KES ${money(details.unused)}`} yellow />
             <SummaryItem label="Allocation" value={`KES ${money(sector.amount)}`} />
@@ -1119,5 +1133,102 @@ const styles = StyleSheet.create({
   av3bTitleNarrow: {
     fontSize: 25,
     lineHeight: 31
+  },
+
+  /* PC-030M20AV3AG RESPONSIVE CALIBRATION */
+  av3agContent: {
+    width: "100%",
+    alignSelf: "center",
+    paddingBottom: 128
+  },
+  av3agContentWide: {
+    maxWidth: 960,
+    paddingHorizontal: 24
+  },
+  av3agContentCompact: {
+    paddingTop: 24,
+    paddingHorizontal: 16
+  },
+  av3agContentNarrow: {
+    paddingHorizontal: 12
+  },
+  av3agHeaderCompact: {
+    flexWrap: "wrap",
+    alignItems: "stretch"
+  },
+  av3agHeaderActionsCompact: {
+    width: "100%",
+    flexWrap: "wrap"
+  },
+  av3agHeaderButtonCompact: {
+    flexGrow: 1,
+    minWidth: 132
+  },
+  av3agTitleCompact: {
+    width: "100%",
+    fontSize: 28,
+    lineHeight: 34
+  },
+  av3agTitleNarrow: {
+    fontSize: 25,
+    lineHeight: 31
+  },
+  av3agQuickGridCompact: {
+    flexDirection: "column"
+  },
+  av3agQuickCardCompact: {
+    width: "100%",
+    minHeight: 88
+  },
+  av3agQuickCardNarrow: {
+    alignItems: "flex-start"
+  },
+  av3agModalFrame: {
+    width: "100%",
+    maxWidth: 960,
+    alignSelf: "center"
+  },
+  av3agOverlayCompact: {
+    padding: 12,
+    paddingTop: 18
+  },
+  av3agModalCompact: {
+    padding: 16,
+    maxHeight: "96%"
+  },
+  av3agModalNarrow: {
+    padding: 12,
+    borderRadius: 18
+  },
+  av3agPopupHeaderCompact: {
+    flexWrap: "wrap",
+    gap: 10
+  },
+  av3agPopupTitleNarrow: {
+    fontSize: 20,
+    lineHeight: 26
+  },
+  av3agStackCompact: {
+    flexDirection: "column",
+    gap: 0
+  },
+  av3agSliderWrap: {
+    flexWrap: "wrap"
+  },
+  av3agSliderChipNarrow: {
+    flexBasis: "47%",
+    flexGrow: 1
+  },
+  av3agStockRowNarrow: {
+    flexDirection: "column"
+  },
+  av3agStockRightNarrow: {
+    width: "100%",
+    minWidth: 0,
+    alignItems: "flex-start"
+  },
+  av3agSummaryStripNarrow: {
+    flexDirection: "column",
+    gap: 12
   }
 });

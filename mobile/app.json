@@ -45,7 +45,8 @@
       ]
     },
     "web": {
-      "bundler": "metro"
+      "bundler": "metro",
+      "output": "single"
     },
     "experiments": {
       "typedRoutes": false

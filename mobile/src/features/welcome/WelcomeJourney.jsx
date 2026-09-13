@@ -280,7 +280,7 @@ function money(value) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#020617" },
-  content: { padding: 22, paddingTop: 70, paddingBottom: 100 },
+  content: { /* PC-030M20AV3AN RESPONSIVE UAT CALIBRATION */ width: "100%", maxWidth: 960, alignSelf: "center", padding: 22, paddingTop: 70, paddingBottom: 128 },
   centerScreen: {
     flex: 1,
     backgroundColor: "#020617",
@@ -335,9 +335,10 @@ const styles = StyleSheet.create({
     color: "white",
     marginTop: 18
   },
-  quickAmounts: { flexDirection: "row", gap: 8, marginTop: 14 },
+  quickAmounts: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 14 },
   quickAmount: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: 120,
     backgroundColor: "#1e293b",
     borderRadius: 14,
     padding: 11
@@ -350,6 +351,7 @@ const styles = StyleSheet.create({
   },
   allocationRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     borderBottomColor: "#1e293b",
     borderBottomWidth: 1,

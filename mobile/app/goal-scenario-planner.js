@@ -98,7 +98,7 @@ export default function GoalScenarioPlanner() {
 
       {error ? <View style={styles.warning}><Text style={styles.warningTitle}>Scenario unavailable</Text><Text style={styles.body}>{error}</Text></View> : null}
 
-      <View style={styles.card}>
+      <View style={[styles.card, viewportWidth < 480 && styles.av3ahCardNarrow]}>
         <Text style={styles.cardTitle}>{goal?.name || "Goal assumptions"}</Text>
         <View style={[styles.inputGrid, styles.av3bInputGrid]}>
           <Field label="Target amount (KES)" value={targetAmount} onChangeText={setTargetAmount} numeric />
@@ -107,7 +107,7 @@ export default function GoalScenarioPlanner() {
           <Field label="Expected annual return (%)" value={annualReturn} onChangeText={setAnnualReturn} numeric />
           <Field label="Defensive/MMF target (%)" value={defensiveTarget} onChangeText={setDefensiveTarget} numeric />
         </View>
-        <View style={styles.presetRow}>
+        <View style={[styles.presetRow, viewportWidth < 480 && styles.av3ahPresetRowNarrow]}>
           <Preset label="+ KES 5,000/month" onPress={() => setMonthlyContribution(String(number(monthlyContribution) + 5000))} />
           <Preset label="+ 6 months" onPress={() => setTargetDate(addMonths(targetDate, 6))} />
           <Preset label="Reduce target 5%" onPress={() => setTargetAmount(String(Math.round(number(targetAmount) * 0.95)))} />
@@ -115,9 +115,9 @@ export default function GoalScenarioPlanner() {
       </View>
 
       {scenario.valid ? <>
-        <View style={styles.card}>
+        <View style={[styles.card, viewportWidth < 480 && styles.av3ahCardNarrow]}>
           <Text style={styles.cardTitle}>Goal impact</Text>
-          <View style={styles.metrics}>
+          <View style={[styles.metrics, viewportWidth < 560 && styles.av3ahMetricsNarrow]}>
             <Metric label="Projected value" value={`KES ${money(scenario.trajectory.projectedValue)}`} />
             <Metric label="Goal shortfall" value={`KES ${money(scenario.goalGap)}`} danger={scenario.goalGap > 0} />
             <Metric label="Required monthly" value={`KES ${money(scenario.requiredMonthlyContribution)}`} />
@@ -126,21 +126,21 @@ export default function GoalScenarioPlanner() {
           <Text style={scenario.goalGap > 0 ? styles.warningText : styles.successText}>{scenario.goalGap > 0 ? `This scenario still falls short by KES ${money(scenario.goalGap)}.` : `This scenario reaches the goal with a KES ${money(scenario.goalSurplus)} surplus.`}</Text>
         </View>
 
-        <View style={styles.card}>
+        <View style={[styles.card, viewportWidth < 480 && styles.av3ahCardNarrow]}>
           <Text style={styles.cardTitle}>Contribution routing</Text>
           <Text style={styles.body}>MMF is one allocation destination—not the entire goal solution.</Text>
-          <RouteRow label="Verified MMF / fixed income" value={scenario.contributionPlan.defensive} />
-          <RouteRow label="Underweight equity sectors" value={scenario.contributionPlan.equitySectors} />
-          <RouteRow label="Total planned contributions" value={scenario.contributionPlan.total} />
+          <RouteRow label="Verified MMF / fixed income" value={scenario.contributionPlan.defensive} compact={viewportWidth < 520} />
+          <RouteRow label="Underweight equity sectors" value={scenario.contributionPlan.equitySectors} compact={viewportWidth < 520} />
+          <RouteRow label="Total planned contributions" value={scenario.contributionPlan.total} compact={viewportWidth < 520} />
           <Text style={styles.muted}>Defensive allocation gap: KES {money(scenario.defensivePlan.gap)} at a {scenario.defensivePlan.targetPercentage.toFixed(1)}% illustrative target.</Text>
         </View>
 
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Diversification simulation</Text>
           <Text style={styles.body}>Edit illustrative sector targets. Future equity contributions are redirected toward underweight sectors; no sale is created.</Text>
-          {scenario.sectorPlan.map((row) => <View key={row.sector} style={[styles.sectorRow, viewportWidth < 480 && styles.av3bSectorRowNarrow]}>
+          {scenario.sectorPlan.map((row) => <View key={row.sector} style={[styles.sectorRow, viewportWidth < 560 && styles.av3ahSectorRowCompact, viewportWidth < 480 && styles.av3ahSectorRowNarrow]}>
             <View style={styles.sectorCopy}><Text style={styles.sectorName}>{row.sector}</Text><Text style={styles.muted}>Current {row.currentPercentage.toFixed(1)}% → simulated {row.simulatedPercentage.toFixed(1)}%</Text><Text style={styles.successText}>Direct KES {money(row.directedContribution)}</Text></View>
-            <View><Text style={styles.inputLabel}>Target %</Text><TextInput style={styles.targetInput} keyboardType="decimal-pad" value={String(sectorTargets[row.sector] ?? row.targetPercentage)} onChangeText={(value) => setSectorTargets((current) => ({ ...current, [row.sector]: value }))} /></View>
+            <View style={viewportWidth < 560 && styles.av3ahTargetWrap}><Text style={styles.inputLabel}>Target %</Text><TextInput style={[styles.targetInput, viewportWidth < 560 && styles.av3ahTargetInputCompact]} keyboardType="decimal-pad" value={String(sectorTargets[row.sector] ?? row.targetPercentage)} onChangeText={(value) => setSectorTargets((current) => ({ ...current, [row.sector]: value }))} /></View>
           </View>)}
           <Text style={styles.muted}>Largest sector: {scenario.concentration.currentLargestSector} {number(scenario.concentration.currentLargestPercentage).toFixed(1)}% → {number(scenario.concentration.simulatedLargestPercentage).toFixed(1)}% simulated.</Text>
         </View>
@@ -153,10 +153,10 @@ export default function GoalScenarioPlanner() {
   );
 }
 
-function Field({ label, value, onChangeText, numeric }) { return <View style={[styles.field, styles.av3bField]}><Text style={styles.inputLabel}>{label}</Text><TextInput style={styles.input} value={value} onChangeText={onChangeText} keyboardType={numeric ? "decimal-pad" : "default"} /></View>; }
-function Metric({ label, value, danger }) { return <View style={styles.metric}><Text style={styles.inputLabel}>{label}</Text><Text style={danger ? styles.dangerValue : styles.metricValue}>{value}</Text></View>; }
-function RouteRow({ label, value }) { return <View style={styles.routeRow}><Text style={styles.body}>{label}</Text><Text style={styles.metricValue}>KES {money(value)}</Text></View>; }
-function Preset({ label, onPress }) { return <Pressable style={styles.preset} onPress={onPress}><Text style={styles.presetText}>{label}</Text></Pressable>; }
+function Field({ label, value, onChangeText, numeric }) { return <View style={[styles.field, styles.av3bField, styles.av3ahField]}><Text style={styles.inputLabel}>{label}</Text><TextInput style={styles.input} value={value} onChangeText={onChangeText} keyboardType={numeric ? "decimal-pad" : "default"} /></View>; }
+function Metric({ label, value, danger }) { return <View style={[styles.metric, styles.av3ahMetric]}><Text style={styles.inputLabel}>{label}</Text><Text style={danger ? styles.dangerValue : styles.metricValue}>{value}</Text></View>; }
+function RouteRow({ label, value, compact }) { return <View style={[styles.routeRow, compact && styles.av3ahRouteRowCompact]}><Text style={[styles.body, styles.av3ahRouteLabel]}>{label}</Text><Text style={[styles.metricValue, compact && styles.av3ahRouteValueCompact]}>KES {money(value)}</Text></View>; }
+function Preset({ label, onPress }) { return <Pressable style={[styles.preset, styles.av3ahPreset]} onPress={onPress}><Text style={styles.presetText}>{label}</Text></Pressable>; }
 function number(value) { return Number.isFinite(Number(value)) ? Number(value) : 0; }
 function money(value) { return number(value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
 function addMonths(value, count) { const date = new Date(`${value}T00:00:00`); if (Number.isNaN(date.getTime())) return value; date.setMonth(date.getMonth() + count); return date.toISOString().slice(0, 10); }
@@ -211,5 +211,56 @@ const styles = StyleSheet.create({
   av3bSectorRowNarrow: {
     flexDirection: "column",
     alignItems: "stretch"
+  },
+
+  /* PC-030M20AV3AH RESPONSIVE CALIBRATION */
+  av3ahCardNarrow: {
+    padding: 14,
+    borderRadius: 16
+  },
+  av3ahField: {
+    width: "100%",
+    minWidth: 0
+  },
+  av3ahPresetRowNarrow: {
+    flexDirection: "column",
+    alignItems: "stretch"
+  },
+  av3ahPreset: {
+    minHeight: 44,
+    justifyContent: "center"
+  },
+  av3ahMetricsNarrow: {
+    flexDirection: "column"
+  },
+  av3ahMetric: {
+    minWidth: 0
+  },
+  av3ahRouteRowCompact: {
+    flexDirection: "column",
+    alignItems: "stretch",
+    gap: 5
+  },
+  av3ahRouteLabel: {
+    flexShrink: 1
+  },
+  av3ahRouteValueCompact: {
+    textAlign: "left"
+  },
+  av3ahSectorRowCompact: {
+    alignItems: "flex-start"
+  },
+  av3ahSectorRowNarrow: {
+    flexDirection: "column",
+    alignItems: "stretch"
+  },
+  av3ahTargetWrap: {
+    width: "100%",
+    gap: 5
+  },
+  av3ahTargetInputCompact: {
+    width: "100%",
+    textAlign: "left",
+    paddingHorizontal: 12
   }
 });

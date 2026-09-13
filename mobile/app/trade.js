@@ -2035,9 +2035,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#020617"
   },
   content: {
+    /* PC-030M20AV3AL RESPONSIVE UAT CALIBRATION */
+    width: "100%",
+    maxWidth: 960,
+    alignSelf: "center",
     padding: 22,
     paddingTop: 70,
-    paddingBottom: 100
+    paddingBottom: 128
   },
   title: {
     color: "white",
@@ -2238,6 +2242,7 @@ const styles = StyleSheet.create({
     borderBottomColor: "#1e293b",
     borderBottomWidth: 1,
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     gap: 12
   },
@@ -2253,6 +2258,7 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     padding: 14,
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 12,
     justifyContent: "space-between"
   },
@@ -2348,6 +2354,7 @@ const styles = StyleSheet.create({
   },
   sideRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 10
   },
   sideChip: {
@@ -2480,6 +2487,7 @@ const styles = StyleSheet.create({
   },
   headerRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     alignItems: "center",
     gap: 12

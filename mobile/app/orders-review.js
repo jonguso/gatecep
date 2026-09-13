@@ -346,9 +346,10 @@ function money(value) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#020617" },
-  content: { padding: 22, paddingTop: 70, paddingBottom: 110 },
+  content: { /* PC-030M20AV3AL RESPONSIVE UAT CALIBRATION */ width: "100%", maxWidth: 960, alignSelf: "center", padding: 22, paddingTop: 70, paddingBottom: 128 },
   headerRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     alignItems: "center",
     gap: 12
@@ -424,6 +425,7 @@ const styles = StyleSheet.create({
   },
   orderTop: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     gap: 12
   },
@@ -448,11 +450,13 @@ const styles = StyleSheet.create({
   },
   sideRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 10,
     marginTop: 16
   },
   sideChip: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: 120,
     backgroundColor: "#020617",
     borderColor: "#334155",
     borderWidth: 1,
@@ -475,11 +479,13 @@ const styles = StyleSheet.create({
   },
   editGrid: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 10,
     marginTop: 16
   },
   editBox: {
-    flex: 1
+    flexGrow: 1,
+    flexBasis: 140
   },
   inputLabel: {
     color: "#94a3b8",
@@ -513,11 +519,13 @@ const styles = StyleSheet.create({
   },
   buttonRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 10,
     marginTop: 16
   },
   queueButton: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: 150,
     backgroundColor: "#9333ea",
     padding: 14,
     borderRadius: 16
@@ -529,7 +537,8 @@ const styles = StyleSheet.create({
     fontSize: 12
   },
   deleteButton: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: 150,
     backgroundColor: "rgba(239,68,68,.12)",
     borderColor: "rgba(239,68,68,.35)",
     borderWidth: 1,

@@ -313,6 +313,7 @@ if (!hasName && cloudProfileState?.status === "MISSING") {
   );
 }
 
+// PC-030M20AV3AQ — Final Responsive UAT Closure: startup loading route verified responsive; no UI logic changed
 const styles = {
   screen: {
     flex: 1,

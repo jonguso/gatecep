@@ -299,9 +299,10 @@ function describeArc(cx, cy, outerRadius, innerRadius, startAngle, endAngle) {
   ].join(" ");
 }
 
+// PC-030M20AV3AQ — Final Responsive UAT Closure: Coach G Demo calibrated for compact and desktop widths
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#020617" },
-  content: { padding: 22, paddingTop: 70, paddingBottom: 40 },
+  content: { padding: 22, paddingTop: 70, paddingBottom: 128, width: "100%", maxWidth: 960, alignSelf: "center" },
   title: { color: "white", fontSize: 34, fontWeight: "900" },
   subtitle: { color: "#94a3b8", marginTop: 10, lineHeight: 22 },
   card: {
@@ -330,9 +331,10 @@ const styles = StyleSheet.create({
     padding: 15,
     color: "white"
   },
-  quickRow: { flexDirection: "row", gap: 8, marginTop: 12 },
+  quickRow: { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 12 },
   quick: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: 120,
     backgroundColor: "#1e293b",
     padding: 10,
     borderRadius: 12
@@ -355,6 +357,7 @@ const styles = StyleSheet.create({
   cardTitle: { color: "#67e8f9", fontWeight: "900", fontSize: 17 },
   row: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     borderBottomColor: "#1e293b",
     borderBottomWidth: 1,

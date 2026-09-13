@@ -834,6 +834,7 @@ function money(value) {
   });
 }
 
+// PC-030M20AV3AQ — Final Responsive UAT Closure: Practice Decision calibrated for compact and desktop widths
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
@@ -843,7 +844,10 @@ const styles = StyleSheet.create({
   content: {
     padding: 22,
     paddingTop: 70,
-    paddingBottom: 110
+    paddingBottom: 128,
+    width: "100%",
+    maxWidth: 960,
+    alignSelf: "center"
   },
 
   centerScreen: {
@@ -956,6 +960,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+    flexWrap: "wrap",
     gap: 12,
     backgroundColor: "#020617",
     borderColor: "#334155",
@@ -1028,12 +1033,15 @@ const styles = StyleSheet.create({
 
   confidenceRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     gap: 8,
     marginTop: 16
   },
 
   confidenceButton: {
-    flex: 1,
+    flexGrow: 1,
+    flexBasis: 48,
+    minWidth: 48,
     backgroundColor: "#020617",
     borderColor: "#334155",
     borderWidth: 1,

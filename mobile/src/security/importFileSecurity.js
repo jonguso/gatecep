@@ -1,5 +1,4 @@
-import * as FileSystem from "expo-file-system/legacy";
-
+import { getImportFileInfo } from "./importFileInfo";
 export const MAX_IMPORT_FILE_BYTES = 5 * 1024 * 1024;
 export const MAX_IMPORT_ROWS = 10000;
 
@@ -17,7 +16,7 @@ export async function requireSafeImportFile(file) {
 
   if ((!Number.isFinite(size) || size <= 0) && file?.uri) {
     try {
-      const info = await FileSystem.getInfoAsync(file.uri, { size: true });
+      const info = await getImportFileInfo(file);
       size = Number(info?.size);
     } catch {
       size = 0;

@@ -1,7 +1,6 @@
 export * from "./coachPortfolioReview.js";
 export * from "./performanceAttribution.js";
 export * from "./portfolioHealth.js";
-export * from "./portfolioHubData.js";
 export * from "./portfolioScore.js";
 export * from "./portfolioSnapshot.js";
 export * from "./portfolioStore.js";

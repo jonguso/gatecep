@@ -59,16 +59,6 @@ export default function BrokerUpload() {
           </Text>
         </Pressable>
 
-        <Pressable
-          style={styles.docOption}
-          onPress={() => router.push("/manual-portfolio-entry")}
-        >
-          <Text style={styles.docTitle}>Holdings Report</Text>
-          <Text style={styles.fallback}>Fallback</Text>
-          <Text style={styles.docDesc}>
-            Upload current holdings when full valuation is unavailable.
-          </Text>
-        </Pressable>
       </View>
 
       <Pressable

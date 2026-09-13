@@ -180,7 +180,7 @@ export default function PortfolioSyncCenter() {
         <ActionButton label="Open Connected Broker Sync" onPress={() => router.push("/broker-sync")} />
       </ContainedPanel> : null}
 
-      {activePanel === "manage" ? <ContainedPanel title="Manage Canonical REAL Data" subtitle="Initial portfolio, cash, transactions, and manual entry" testID="real-sync-manage-panel">
+      {activePanel === "manage" ? <ContainedPanel title="Manage Canonical REAL Data" subtitle="Initial portfolio, cash, and verified transaction evidence" testID="real-sync-manage-panel">
         <Text style={styles.body}>These actions change or establish GateCEP's REAL record. They are separate from read-only reconciliation evidence.</Text>
         {state.connectedRealBroker ? (
           <Text style={styles.protection}>A REAL broker is connected. Holdings and cash must now come through verified broker evidence or the live broker adapter.</Text>
@@ -188,7 +188,6 @@ export default function PortfolioSyncCenter() {
           <>
             <ActionButton label="Create Initial REAL Portfolio" onPress={() => router.push("/broker-upload")} />
             <ActionButton label="Set Initial REAL Cash" onPress={() => router.push("/(tabs)/funds")} />
-            <ActionButton label="Manual Initial Portfolio" onPress={() => router.push("/manual-portfolio-entry")} />
           </>
         )}
       </ContainedPanel> : null}

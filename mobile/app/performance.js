@@ -66,6 +66,8 @@ const [historicalSummary, setHistoricalSummary] = useState(null);
   const [selectedTimelinePoint, setSelectedTimelinePoint] = useState(null);
 
   const { width: windowWidth, height: windowHeight } = useWindowDimensions();
+  const isCompactViewport = windowWidth < 720;
+  const isNarrowViewport = windowWidth < 480;
   const activeSectionIndex = PERFORMANCE_SECTIONS.findIndex((section) => section.id === activeSection);
   const previousSection = activeSectionIndex > 0 ? PERFORMANCE_SECTIONS[activeSectionIndex - 1] : null;
   const nextSection = activeSectionIndex >= 0 && activeSectionIndex < PERFORMANCE_SECTIONS.length - 1
@@ -262,9 +264,9 @@ const [historicalSummary, setHistoricalSummary] = useState(null);
 
   const timelineWidth =
     Math.max(
-      280,
+      220,
       Math.min(
-        Number(windowWidth || 360) - 72,
+        Number(windowWidth || 360) - (isNarrowViewport ? 56 : 72),
         860
       )
     );
@@ -279,10 +281,10 @@ const [historicalSummary, setHistoricalSummary] = useState(null);
   }
 
   return (
-    <ScrollView ref={scrollRef} style={styles.screen} contentContainerStyle={[styles.content, windowWidth >= 720 && styles.av3bContentWide, windowWidth < 720 && styles.av3bContentCompact, windowWidth < 480 && styles.av3bContentNarrow]}>
-      <View style={[styles.headerRow, windowWidth < 720 && styles.av3bHeaderCompact]}>
+    <ScrollView ref={scrollRef} style={styles.screen} contentContainerStyle={[styles.content, styles.av3afContent, !isCompactViewport && styles.av3afContentWide, isCompactViewport && styles.av3afContentCompact, isNarrowViewport && styles.av3afContentNarrow]}>
+      <View style={[styles.headerRow, isCompactViewport && styles.av3afHeaderCompact]}>
         <View style={{ flex: 1 }}>
-          <Text style={[styles.title, windowWidth < 720 && styles.av3bTitleCompact, windowWidth < 480 && styles.av3bTitleNarrow]}>Performance</Text>
+          <Text style={[styles.title, isCompactViewport && styles.av3afTitleCompact, isNarrowViewport && styles.av3afTitleNarrow]}>Performance</Text>
           <Text style={styles.subtitle}>
             {activeSection
               ? PERFORMANCE_SECTIONS.find((section) => section.id === activeSection)?.title
@@ -290,11 +292,11 @@ const [historicalSummary, setHistoricalSummary] = useState(null);
           </Text>
         </View>
 
-        <View style={[styles.headerActions, windowWidth < 720 && styles.av3bHeaderActionsCompact]}>
-          <Pressable style={styles.dashboardButton} onPress={() => activeSection ? moveToSection(null) : exitPerformance()}>
+        <View style={[styles.headerActions, isCompactViewport && styles.av3afHeaderActionsCompact]}>
+          <Pressable style={[styles.dashboardButton, isCompactViewport && styles.av3afHeaderButtonCompact]} onPress={() => activeSection ? moveToSection(null) : exitPerformance()}>
             <Text style={styles.dashboardText}>{activeSection ? "Overview" : "‹ Back"}</Text>
           </Pressable>
-          <Pressable style={styles.dashboardButton} onPress={() => router.replace("/(tabs)/dashboard")}>
+          <Pressable style={[styles.dashboardButton, isCompactViewport && styles.av3afHeaderButtonCompact]} onPress={() => router.replace("/(tabs)/dashboard")}>
             <Text style={styles.dashboardText}>Home</Text>
           </Pressable>
         </View>
@@ -310,7 +312,7 @@ const [historicalSummary, setHistoricalSummary] = useState(null);
         </View>
       ) : (
         <>
-          <View style={[styles.summary, activeSection && styles.hidden]}>
+          <View style={[styles.summary, isNarrowViewport && styles.av3afSummaryNarrow, activeSection && styles.hidden]}>
             <SummaryItem
               label="Holdings Market Value"
               value={`KES ${money(metrics.latest.currentValue)}`}
@@ -362,7 +364,7 @@ const [historicalSummary, setHistoricalSummary] = useState(null);
                 accessibilityRole="button"
                 accessibilityLabel={`Open ${section.title}`}
                 key={section.id}
-                style={({ pressed }) => [styles.performanceMenuButton, windowWidth < 600 && styles.performanceMenuButtonCompact, pressed && styles.performanceMenuButtonPressed]}
+                style={({ pressed }) => [styles.performanceMenuButton, windowWidth < 600 && styles.performanceMenuButtonCompact, isNarrowViewport && styles.av3afMenuButtonNarrow, pressed && styles.performanceMenuButtonPressed]}
                 onPress={() => moveToSection(section.id)}
               >
                 <View style={{ flex: 1 }}>
@@ -376,7 +378,7 @@ const [historicalSummary, setHistoricalSummary] = useState(null);
           </View>
 
           {activeSection ? (
-            <View style={styles.detailNavigation}>
+            <View style={[styles.detailNavigation, isNarrowViewport && styles.av3afDetailNavigationNarrow]}>
               <Pressable style={styles.detailBackButton} onPress={() => moveToSection(previousSection?.id || null)}>
                 <Text style={styles.detailBackText}>{previousSection ? `‹ Previous: ${previousSection.title}` : "‹ Performance Overview"}</Text>
               </Pressable>
@@ -387,8 +389,8 @@ const [historicalSummary, setHistoricalSummary] = useState(null);
           {activeSection ? (
           <View style={[styles.detailPanel, { height: detailPanelHeight }]}>
           <ScrollView style={styles.detailPanelScroll} contentContainerStyle={styles.detailPanelContent} nestedScrollEnabled showsVerticalScrollIndicator>
-          <View style={[styles.card, activeSection !== "timeline" && styles.hidden]}>
-            <View style={styles.sectionHeaderRow}>
+          <View style={[styles.card, isNarrowViewport && styles.av3afCardNarrow, activeSection !== "timeline" && styles.hidden]}>
+            <View style={[styles.sectionHeaderRow, isNarrowViewport && styles.av3afSectionHeaderNarrow]}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.cardTitle}>
                   Portfolio Value Timeline
@@ -630,8 +632,8 @@ const [historicalSummary, setHistoricalSummary] = useState(null);
             )}
           </View>
 
-          <View style={[styles.card, activeSection !== "historical" && styles.hidden]}>
-            <View style={styles.sectionHeaderRow}>
+          <View style={[styles.card, isNarrowViewport && styles.av3afCardNarrow, activeSection !== "historical" && styles.hidden]}>
+            <View style={[styles.sectionHeaderRow, isNarrowViewport && styles.av3afSectionHeaderNarrow]}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.cardTitle}>
                   Historical Performance
@@ -701,8 +703,8 @@ const [historicalSummary, setHistoricalSummary] = useState(null);
             ) : null}
           </View>
 
-          <View style={[styles.card, activeSection !== "benchmark" && styles.hidden]}>
-            <View style={styles.sectionHeaderRow}>
+          <View style={[styles.card, isNarrowViewport && styles.av3afCardNarrow, activeSection !== "benchmark" && styles.hidden]}>
+            <View style={[styles.sectionHeaderRow, isNarrowViewport && styles.av3afSectionHeaderNarrow]}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.cardTitle}>
                   Benchmark Comparison
@@ -884,8 +886,8 @@ const [historicalSummary, setHistoricalSummary] = useState(null);
             ) : null}
           </View>
 
-          <View style={[styles.card, activeSection !== "goal" && styles.hidden]}>
-            <View style={styles.sectionHeaderRow}>
+          <View style={[styles.card, isNarrowViewport && styles.av3afCardNarrow, activeSection !== "goal" && styles.hidden]}>
+            <View style={[styles.sectionHeaderRow, isNarrowViewport && styles.av3afSectionHeaderNarrow]}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.cardTitle}>
                   Goal Progress Intelligence
@@ -1113,8 +1115,8 @@ const [historicalSummary, setHistoricalSummary] = useState(null);
             ) : null}
           </View>
 
-          <View style={[styles.card, !["records", "milestones"].includes(activeSection) && styles.hidden]}>
-            <View style={styles.sectionHeaderRow}>
+          <View style={[styles.card, isNarrowViewport && styles.av3afCardNarrow, !["records", "milestones"].includes(activeSection) && styles.hidden]}>
+            <View style={[styles.sectionHeaderRow, isNarrowViewport && styles.av3afSectionHeaderNarrow]}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.cardTitle}>
                   {activeSection === "milestones" ? "Portfolio Milestones" : "Performance Records"}
@@ -1369,7 +1371,7 @@ const [historicalSummary, setHistoricalSummary] = useState(null);
                   (milestone) => (
                     <View
                       key={`milestone-${milestone.threshold}`}
-                      style={styles.milestoneRow}
+                      style={[styles.milestoneRow, isNarrowViewport && styles.av3afStackRowNarrow]}
                     >
                       <View style={{ flex: 1 }}>
                         <Text style={styles.milestoneValue}>
@@ -1431,7 +1433,7 @@ const [historicalSummary, setHistoricalSummary] = useState(null);
             ) : null}
           </View>
 
-          <View style={[styles.card, activeSection !== "drawdown" && styles.hidden]}>
+          <View style={[styles.card, isNarrowViewport && styles.av3afCardNarrow, activeSection !== "drawdown" && styles.hidden]}>
             <Text style={styles.cardTitle}>
               Portfolio Drawdown
             </Text>
@@ -1507,7 +1509,7 @@ const [historicalSummary, setHistoricalSummary] = useState(null);
             </View>
           </View>
 
-          <View style={[styles.card, activeSection !== "health" && styles.hidden]}>
+          <View style={[styles.card, isNarrowViewport && styles.av3afCardNarrow, activeSection !== "health" && styles.hidden]}>
             <Text style={styles.cardTitle}>
               Portfolio Health Trend
             </Text>
@@ -1592,11 +1594,11 @@ const [historicalSummary, setHistoricalSummary] = useState(null);
             </View>
           </View>
 
-          <View style={[styles.card, activeSection !== "snapshots" && styles.hidden]}>
+          <View style={[styles.card, isNarrowViewport && styles.av3afCardNarrow, activeSection !== "snapshots" && styles.hidden]}>
             <Text style={styles.cardTitle}>Snapshot History</Text>
 
             {snapshots.map((s) => (
-              <View key={s.date} style={styles.snapshotRow}>
+              <View key={s.date} style={[styles.snapshotRow, isNarrowViewport && styles.av3afStackRowNarrow]}>
                 <View style={{ flex: 1 }}>
                   <Text style={styles.snapshotDate}>{s.date}</Text>
                   <Text style={styles.small}>
@@ -1722,6 +1724,7 @@ function TimelineSnapshotInspector({
   point,
   onClose
 }) {
+  const { width } = useWindowDimensions();
   if (!point) {
     return null;
   }
@@ -1745,7 +1748,7 @@ function TimelineSnapshotInspector({
 
   return (
     <View style={styles.snapshotInspector}>
-      <View style={styles.snapshotInspectorHeader}>
+      <View style={[styles.snapshotInspectorHeader, width < 480 && styles.av3afSectionHeaderNarrow]}>
         <View style={{ flex: 1 }}>
           <Text style={styles.snapshotInspectorTitle}>
             Snapshot Inspector
@@ -2624,6 +2627,7 @@ function PeriodCard({
   label,
   period
 }) {
+  const { width } = useWindowDimensions();
   const available =
     Boolean(
       period?.available
@@ -2651,7 +2655,7 @@ function PeriodCard({
       : null;
 
   return (
-    <View style={styles.periodCard}>
+    <View style={[styles.periodCard, width < 480 && styles.av3afMetricFullWidth]}>
       <Text style={styles.periodLabel}>
         {label}
       </Text>
@@ -2705,6 +2709,7 @@ function PerformanceRecordMetric({
   detail,
   positive
 }) {
+  const { width } = useWindowDimensions();
   let valueStyle =
     styles.performanceRecordValue;
 
@@ -2719,7 +2724,7 @@ function PerformanceRecordMetric({
   }
 
   return (
-    <View style={styles.performanceRecordMetric}>
+    <View style={[styles.performanceRecordMetric, width < 480 && styles.av3afMetricFullWidth]}>
       <Text style={styles.performanceRecordLabel}>
         {label}
       </Text>
@@ -2740,8 +2745,9 @@ function AnalyticsMetric({
   label,
   value
 }) {
+  const { width } = useWindowDimensions();
   return (
-    <View style={styles.analyticsMetric}>
+    <View style={[styles.analyticsMetric, width < 480 && styles.av3afMetricFullWidth]}>
       <Text style={styles.small}>
         {label}
       </Text>
@@ -2755,6 +2761,7 @@ function AnalyticsMetric({
 
 
 function SummaryItem({ label, value, cyan, green, positive }) {
+  const { width } = useWindowDimensions();
   let valueStyle = styles.white;
 
   if (cyan) valueStyle = styles.cyan;
@@ -2762,7 +2769,7 @@ function SummaryItem({ label, value, cyan, green, positive }) {
   if (positive !== undefined) valueStyle = positive ? styles.green : styles.red;
 
   return (
-    <View style={styles.summaryItem}>
+    <View style={[styles.summaryItem, width < 480 && styles.av3afMetricFullWidth]}>
       <Text style={styles.small}>{label}</Text>
       <Text style={valueStyle}>{value}</Text>
     </View>
@@ -3514,5 +3521,23 @@ const styles = StyleSheet.create({
   av3bTitleNarrow: {
     fontSize: 25,
     lineHeight: 31
-  }
+  },
+
+  /* PC-030M20AV3AF RESPONSIVE CALIBRATION */
+  av3afContent: { width: "100%", alignSelf: "center", paddingBottom: 128 },
+  av3afContentWide: { maxWidth: 960, paddingHorizontal: 24 },
+  av3afContentCompact: { paddingHorizontal: 16, paddingTop: 24 },
+  av3afContentNarrow: { paddingHorizontal: 12 },
+  av3afHeaderCompact: { flexWrap: "wrap", alignItems: "stretch" },
+  av3afHeaderActionsCompact: { width: "100%", flexWrap: "wrap" },
+  av3afHeaderButtonCompact: { flexGrow: 1, minWidth: 120, alignItems: "center" },
+  av3afTitleCompact: { fontSize: 28, lineHeight: 34 },
+  av3afTitleNarrow: { fontSize: 25, lineHeight: 31 },
+  av3afSummaryNarrow: { flexDirection: "column" },
+  av3afMenuButtonNarrow: { width: "100%", minHeight: 64 },
+  av3afDetailNavigationNarrow: { flexDirection: "column", alignItems: "stretch" },
+  av3afCardNarrow: { padding: 14, borderRadius: 16 },
+  av3afSectionHeaderNarrow: { flexDirection: "column", alignItems: "stretch" },
+  av3afStackRowNarrow: { flexDirection: "column", alignItems: "stretch" },
+  av3afMetricFullWidth: { width: "100%", minWidth: 0 }
 });

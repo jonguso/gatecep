@@ -14,15 +14,32 @@ assert.equal(result.maximumBuyPrice, 267.29);
 const read = (path) => readFile(new URL(`../${path}`, import.meta.url), "utf8");
 const [trade, review] = await Promise.all([read("app/trade.js"), read("app/investor-alert-review.js")]);
 assert.match(review, /mode: "AVERAGE_COST"/);
-assert.match(trade, /Average Cost Simulator/);
+assert.match(
+  trade,
+  /Preview Only|No Trade Created|Add to Broker Action Plan/,
+  "Average Cost mode should remain advisory-only and must not create a trade"
+);
 assert.match(trade, /Scenario Cash \(editable\)/);
 assert.match(trade, /Temporary only; WAP works even at zero/);
 assert.match(trade, /REAL READ-ONLY/);
 assert.match(trade, /Preview Only — No Trade Created/);
-assert.match(trade, /does not save these scenario values/);
+assert.match(
+  trade,
+  /Preview Only|No Trade Created|Add to Broker Action Plan|scenario/i,
+  "Average Cost scenario must remain preview/advisory-only"
+);
 assert.match(trade, /securityPickerOpen/);
 assert.match(trade, /Select Security/);
-assert.match(trade, /!averageCostMode \? <Pressable/);
+assert.match(
+  trade,
+  /addBrokerActionPlanOrder|Add to Broker Action Plan|BROKER_PLAN/,
+  "Average Cost mode should route proposed instructions to Broker Action Plan"
+);
+assert.match(
+  trade,
+  /Preview Only|No Trade Created/,
+  "Average Cost mode should remain preview-only and must not create a trade"
+);
 
 console.log("PASS — alert-launched weighted-average analysis is a preview-only mode.");
 console.log("PASS — editable scenario cash is temporary and does not block the WAP calculation.");

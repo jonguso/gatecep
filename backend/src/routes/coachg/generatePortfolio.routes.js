@@ -1,4 +1,5 @@
 import express from "express";
+import { marketDataGateway } from "../../services/marketData/MarketDataGateway.js";
 
 import {
   buildInvestorProfile
@@ -10,7 +11,7 @@ import {
 
 const router = express.Router();
 
-router.get("/", (req, res) => {
+router.get("/", async (req, res) => {
   try {
     const {
       goal = "balanced_growth",
@@ -29,9 +30,17 @@ router.get("/", (req, res) => {
       contribution
     });
 
+    const pricesResult = await marketDataGateway.getPrices();
+    const marketPriceLookup = Object.fromEntries(
+      (pricesResult.data || [])
+        .map((item) => [String(item.symbol || item.code || "").trim().toUpperCase(), item])
+        .filter(([symbol]) => symbol)
+    );
+
     const recommendation = buildRecommendedPortfolio(
       profile,
-      Number(amount || 0)
+      Number(amount || 0),
+      marketPriceLookup
     );
 
     const confidence = calculateConfidence(profile, recommendation);

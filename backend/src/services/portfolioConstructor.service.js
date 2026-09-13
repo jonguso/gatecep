@@ -3,7 +3,6 @@ const SECURITY_UNIVERSE = [
     symbol: "SCOM",
     name: "Safaricom",
     sector: "Telecommunication",
-    price: 30.6,
     dividendYield: 5.8,
     styles: ["dividend", "balanced_growth", "wealth_growth"]
   },
@@ -11,7 +10,6 @@ const SECURITY_UNIVERSE = [
     symbol: "KCB",
     name: "KCB Group",
     sector: "Banking",
-    price: 67.75,
     dividendYield: 6.2,
     styles: ["dividend", "balanced_growth", "wealth_growth"]
   },
@@ -19,7 +17,6 @@ const SECURITY_UNIVERSE = [
     symbol: "COOP",
     name: "Co-operative Bank",
     sector: "Banking",
-    price: 31.6,
     dividendYield: 7.1,
     styles: ["dividend", "balanced_growth"]
   },
@@ -27,7 +24,6 @@ const SECURITY_UNIVERSE = [
     symbol: "ABSA",
     name: "Absa Bank Kenya",
     sector: "Banking",
-    price: 29,
     dividendYield: 8.1,
     styles: ["dividend", "preservation"]
   },
@@ -35,7 +31,6 @@ const SECURITY_UNIVERSE = [
     symbol: "EQT",
     name: "Equity Group",
     sector: "Banking",
-    price: 75.25,
     dividendYield: 5.5,
     styles: ["wealth_growth", "balanced_growth"]
   },
@@ -43,7 +38,6 @@ const SECURITY_UNIVERSE = [
     symbol: "BAT",
     name: "BAT Kenya",
     sector: "Manufacturing",
-    price: 520,
     dividendYield: 9.5,
     styles: ["dividend", "preservation"]
   },
@@ -51,7 +45,6 @@ const SECURITY_UNIVERSE = [
     symbol: "EABL",
     name: "East African Breweries",
     sector: "Manufacturing",
-    price: 248,
     dividendYield: 4.8,
     styles: ["dividend", "balanced_growth"]
   },
@@ -59,7 +52,6 @@ const SECURITY_UNIVERSE = [
     symbol: "SMWF",
     name: "Sanlam MSCI World ETF",
     sector: "ETF",
-    price: 940,
     dividendYield: 0,
     styles: ["wealth_growth", "balanced_growth", "preservation"]
   },
@@ -67,7 +59,6 @@ const SECURITY_UNIVERSE = [
     symbol: "GLD",
     name: "NewGold ETF",
     sector: "ETF",
-    price: 5650,
     dividendYield: 0,
     styles: ["preservation", "balanced_growth"]
   },
@@ -75,13 +66,12 @@ const SECURITY_UNIVERSE = [
     symbol: "KPLC",
     name: "Kenya Power",
     sector: "Energy",
-    price: 16.1,
     dividendYield: 0,
     styles: ["wealth_growth", "aggressive"]
   }
 ];
 
-export function buildRecommendedPortfolio(profile, amount) {
+export function buildRecommendedPortfolio(profile, amount, marketPriceLookup = {}) {
   const investmentAmount = Number(amount || 0);
   const cashReserveAmount =
     investmentAmount * (profile.constraints.cashReserve / 100);
@@ -95,7 +85,21 @@ export function buildRecommendedPortfolio(profile, amount) {
   const maxSingleAmount =
     investmentAmount * (profile.constraints.maxSinglePosition / 100);
 
-  const selectedUniverse = rankUniverse(profile);
+  const selectedUniverse = rankUniverse(profile)
+    .map((stock) => {
+      const market = marketPriceLookup[stock.symbol] || {};
+      const price = Number(market.price || market.lastPrice || 0);
+
+      if (!(price > 0)) return null;
+
+      return {
+        ...stock,
+        price,
+        priceSource: market.priceSource || market.provider || null,
+        marketDate: market.marketDate || null
+      };
+    })
+    .filter(Boolean);
 
   const sectorExposure = {};
   const portfolio = [];

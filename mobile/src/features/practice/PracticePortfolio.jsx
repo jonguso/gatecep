@@ -26,6 +26,7 @@ import CoachInsightCard from "./components/CoachInsightCard";
 import ConfidenceMeter from "./components/ConfidenceMeter";
 import LessonCard from "./components/LessonCard";
 import PortfolioAllocationCard from "./components/PortfolioAllocationCard";
+import { useMarketData } from "../../services/markets/useMarketData";
 
 /*
  * ============================================================
@@ -65,7 +66,6 @@ const PRACTICE_SECURITIES = {
       symbol: "SCOM",
       name: "Safaricom",
       sector: "Telecommunication",
-      price: 34.6,
       reason:
         "Provides exposure to telecommunications, digital payments, and long-term business growth."
     },
@@ -73,7 +73,6 @@ const PRACTICE_SECURITIES = {
       symbol: "KEGN",
       name: "KenGen",
       sector: "Energy",
-      price: 9.85,
       reason:
         "Provides exposure to electricity generation and Kenya's long-term infrastructure needs."
     },
@@ -81,7 +80,6 @@ const PRACTICE_SECURITIES = {
       symbol: "EQT",
       name: "Equity Group",
       sector: "Banking",
-      price: 85,
       reason:
         "Provides exposure to banking, regional growth, and financial services."
     }
@@ -92,7 +90,6 @@ const PRACTICE_SECURITIES = {
       symbol: "SCOM",
       name: "Safaricom",
       sector: "Telecommunication",
-      price: 34.6,
       reason:
         "A familiar company that may combine business growth with dividend income."
     },
@@ -100,7 +97,6 @@ const PRACTICE_SECURITIES = {
       symbol: "EABL",
       name: "East African Breweries",
       sector: "Manufacturing",
-      price: 270,
       reason:
         "Provides consumer-business exposure and may support an income-focused strategy."
     },
@@ -108,7 +104,6 @@ const PRACTICE_SECURITIES = {
       symbol: "COOP",
       name: "Co-operative Bank",
       sector: "Banking",
-      price: 35,
       reason:
         "Provides accessible banking exposure for a diversified practice portfolio."
     }
@@ -119,7 +114,6 @@ const PRACTICE_SECURITIES = {
       symbol: "GLD",
       name: "Gold ETF",
       sector: "ETF",
-      price: 4995,
       reason:
         "Provides diversification beyond ordinary company shares."
     },
@@ -127,7 +121,6 @@ const PRACTICE_SECURITIES = {
       symbol: "SMWF",
       name: "Satrix MSCI World Feeder",
       sector: "ETF",
-      price: 945,
       reason:
         "Provides practice exposure to diversified global-market investing."
     }
@@ -138,7 +131,6 @@ const PRACTICE_SECURITIES = {
       symbol: "KCB",
       name: "KCB Group",
       sector: "Banking",
-      price: 80,
       reason:
         "Provides exposure to a large regional banking institution."
     },
@@ -146,7 +138,6 @@ const PRACTICE_SECURITIES = {
       symbol: "EQT",
       name: "Equity Group",
       sector: "Banking",
-      price: 85,
       reason:
         "Provides exposure to retail banking and regional financial services."
     },
@@ -154,7 +145,6 @@ const PRACTICE_SECURITIES = {
       symbol: "COOP",
       name: "Co-operative Bank",
       sector: "Banking",
-      price: 35,
       reason:
         "Provides a lower-priced banking example for practice investing."
     }
@@ -168,6 +158,11 @@ const PRACTICE_SECURITIES = {
  */
 
 export default function PracticePortfolio() {
+  const marketData = useMarketData();
+  const marketRows = Array.isArray(marketData?.rows)
+    ? marketData.rows
+    : [];
+
   const [
     savedProfile,
     setSavedProfile
@@ -364,8 +359,8 @@ export default function PracticePortfolio() {
   const practiceHoldings =
     useMemo(() => {
       return buildPracticeHoldings(
-        allocations
-      );
+        allocations,
+      marketRows);
     }, [allocations]);
 
   /*
@@ -1050,8 +1045,29 @@ export default function PracticePortfolio() {
  */
 
 function buildPracticeHoldings(
-  allocations = []
+  allocations = [],
+  marketRows = []
 ) {
+  const quoteBySymbol = new Map();
+
+  (Array.isArray(marketRows) ? marketRows : []).forEach((quote) => {
+    const symbol = String(quote?.symbol || "")
+      .toUpperCase()
+      .trim();
+
+    const price = Number(
+      quote?.price ??
+      quote?.lastPrice ??
+      quote?.close ??
+      0
+    );
+
+    if (symbol && Number.isFinite(price) && price > 0) {
+      quoteBySymbol.set(symbol, quote);
+    }
+  });
+
+
   const holdings = [];
 
   allocations.forEach(
@@ -1086,9 +1102,19 @@ function buildPracticeHoldings(
 
       securities.forEach(
         (security) => {
+          const quote =
+            quoteBySymbol.get(
+              String(security.symbol || "")
+                .toUpperCase()
+                .trim()
+            );
+
           const price =
             Number(
-              security.price || 0
+              quote?.price ??
+              quote?.lastPrice ??
+              quote?.close ??
+              0
             );
 
           if (price <= 0) {
@@ -1331,6 +1357,7 @@ function money(value) {
  * ============================================================
  */
 
+// PC-030M20AV3AQ — Final Responsive UAT Closure: Starter Plan / Practice Portfolio calibrated for compact and desktop widths
 const styles =
   StyleSheet.create({
     screen: {
@@ -1342,7 +1369,10 @@ const styles =
     content: {
       padding: 22,
       paddingTop: 70,
-      paddingBottom: 110
+      paddingBottom: 128,
+      width: "100%",
+      maxWidth: 960,
+      alignSelf: "center"
     },
 
     centerScreen: {
@@ -1426,6 +1456,8 @@ const styles =
 
     metric: {
       width: "47%",
+      minWidth: 140,
+      flexGrow: 1,
       backgroundColor:
         "#020617",
       borderColor:

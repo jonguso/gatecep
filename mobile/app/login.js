@@ -119,6 +119,7 @@ export default function LoginScreen() {
   );
 }
 
+// PC-030M20AV3AQ — Final Responsive UAT Closure: login already uses centered maxWidth 520 responsive form
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#020617" },
   flex: { flex: 1 },

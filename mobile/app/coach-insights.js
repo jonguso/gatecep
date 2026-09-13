@@ -27,6 +27,8 @@ import {
 
 export default function Coach() {
   const { width: viewportWidth } = useWindowDimensions();
+  const isCompactViewport = viewportWidth < 720;
+  const isNarrowViewport = viewportWidth < 480;
   const [portfolio, setPortfolio] = useState([]);
   const [dashboardContext, setDashboardContext] = useState(null);
   const [recommendationHistory, setRecommendationHistory] = useState([]);
@@ -332,19 +334,19 @@ router.push("/(tabs)/trading");
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, viewportWidth >= 720 && styles.av3bContentWide, viewportWidth < 720 && styles.av3bContentCompact, viewportWidth < 480 && styles.av3bContentNarrow]}>
-      <View style={[styles.headerRow, viewportWidth < 720 && styles.av3bHeaderCompact]}>
-        <Text style={[styles.title, viewportWidth < 720 && styles.av3bTitleCompact, viewportWidth < 480 && styles.av3bTitleNarrow]}>Practice Coach G Lab</Text>
+    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, styles.av3aeContent, !isCompactViewport && styles.av3aeContentWide, isCompactViewport && styles.av3aeContentCompact, isNarrowViewport && styles.av3aeContentNarrow]}>
+      <View style={[styles.headerRow, isCompactViewport && styles.av3aeHeaderCompact]}>
+        <Text style={[styles.title, isCompactViewport && styles.av3aeTitleCompact, isNarrowViewport && styles.av3aeTitleNarrow]}>Practice Coach G Lab</Text>
 
         <Pressable
-          style={styles.dashboardButton}
+          style={[styles.dashboardButton, isCompactViewport && styles.av3aeHeaderButtonCompact]}
           onPress={() => router.replace("/(tabs)/dashboard")}
         >
           <Text style={styles.dashboardButtonText}>Dashboard</Text>
         </Pressable>
 
         <Pressable
-          style={styles.dashboardButton}
+          style={[styles.dashboardButton, isCompactViewport && styles.av3aeHeaderButtonCompact]}
           onPress={() =>
             router.replace("/(tabs)/coach")
           }
@@ -409,7 +411,7 @@ router.push("/(tabs)/trading");
       <View style={styles.card}>
         <Text style={styles.section}>Practice Records</Text>
 
-        <View style={styles.quickGrid}>
+        <View style={[styles.quickGrid, isCompactViewport && styles.av3aeQuickGridCompact]}>
           <QuickCard title="Practice Order Book" desc="Review simulated orders only" route="/order-book" />
           <QuickCard title="Practice Trade History" desc="Review simulated trades only" route="/trade-history" />
         </View>
@@ -495,8 +497,9 @@ router.push("/(tabs)/trading");
 }
 
 function QuickCard({ title, desc, route }) {
+  const { width } = useWindowDimensions();
   return (
-    <Pressable style={styles.quickCard} onPress={() => router.push(route)}>
+    <Pressable style={[styles.quickCard, width < 720 && styles.av3aeQuickCardCompact]} onPress={() => router.push(route)}>
       <Text style={styles.quickTitle}>{title}</Text>
       <Text style={styles.quickDesc}>{desc}</Text>
     </Pressable>
@@ -527,12 +530,16 @@ function SimulatorModal({
   createTradeBasketFromRecommendation,
   setSelectedSector
 }) {
+  const { width } = useWindowDimensions();
+  const compact = width < 720;
+  const narrow = width < 480;
+
   return (
     <Modal visible={visible} transparent animationType="fade">
-      <View style={styles.overlay}>
-        <View style={styles.simulatorModal}>
-          <View style={styles.popupHeader}>
-            <View style={{ flex: 1 }}>
+      <View style={[styles.overlay, compact && styles.av3aeOverlayCompact]}>
+        <View style={[styles.simulatorModal, styles.av3aeModalFrame, compact && styles.av3aeModalCompact, narrow && styles.av3aeModalNarrow]}>
+          <View style={[styles.popupHeader, compact && styles.av3aePopupHeaderCompact]}>
+            <View style={{ flex: 1, minWidth: 0 }}>
               <Text style={styles.popupTitle}>Practice Investment Simulator</Text>
               <Text style={styles.body}>
                 Test a hypothetical allocation. No REAL portfolio or broker record will change.
@@ -544,7 +551,7 @@ function SimulatorModal({
             </Pressable>
           </View>
 
-          <View style={styles.dropdownRow}>
+          <View style={[styles.dropdownRow, compact && styles.av3aeStackCompact]}>
             <View style={styles.dropdownHalf}>
               <Dropdown
                 label="Investment Goal"
@@ -584,7 +591,7 @@ function SimulatorModal({
 
           <Text style={styles.inputLabel}>Rebalance Intensity: {intensity}%</Text>
 
-          <View style={styles.sliderRow}>
+          <View style={[styles.sliderRow, narrow && styles.av3aeSliderWrap]}>
             {[25, 50, 75, 100].map((level) => (
               <Pressable
                 key={level}
@@ -618,10 +625,10 @@ function SimulatorModal({
           </Pressable>
 
           <Modal visible={showResults} transparent animationType="fade">
-            <View style={styles.resultOverlay}>
-              <View style={styles.resultModal}>
-                <View style={styles.popupHeader}>
-                  <Text style={styles.popupTitle}>Simulation Results</Text>
+            <View style={[styles.resultOverlay, compact && styles.av3aeOverlayCompact]}>
+              <View style={[styles.resultModal, styles.av3aeModalFrame, compact && styles.av3aeModalCompact, narrow && styles.av3aeModalNarrow]}>
+                <View style={[styles.popupHeader, compact && styles.av3aePopupHeaderCompact]}>
+                  <Text style={[styles.popupTitle, narrow && styles.av3aePopupTitleNarrow]}>Simulation Results</Text>
 
                   <Pressable onPress={() => setShowResults(false)}>
                     <Text style={styles.gray}>Close</Text>
@@ -704,14 +711,17 @@ function SectorDetailsModal({ sector, onClose, buildSectorDetails }) {
   if (!sector) return null;
 
   const details = buildSectorDetails(sector);
+  const { width } = useWindowDimensions();
+  const compact = width < 720;
+  const narrow = width < 480;
 
   return (
     <Modal visible transparent animationType="fade">
-      <View style={styles.overlay}>
-        <View style={styles.popup}>
-          <View style={styles.popupHeader}>
-            <View>
-              <Text style={styles.popupTitle}>{sector.sector}</Text>
+      <View style={[styles.overlay, compact && styles.av3aeOverlayCompact]}>
+        <View style={[styles.popup, styles.av3aeModalFrame, compact && styles.av3aeModalCompact, narrow && styles.av3aeModalNarrow]}>
+          <View style={[styles.popupHeader, compact && styles.av3aePopupHeaderCompact]}>
+            <View style={{ flex: 1, minWidth: 0 }}>
+              <Text style={[styles.popupTitle, narrow && styles.av3aePopupTitleNarrow]}>{sector.sector}</Text>
               <Text style={styles.body}>Allocation: KES {money(sector.amount)}</Text>
               <Text style={styles.section}>
                 Holdings ({details.holdings.length} securities)
@@ -725,14 +735,14 @@ function SectorDetailsModal({ sector, onClose, buildSectorDetails }) {
 
           <ScrollView style={{ maxHeight: 320 }}>
             {details.holdings.map((h) => (
-              <View key={h.symbol} style={styles.stockRow}>
+              <View key={h.symbol} style={[styles.stockRow, narrow && styles.av3aeStockRowNarrow]}>
                 <View style={styles.stockLeft}>
                   <Text style={styles.stockSymbol}>{h.symbol}</Text>
                   <Text style={styles.stockName}>{h.name}</Text>
                   <Text style={styles.stockReason}>{h.reason}</Text>
                 </View>
 
-                <View style={styles.stockRight}>
+                <View style={[styles.stockRight, narrow && styles.av3aeStockRightNarrow]}>
                   <Text style={styles.stockShares}>{h.qty} shares</Text>
                   <Text style={styles.marketPrice}>@ KES {money(h.price)}</Text>
                   <Text style={styles.stockValue}>KES {money(h.invested)}</Text>
@@ -741,7 +751,7 @@ function SectorDetailsModal({ sector, onClose, buildSectorDetails }) {
             ))}
           </ScrollView>
 
-          <View style={styles.summaryStrip}>
+          <View style={[styles.summaryStrip, narrow && styles.av3aeSummaryStripNarrow]}>
             <SummaryItem label="Invested" value={`KES ${money(details.investedTotal)}`} />
             <SummaryItem label="Unused" value={`KES ${money(details.unused)}`} yellow />
             <SummaryItem label="Allocation" value={`KES ${money(sector.amount)}`} />
@@ -1118,5 +1128,92 @@ const styles = StyleSheet.create({
   av3bTitleNarrow: {
     fontSize: 25,
     lineHeight: 31
+  },
+
+  /* PC-030M20AV3AE RESPONSIVE CALIBRATION */
+  av3aeContent: {
+    width: "100%",
+    alignSelf: "center",
+    paddingBottom: 128
+  },
+  av3aeContentWide: {
+    maxWidth: 960,
+    paddingHorizontal: 24
+  },
+  av3aeContentCompact: {
+    paddingTop: 24,
+    paddingHorizontal: 16
+  },
+  av3aeContentNarrow: {
+    paddingHorizontal: 12
+  },
+  av3aeHeaderCompact: {
+    flexWrap: "wrap",
+    alignItems: "stretch"
+  },
+  av3aeHeaderButtonCompact: {
+    flexGrow: 1,
+    minWidth: 132,
+    alignItems: "center"
+  },
+  av3aeTitleCompact: {
+    width: "100%",
+    fontSize: 28,
+    lineHeight: 34
+  },
+  av3aeTitleNarrow: {
+    fontSize: 25,
+    lineHeight: 31
+  },
+  av3aeQuickGridCompact: {
+    flexDirection: "column"
+  },
+  av3aeQuickCardCompact: {
+    width: "100%",
+    minHeight: 88
+  },
+  av3aeModalFrame: {
+    width: "100%",
+    maxWidth: 960,
+    alignSelf: "center"
+  },
+  av3aeOverlayCompact: {
+    padding: 12,
+    paddingTop: 18
+  },
+  av3aeModalCompact: {
+    padding: 16,
+    maxHeight: "96%"
+  },
+  av3aeModalNarrow: {
+    padding: 12,
+    borderRadius: 18
+  },
+  av3aePopupHeaderCompact: {
+    flexWrap: "wrap",
+    gap: 10
+  },
+  av3aePopupTitleNarrow: {
+    fontSize: 20,
+    lineHeight: 26
+  },
+  av3aeStackCompact: {
+    flexDirection: "column",
+    gap: 0
+  },
+  av3aeSliderWrap: {
+    flexWrap: "wrap"
+  },
+  av3aeStockRowNarrow: {
+    flexDirection: "column"
+  },
+  av3aeStockRightNarrow: {
+    width: "100%",
+    minWidth: 0,
+    alignItems: "flex-start"
+  },
+  av3aeSummaryStripNarrow: {
+    flexDirection: "column",
+    gap: 12
   }
 });

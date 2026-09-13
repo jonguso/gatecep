@@ -4,12 +4,15 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  View
+  View,
+  useWindowDimensions
 } from "react-native";
 import { router } from "expo-router";
 
 import { savePortfolio } from "../../src/portfolio/portfolioStore";
 import { saveInvestorProfile } from "../../src/features/profile/api/investorProfileApi";
+import { useMarketData } from "../../src/services/markets/useMarketData";
+
 import {
   userGetItem,
   userSetItem
@@ -19,28 +22,52 @@ const STARTER_AMOUNT = 25000;
 
 const SECURITY_IDEAS = {
   Banking: [
-    { symbol: "KCB", name: "KCB Group PLC", sector: "Banking", price: 67.75 },
-    { symbol: "COOP", name: "Co-operative Bank of Kenya Ltd", sector: "Banking", price: 31.6 },
-    { symbol: "ABSA", name: "Absa Bank Kenya PLC", sector: "Banking", price: 29 }
+    { symbol: "KCB", name: "KCB Group PLC", sector: "Banking" },
+    { symbol: "COOP", name: "Co-operative Bank of Kenya Ltd", sector: "Banking" },
+    { symbol: "ABSA", name: "Absa Bank Kenya PLC", sector: "Banking" }
   ],
   Telecom: [
-    { symbol: "SCOM", name: "Safaricom PLC", sector: "Telecom", price: 30.6 }
+    { symbol: "SCOM", name: "Safaricom PLC", sector: "Telecom" }
   ],
   "Dividend Stocks": [
-    { symbol: "BAT", name: "British American Tobacco Kenya PLC", sector: "Mfg. and Allied", price: 520 },
-    { symbol: "EABL", name: "East African Breweries PLC", sector: "Mfg. and Allied", price: 248 }
+    { symbol: "BAT", name: "British American Tobacco Kenya PLC", sector: "Mfg. and Allied" },
+    { symbol: "EABL", name: "East African Breweries PLC", sector: "Mfg. and Allied" }
   ],
   "ETF / Diversifier": [
-    { symbol: "SMWF", name: "Sanlam MSCI World ETF", sector: "ETF", price: 940 },
-    { symbol: "GLD", name: "ABSA NewGold ETF", sector: "ETF", price: 5650 }
+    { symbol: "SMWF", name: "Sanlam MSCI World ETF", sector: "ETF" },
+    { symbol: "GLD", name: "ABSA NewGold ETF", sector: "ETF" }
   ],
   "Growth Stocks": [
-    { symbol: "SCOM", name: "Safaricom PLC", sector: "Telecom", price: 30.6 },
-    { symbol: "EABL", name: "East African Breweries PLC", sector: "Mfg. and Allied", price: 248 }
+    { symbol: "SCOM", name: "Safaricom PLC", sector: "Telecom" },
+    { symbol: "EABL", name: "East African Breweries PLC", sector: "Mfg. and Allied" }
   ]
 };
 
 export default function SmartPortfolio() {
+  const marketRuntime = useMarketData();
+  const marketRows =
+    marketRuntime?.data ||
+    marketRuntime?.quotes ||
+    marketRuntime?.stocks ||
+    marketRuntime?.marketData ||
+    [];
+
+  const quoteBySymbol = new Map(
+    (Array.isArray(marketRows) ? marketRows : [])
+      .filter((row) => row?.symbol)
+      .map((row) => [String(row.symbol).toUpperCase(), row])
+  );
+
+  const resolveIdeaPrice = (idea) => {
+    const quote = quoteBySymbol.get(String(idea?.symbol || "").toUpperCase());
+    const price = Number(
+      quote?.price ?? quote?.lastPrice ?? quote?.currentPrice ?? NaN
+    );
+    return Number.isFinite(price) && price > 0 ? price : null;
+  };
+
+  const { width: windowWidth } = useWindowDimensions();
+  const isCompact = windowWidth < 520;
   const [profile, setProfile] = useState(null);
   const [plan, setPlan] = useState([]);
   const [starterHoldings, setStarterHoldings] = useState([]);
@@ -135,11 +162,14 @@ export default function SmartPortfolio() {
       ideas.forEach((idea) => {
         if (allocationRemaining <= 0) return;
 
-        const quantity = Math.floor(allocationRemaining / idea.price);
+        const marketPrice = resolveIdeaPrice(idea);
+        if (!marketPrice) return;
+
+        const quantity = Math.floor(allocationRemaining / marketPrice);
 
         if (quantity <= 0) return;
 
-        const invested = quantity * idea.price;
+        const invested = quantity * marketPrice;
 
         holdings.push({
           broker: "STARTER_PLAN",
@@ -148,10 +178,10 @@ export default function SmartPortfolio() {
           name: idea.name,
           sector: idea.sector,
           quantity,
-          averagePrice: idea.price,
-          averageCost: idea.price,
-          marketPrice: idea.price,
-          price: idea.price,
+          averagePrice: marketPrice,
+          averageCost: marketPrice,
+          marketPrice: marketPrice,
+          price: marketPrice,
           marketValue: invested,
           value: invested,
           costValue: invested,
@@ -220,8 +250,11 @@ await saveInvestorProfile({
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Your Smart Portfolio is Ready</Text>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={[styles.content, isCompact && styles.contentCompact]}
+    >
+      <Text style={[styles.title, isCompact && styles.titleCompact]}>Your Smart Portfolio is Ready</Text>
 
       <Text style={styles.subtitle}>
         Coach G built this KES {money(STARTER_AMOUNT)} starter allocation from
@@ -234,7 +267,7 @@ await saveInvestorProfile({
         </Text>
 
         {plan.map((item) => (
-          <View key={item.name} style={styles.row}>
+          <View key={item.name} style={[styles.row, isCompact && styles.rowCompact]}>
             <View style={{ flex: 1 }}>
               <Text style={styles.name}>{item.name}</Text>
               <Text style={styles.amount}>KES {money(item.amount)}</Text>
@@ -255,7 +288,7 @@ await saveInvestorProfile({
           </Text>
         ) : (
           starterHoldings.map((holding, index) => (
-            <View key={`${holding.symbol}-${index}`} style={styles.row}>
+            <View key={`${holding.symbol}-${index}`} style={[styles.row, isCompact && styles.rowCompact]}>
               <View style={{ flex: 1 }}>
                 <Text style={styles.name}>{holding.symbol}</Text>
                 <Text style={styles.amount}>
@@ -268,7 +301,7 @@ await saveInvestorProfile({
           ))
         )}
 
-        <View style={styles.cashRow}>
+        <View style={[styles.cashRow, isCompact && styles.rowCompact]}>
           <Text style={styles.name}>Cash Reserve</Text>
           <Text style={styles.cash}>KES {money(cashReserve)}</Text>
         </View>
@@ -312,14 +345,26 @@ const styles = StyleSheet.create({
     backgroundColor: "#020617"
   },
   content: {
+    /* PC-030M20AV3AO RESPONSIVE CALIBRATION */
+    width: "100%",
+    maxWidth: 960,
+    alignSelf: "center",
     padding: 25,
     paddingTop: 70,
-    paddingBottom: 110
+    paddingBottom: 128
+  },
+  contentCompact: {
+    paddingHorizontal: 16,
+    paddingTop: 32
   },
   title: {
     color: "white",
     fontSize: 34,
     fontWeight: "900"
+  },
+  titleCompact: {
+    fontSize: 28,
+    lineHeight: 34
   },
   subtitle: {
     color: "#94a3b8",
@@ -342,11 +387,15 @@ const styles = StyleSheet.create({
   },
   row: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     borderBottomColor: "#1e293b",
     borderBottomWidth: 1,
     paddingVertical: 10,
     gap: 12
+  },
+  rowCompact: {
+    alignItems: "flex-start"
   },
   name: {
     color: "#cbd5e1",
@@ -360,10 +409,12 @@ const styles = StyleSheet.create({
   weight: {
     color: "white",
     fontWeight: "900",
-    textAlign: "right"
+    textAlign: "right",
+    flexShrink: 1
   },
   cashRow: {
     flexDirection: "row",
+    flexWrap: "wrap",
     justifyContent: "space-between",
     paddingTop: 14
   },

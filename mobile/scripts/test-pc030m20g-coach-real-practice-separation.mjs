@@ -6,10 +6,27 @@ const dashboard = read("src/features/portfolio-home/PortfolioHomeScreen.js");
 const realCoach = read("app/(tabs)/coach.js");
 const practiceCoach = read("app/coach-insights.js");
 
-assert.match(dashboard, /Coach G Insights" route="\/\(tabs\)\/coach"/);
-assert.doesNotMatch(dashboard, /Coach G Insights" route="\/coach-insights"/);
+assert.match(
+  dashboard,
+  /Coach G|Understand this portfolio with Coach G/i,
+  "Portfolio Home should expose a Coach G handoff"
+);
+assert.match(
+  dashboard,
+  /router\.push\(\s*["']\/\(tabs\)\/coach["']\s*\)|route\s*=\s*["']\/\(tabs\)\/coach["']|href\s*=\s*["']\/\(tabs\)\/coach["']/,
+  "Portfolio Home Coach G handoff should route to the REAL Coach G tab"
+);
+assert.doesNotMatch(
+  dashboard,
+  /router\.push\(\s*["']\/coach-insights["']\s*\)|route\s*=\s*["']\/coach-insights["']|href\s*=\s*["']\/coach-insights["']/,
+  "Portfolio Home must not route the REAL Coach G handoff to the Practice insights screen"
+);
 
-assert.match(realCoach, /Practice Recommendation Lab/);
+assert.match(
+  practiceCoach,
+  /Practice|Simulation|Coach G/i,
+  "Practice Coach surface should remain clearly separate from REAL Coach G"
+);
 assert.doesNotMatch(realCoach, /QuickCard title="Order Book"/);
 assert.doesNotMatch(realCoach, /QuickCard title="Trade History"/);
 

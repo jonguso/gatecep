@@ -191,9 +191,13 @@ const styles = StyleSheet.create({
   },
 
   content: {
+    /* PC-030M20AV3AN RESPONSIVE UAT CALIBRATION */
+    width: "100%",
+    maxWidth: 960,
+    alignSelf: "center",
     padding: 22,
     paddingTop: 70,
-    paddingBottom: 110
+    paddingBottom: 128
   },
 
   center: {
