@@ -222,9 +222,14 @@ export default function Coach() {
     }
 
     await saveTradeBasket(
-  basketItems,
-  "COACH_G_SIMULATION"
-);
+      basketItems,
+      "COACH_G_SIMULATION",
+      {
+        executionMode: "PRACTICE",
+        brokerId: "GATECEP_PRACTICE",
+        brokerAccountId: null
+      }
+    );
 
 await createBasketExecution();
 

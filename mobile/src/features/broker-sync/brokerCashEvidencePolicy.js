@@ -97,7 +97,7 @@ export function hasConnectedRealBrokerAccount(accounts = []) {
     const mode = clean(account?.connectionMode).toUpperCase();
     const brokerId = clean(account?.brokerId || account?.id).toUpperCase();
     const status = clean(account?.status || "ACTIVE").toUpperCase();
-    const excluded = brokerId === "SIM" || /PRACTICE|DEMO|SIMULATION/.test(mode);
+    const excluded = ["SIM", "GATECEP_PRACTICE"].includes(brokerId) || /PRACTICE|DEMO|SIMULATION/.test(mode);
     return !excluded && status !== "INACTIVE" && status !== "DISCONNECTED" && (account?.connected === true || account?.linked === true);
   });
 }

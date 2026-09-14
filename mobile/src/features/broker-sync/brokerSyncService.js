@@ -643,7 +643,7 @@ export async function syncConnectedBrokerMirror() {
     const brokerId = String(account?.brokerId || account?.id || "").toUpperCase();
     const mode = String(account?.connectionMode || "").toUpperCase();
 
-    return brokerId !== "SIM" && !mode.includes("PRACTICE") && !mode.includes("DEMO");
+    return !["SIM", "GATECEP_PRACTICE"].includes(brokerId) && !mode.includes("PRACTICE") && !mode.includes("DEMO") && !mode.includes("SIMULATION");
   });
 
   if (!accounts.length) {

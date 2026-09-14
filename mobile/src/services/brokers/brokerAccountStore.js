@@ -18,7 +18,7 @@ export function resolveCanonicalBrokerId(value = "") {
   if (["DYER","DYER & BLAIR","DYER AND BLAIR"].includes(raw)) return "DYER";
   if (["FAIDA","FAIDA INVESTMENT BANK"].includes(raw)) return "FAIDA";
   if (["STANDARD INVESTMENT BANK","SIB"].includes(raw)) return "SIB";
-  if (["GATECEP-DEMO","GATECEP DEMO","SIM"].includes(raw)) return "SIM";
+  if (["GATECEP-DEMO","GATECEP DEMO","GATECEP_PRACTICE","GATECEP PRACTICE","GATECEP BROKER","SIM","SIMULATION BROKER"].includes(raw)) return "GATECEP_PRACTICE";
   return raw.replace(/[^A-Z0-9]+/g, "_");
 }
 
@@ -47,7 +47,7 @@ export async function migrateLegacyBrokerProfileToCanonicalAccounts() {
   if (!brokerId) return { migrated:false, reason:"LEGACY_BROKER_ID_UNAVAILABLE", accounts:[] };
 
   const now=new Date().toISOString();
-  const broker=findBrokerById(brokerId||"SIM");
+  const broker=findBrokerById(brokerId||"GATECEP_PRACTICE");
   const brokerName=brokerLabel||cleanText(broker?.name)||brokerId;
   const account={
     id:brokerId, brokerId, brokerName, broker:brokerName, name:brokerName,
@@ -126,7 +126,7 @@ export async function upsertBrokerAccount({
   apiMode = "PENDING_BROKER_API",
   feeSchedule = null
 } = {}) {
-  const broker = findBrokerById(brokerId || "SIM");
+  const broker = findBrokerById(brokerId || "GATECEP_PRACTICE");
   const accounts = await loadBrokerAccounts();
 
   const resolvedBrokerId = brokerId || broker.id;

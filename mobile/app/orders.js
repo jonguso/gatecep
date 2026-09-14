@@ -16,9 +16,8 @@ import {
   cancelExecutionOrder,
   createBasketExecution,
   loadBasketExecution,
-  markBrokerReceived,
   markExecutionOrderFilled,
-  routeExecutionOrder,
+  routeExecutionOrderByMode,
   updateExecutionOrder
 } from "../src/trade/basketExecutionStore";
 import { ORDER_STATUS, isClosedOrder } from "../src/trade/orderLifecycle";
@@ -100,27 +99,37 @@ export default function Orders() {
   };
 
   async function sendToBroker(order) {
-    const routed = await routeExecutionOrder(order.id, {
-      id: "GATECEP_PRACTICE",
-      name: "Practice Simulator"
-    });
+    try {
+      const routed = await routeExecutionOrderByMode(order.id);
+      setExecution(routed);
+    } catch (error) {
+      const code = error?.code || error?.message;
 
-    setExecution(routed);
-
-    setTimeout(async () => {
-      const received = await markBrokerReceived(order.id, {
-        brokerOrderId: `PRACTICE-${Date.now()}-${order.symbol}`,
-        status: "BROKER_RECEIVED"
-      });
-
-      setExecution(received);
-    }, 400);
+      Alert.alert(
+        "Order Not Routed",
+        code === "CONNECTED_REAL_BROKER_REQUIRED"
+          ? "Connect or select a REAL broker account before routing this REAL order."
+          : error?.message || "Broker routing failed."
+      );
+    }
   }
 
   async function fillOrder(order) {
+    const executionMode = String(
+      order?.executionMode || execution?.executionMode || "PRACTICE"
+    ).toUpperCase();
+
+    if (executionMode === "REAL") {
+      Alert.alert(
+        "Verified Broker Evidence Required",
+        "REAL orders cannot be manually filled. GateCEP must receive genuine broker execution evidence before REAL holdings, cash, P&L or FIFO can change."
+      );
+      return;
+    }
+
     Alert.alert(
-      "Simulate Fill",
-      `Simulate filling ${order.side} ${order.symbol} in Practice?`,
+      "Practice Fill",
+      `Fill ${order.side} ${order.symbol} through GateCEP Broker in Practice?`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -132,7 +141,7 @@ export default function Orders() {
               quantity: order.quantity,
               price: order.price,
               filledAt: new Date().toISOString(),
-              source: "PRACTICE_SIMULATION"
+              source: "GATECEP_BROKER_PRACTICE"
             });
 
             setExecution(updated);

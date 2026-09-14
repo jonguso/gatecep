@@ -15,6 +15,7 @@ import {
   createBasketExecution,
   loadBasketExecution,
   markExecutionOrderFilled,
+  routeExecutionOrderByMode,
   updateExecutionOrder
 } from "../src/trade/basketExecutionStore";
 import { ORDER_STATUS } from "../src/trade/orderLifecycle";
@@ -83,9 +84,23 @@ export default function QueueManager() {
       return;
     }
 
+    const realCount = queued.filter(
+      (order) =>
+        String(order.executionMode || execution?.executionMode || "PRACTICE").toUpperCase() ===
+        "REAL"
+    ).length;
+    const practiceCount = queued.length - realCount;
+
+    const routeSummary = [
+      practiceCount ? `${practiceCount} Practice order${practiceCount === 1 ? "" : "s"} through GateCEP Broker` : null,
+      realCount ? `${realCount} REAL order${realCount === 1 ? "" : "s"} through the selected connected broker adapter` : null
+    ]
+      .filter(Boolean)
+      .join(" and ");
+
     Alert.alert(
       "Route Orders",
-      `${queued.length} orders will be routed inside the Practice simulator. Nothing is sent to a broker.`,
+      `${routeSummary}. REAL orders remain pending until genuine broker confirmation is available.`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -94,41 +109,18 @@ export default function QueueManager() {
             let latest = execution;
 
             for (const order of queued) {
-              latest = await updateExecutionOrder(order.id, {
-                status: ORDER_STATUS.ROUTED,
-                message: `Routing to ${order.brokerName || "Simulation Broker"}`,
-                routedAt: new Date().toISOString()
-              });
+              try {
+                latest = await routeExecutionOrderByMode(order.id);
+              } catch (error) {
+                const code = error?.code || error?.message;
 
-              const now = new Date().toISOString();
-              const brokerResponse = {
-                brokerId: "GATECEP_PRACTICE",
-                brokerName: "Practice Simulator",
-                brokerOrderId: `PRACTICE-${Date.now()}-${order.symbol}`,
-                status: "PRACTICE_RECEIVED",
-                message: "Practice simulator received the order.",
-                submittedAt: now,
-                receivedAt: now,
-                isPractice: true
-              };
-
-              latest = await updateExecutionOrder(order.id, {
-                brokerId: brokerResponse.brokerId || order.brokerId || "SIM",
-                brokerName:
-                  brokerResponse.brokerName ||
-                  order.brokerName ||
-                  "Simulation Broker",
-                brokerOrderId: brokerResponse.brokerOrderId,
-                brokerStatus: brokerResponse.status,
-                status: ORDER_STATUS.BROKER_RECEIVED,
-                message:
-                  brokerResponse.message ||
-                  "Broker received order through adapter.",
-                submittedAt: brokerResponse.submittedAt,
-                brokerReceivedAt: brokerResponse.receivedAt,
-                adapterResponse: brokerResponse,
-                updatedAt: new Date().toISOString()
-              });
+                Alert.alert(
+                  "Order Not Routed",
+                  code === "CONNECTED_REAL_BROKER_REQUIRED"
+                    ? `${order.symbol}: connect or select a REAL broker account before routing this REAL order.`
+                    : `${order.symbol}: ${error?.message || "Broker routing failed."}`
+                );
+              }
             }
 
             setExecution(latest);
@@ -139,10 +131,14 @@ export default function QueueManager() {
   }
 
   async function fillBrokerReceivedOrders() {
-    const received = orders.filter((order) =>
-      [ORDER_STATUS.BROKER_RECEIVED, ORDER_STATUS.PARTIAL_FILL].includes(
-        order.status
-      )
+    const received = orders.filter(
+      (order) =>
+        [ORDER_STATUS.BROKER_RECEIVED, ORDER_STATUS.PARTIAL_FILL].includes(
+          order.status
+        ) &&
+        String(
+          order.executionMode || execution?.executionMode || "PRACTICE"
+        ).toUpperCase() === "PRACTICE"
     );
 
     if (!received.length) {
@@ -173,7 +169,7 @@ export default function QueueManager() {
                 brokerName: order.brokerName,
                 brokerOrderId: order.brokerOrderId,
                 filledAt: new Date().toISOString(),
-                source: "PRACTICE_SIMULATION"
+                source: "GATECEP_BROKER_PRACTICE"
               });
             }
 
@@ -185,6 +181,18 @@ export default function QueueManager() {
   }
 
   async function markPartial(order) {
+    const executionMode = String(
+      order?.executionMode || execution?.executionMode || "PRACTICE"
+    ).toUpperCase();
+
+    if (executionMode === "REAL") {
+      Alert.alert(
+        "Verified Broker Evidence Required",
+        "REAL orders cannot be manually marked as partially filled. GateCEP must receive genuine broker execution evidence."
+      );
+      return;
+    }
+
     const filledQty = Math.max(1, Math.floor(Number(order.quantity || 0) / 2));
 
     const updated = await updateExecutionOrder(order.id, {
@@ -201,7 +209,7 @@ export default function QueueManager() {
   if (!execution || !orders.length) {
     return (
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Practice Queue Manager</Text>
+        <Text style={styles.title}>Order Queue</Text>
 
         <Text style={styles.subtitle}>
           No active OMS queue found. Create a basket first.

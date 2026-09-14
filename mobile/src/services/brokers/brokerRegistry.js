@@ -1,12 +1,12 @@
 export const BROKER_REGISTRY = [
   {
-    id: "SIM",
-    name: "Simulation Broker",
-    shortName: "SIM",
+    id: "GATECEP_PRACTICE",
+    name: "GateCEP Broker",
+    shortName: "GateCEP",
     adapter: "simulation",
     status: "ACTIVE",
-    apiMode: "SIMULATION",
-    bestFor: "Testing OMS execution"
+    apiMode: "PRACTICE",
+    bestFor: "Learning GateCEP before live investing"
   },
   {
     id: "AIB",
@@ -55,11 +55,24 @@ export const BROKER_REGISTRY = [
   }
 ];
 
-export function findBrokerById(id = "SIM") {
+export function findBrokerById(id = "GATECEP_PRACTICE") {
+  const raw = String(id || "").trim().toUpperCase();
+
+  const canonicalId = [
+    "SIM",
+    "GATECEP-DEMO",
+    "GATECEP DEMO",
+    "GATECEP_PRACTICE",
+    "GATECEP PRACTICE",
+    "GATECEP BROKER",
+    "SIMULATION BROKER"
+  ].includes(raw)
+    ? "GATECEP_PRACTICE"
+    : raw;
+
   return (
     BROKER_REGISTRY.find(
-      (broker) =>
-        String(broker.id).toUpperCase() === String(id).toUpperCase()
+      (broker) => String(broker.id).toUpperCase() === canonicalId
     ) || BROKER_REGISTRY[0]
   );
 }

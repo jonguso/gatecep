@@ -43,6 +43,10 @@ export default function OrdersReview() {
   }
 
   const orders = execution?.orders || [];
+  const executionMode = String(
+    execution?.executionMode || orders[0]?.executionMode || "PRACTICE"
+  ).toUpperCase();
+  const isRealExecution = executionMode === "REAL";
 
   const reviewOrders = useMemo(() => {
     const search = query.trim().toLowerCase();
@@ -101,7 +105,9 @@ export default function OrdersReview() {
 
     Alert.alert(
       "Prepare Order Handoff",
-      `${reviewOrders.length} orders will be prepared for Practice simulation only.`,
+      isRealExecution
+        ? `${reviewOrders.length} REAL order${reviewOrders.length === 1 ? "" : "s"} will be queued for broker routing. Queueing does not mean the broker has received or executed the order.`
+        : `${reviewOrders.length} Practice order${reviewOrders.length === 1 ? "" : "s"} will be queued for GateCEP Broker.`,
       [
         { text: "Cancel", style: "cancel" },
         {
@@ -119,7 +125,7 @@ export default function OrdersReview() {
   if (!execution || !orders.length) {
     return (
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Practice Orders Review</Text>
+        <Text style={styles.title}>{isRealExecution ? "REAL Orders Review" : "Practice Orders Review"}</Text>
 
         <Text style={styles.subtitle}>
           No basket orders found. Create a Coach G trade basket first.
@@ -145,7 +151,7 @@ export default function OrdersReview() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Practice Orders Review</Text>
+        <Text style={styles.title}>{isRealExecution ? "REAL Orders Review" : "Practice Orders Review"}</Text>
 
         <Pressable
           style={styles.dashboardButton}
@@ -156,7 +162,9 @@ export default function OrdersReview() {
       </View>
 
       <Text style={styles.subtitle}>
-        Review simulated basket orders. Nothing here is sent to a REAL broker.
+        {isRealExecution
+          ? "Review REAL orders before queueing them for broker routing. Queueing does not create broker receipt or execution evidence."
+          : "Review Practice orders before sending them through GateCEP Broker."}
       </Text>
 
       <ActiveUserBanner />

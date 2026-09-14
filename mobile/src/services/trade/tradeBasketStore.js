@@ -1,9 +1,34 @@
 import { userGetItem, userSetItem } from "../auth/userStorage";
 
-export async function saveTradeBasket(items = [], source = "COACH_G") {
+export const EXECUTION_MODE = Object.freeze({
+  PRACTICE: "PRACTICE",
+  REAL: "REAL"
+});
+
+export async function saveTradeBasket(
+  items = [],
+  source = "COACH_G",
+  {
+    executionMode = EXECUTION_MODE.PRACTICE,
+    brokerId = null,
+    brokerAccountId = null
+  } = {}
+) {
+  const normalizedExecutionMode =
+    String(executionMode || EXECUTION_MODE.PRACTICE).toUpperCase() === EXECUTION_MODE.REAL
+      ? EXECUTION_MODE.REAL
+      : EXECUTION_MODE.PRACTICE;
+
   const basket = {
     id: `BASKET-${Date.now()}`,
     source,
+    executionMode: normalizedExecutionMode,
+    brokerId:
+      brokerId ||
+      (normalizedExecutionMode === EXECUTION_MODE.PRACTICE
+        ? "GATECEP_PRACTICE"
+        : null),
+    brokerAccountId: brokerAccountId || null,
     status: "DRAFT",
     createdAt: new Date().toISOString(),
     items: items.map((item, index) => ({
@@ -14,7 +39,11 @@ export async function saveTradeBasket(items = [], source = "COACH_G") {
       amount: Number(item.amount || item.value || 0),
       quantity: Number(item.quantity || 0),
       price: Number(item.price || item.marketPrice || 0),
-      reason: item.reason || "Coach G recommendation"
+      reason: item.reason || "Coach G recommendation",
+      decisionSupport:
+        item.decisionSupport && typeof item.decisionSupport === "object"
+          ? item.decisionSupport
+          : null
     }))
   };
 

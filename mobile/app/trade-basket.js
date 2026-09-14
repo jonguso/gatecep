@@ -50,7 +50,19 @@ export default function TradeBasket() {
       updatedAt: new Date().toISOString()
     };
 
-    await saveTradeBasket(nextItems, basket?.source || "COACH_G");
+    await saveTradeBasket(
+      nextItems,
+      basket?.source || "COACH_G",
+      {
+        executionMode: basket?.executionMode || "PRACTICE",
+        brokerId:
+          basket?.brokerId ||
+          ((basket?.executionMode || "PRACTICE") === "PRACTICE"
+            ? "GATECEP_PRACTICE"
+            : null),
+        brokerAccountId: basket?.brokerAccountId || null
+      }
+    );
     setBasket(nextBasket);
   }
 
