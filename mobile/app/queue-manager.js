@@ -15,10 +15,12 @@ import {
   createBasketExecution,
   loadBasketExecution,
   markExecutionOrderFilled,
+  markExecutionOrderPartial,
   routeExecutionOrderByMode,
   updateExecutionOrder
 } from "../src/trade/basketExecutionStore";
 import { ORDER_STATUS } from "../src/trade/orderLifecycle";
+import { buildExecutionStatusReadModel } from "../src/services/trade/realExecutionStatusReadModel";
 
 const FLOW = [
   ORDER_STATUS.REVIEW,
@@ -52,16 +54,30 @@ export default function QueueManager() {
 
   const orders = execution?.orders || [];
 
+  function statusViewFor(order) {
+    return buildExecutionStatusReadModel(order, execution);
+  }
+
+  const realRecoveryOrders = orders.filter(
+    (order) => statusViewFor(order).recoveryRequired
+  );
+
+
   const filteredOrders = useMemo(() => {
     const search = query.trim().toLowerCase();
 
     return orders.filter((order) => {
       if (!search) return true;
 
+      const statusView = statusViewFor(order);
+
       return (
         String(order.symbol || "").toLowerCase().includes(search) ||
         String(order.name || "").toLowerCase().includes(search) ||
-        String(order.status || "").toLowerCase().includes(search) ||
+        String(statusView.rawStatus || "").toLowerCase().includes(search) ||
+        String(statusView.label || "").toLowerCase().includes(search) ||
+        String(statusView.phase || "").toLowerCase().includes(search) ||
+        String(statusView.brokerStatus || "").toLowerCase().includes(search) ||
         String(order.brokerName || "").toLowerCase().includes(search)
       );
     });
@@ -75,8 +91,8 @@ export default function QueueManager() {
   }, [orders]);
 
   async function routeQueuedOrders() {
-    const queued = orders.filter((order) =>
-      [ORDER_STATUS.QUEUED, ORDER_STATUS.BROKER_SELECTED].includes(order.status)
+    const queued = orders.filter(
+      (order) => statusViewFor(order).canRetryRouting
     );
 
     if (!queued.length) {
@@ -85,9 +101,7 @@ export default function QueueManager() {
     }
 
     const realCount = queued.filter(
-      (order) =>
-        String(order.executionMode || execution?.executionMode || "PRACTICE").toUpperCase() ===
-        "REAL"
+      (order) => statusViewFor(order).isReal
     ).length;
     const practiceCount = queued.length - realCount;
 
@@ -131,15 +145,17 @@ export default function QueueManager() {
   }
 
   async function fillBrokerReceivedOrders() {
-    const received = orders.filter(
-      (order) =>
-        [ORDER_STATUS.BROKER_RECEIVED, ORDER_STATUS.PARTIAL_FILL].includes(
-          order.status
-        ) &&
-        String(
-          order.executionMode || execution?.executionMode || "PRACTICE"
-        ).toUpperCase() === "PRACTICE"
-    );
+    const received = orders.filter((order) => {
+      const statusView = statusViewFor(order);
+
+      return (
+        [
+          ORDER_STATUS.BROKER_RECEIVED,
+          ORDER_STATUS.PARTIAL_FILL
+        ].includes(statusView.rawStatus) &&
+        !statusView.isReal
+      );
+    });
 
     if (!received.length) {
       Alert.alert(
@@ -181,11 +197,9 @@ export default function QueueManager() {
   }
 
   async function markPartial(order) {
-    const executionMode = String(
-      order?.executionMode || execution?.executionMode || "PRACTICE"
-    ).toUpperCase();
+    const statusView = statusViewFor(order);
 
-    if (executionMode === "REAL") {
+    if (statusView.isReal) {
       Alert.alert(
         "Verified Broker Evidence Required",
         "REAL orders cannot be manually marked as partially filled. GateCEP must receive genuine broker execution evidence."
@@ -195,12 +209,17 @@ export default function QueueManager() {
 
     const filledQty = Math.max(1, Math.floor(Number(order.quantity || 0) / 2));
 
-    const updated = await updateExecutionOrder(order.id, {
-      status: ORDER_STATUS.PARTIAL_FILL,
+    const updated = await markExecutionOrderPartial(order.id, {
+      symbol: order.symbol,
+      side: order.side,
+      quantity: order.quantity,
+      price: order.price,
       filledQuantity: filledQty,
-      remainingQuantity: Number(order.quantity || 0) - filledQty,
-      message: `Partial fill: ${filledQty}/${order.quantity}`,
-      updatedAt: new Date().toISOString()
+      remainingQuantity:
+        Number(order.quantity || 0) - filledQty,
+      message:
+        `Partial fill: ${filledQty}/${order.quantity}`,
+      source: "GATECEP_BROKER_PRACTICE"
     });
 
     setExecution(updated);
@@ -250,6 +269,53 @@ export default function QueueManager() {
       </Text>
 
       <ActiveUserBanner />
+
+      {realRecoveryOrders.length > 0 ? (
+        <View
+          style={{
+            borderWidth: 1,
+            borderColor: "#a16207",
+            backgroundColor: "#221a09",
+            borderRadius: 14,
+            padding: 14,
+            marginBottom: 14
+          }}
+        >
+          <Text
+            style={{
+              color: "#facc15",
+              fontWeight: "800",
+              fontSize: 16,
+              marginBottom: 6
+            }}
+          >
+            REAL Broker Reconciliation Required
+          </Text>
+
+          <Text
+            style={{
+              color: "#d6c9a4",
+              lineHeight: 19,
+              marginBottom: 10
+            }}
+          >
+            {realRecoveryOrders.length} REAL order
+            {realRecoveryOrders.length === 1 ? "" : "s"} require broker-evidence
+            reconciliation. This may include an uncertain submission or a
+            verified partial execution. Do not manually fill, retry, or
+            resubmit them while recovery is required.
+          </Text>
+
+          <Pressable
+            style={styles.primary}
+            onPress={() => router.push("/real-order-recovery")}
+          >
+            <Text style={styles.primaryText}>
+              Review REAL Submission Recovery
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       <View style={styles.flowCard}>
         <Text style={styles.cardTitle}>Lifecycle Flow</Text>
@@ -343,15 +409,31 @@ export default function QueueManager() {
                   </Text>
                 ) : null}
 
+                {statusViewFor(order).brokerStatus ? (
+                  <Text style={styles.small}>
+                    Broker Status: {statusViewFor(order).brokerStatus}
+                  </Text>
+                ) : null}
+
+                {Number(order.submissionAttemptCount || 0) > 0 ? (
+                  <Text style={styles.small}>
+                    Submission Attempts: {order.submissionAttemptCount}
+                  </Text>
+                ) : null}
+
                 <Text style={styles.reason}>
-                  {order.message || "Waiting for next lifecycle action"}
+                  {order.message || statusViewFor(order).explanation}
                 </Text>
               </View>
 
               <View style={styles.right}>
-                <Text style={statusStyle(order.status)}>{order.status}</Text>
+                <Text style={statusStyle(statusViewFor(order).rawStatus)}>
+                  {statusViewFor(order).label}
+                </Text>
 
-                {order.status === ORDER_STATUS.BROKER_RECEIVED ? (
+                {statusViewFor(order).rawStatus ===
+                  ORDER_STATUS.BROKER_RECEIVED &&
+                !statusViewFor(order).isReal ? (
                   <Pressable
                     style={styles.miniButton}
                     onPress={() => markPartial(order)}

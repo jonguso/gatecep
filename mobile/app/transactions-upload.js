@@ -17,7 +17,7 @@ import {
   requireSafeImportRows,
   safeWorkbookReadOptions
 } from "../src/security/importFileSecurity";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 
 import ActiveUserBanner from "../src/components/ActiveUserBanner";
 import { userSetItem } from "../src/auth/userStorage";
@@ -26,10 +26,24 @@ import { rebuildCanonicalPortfolioLedger } from "../src/features/trading/canonic
 import { partitionBrokerExecutionEvidence } from "../src/features/broker-sync/brokerExecutionEvidencePolicy";
 import { ContainedPanel } from "../src/components/mobile/MobileUI";
 import { extractBrokerPdf } from "../src/services/brokers/brokerPdfExtractionApi";
+import { reconcileUncertainRealOrderFromVerifiedEvidence } from "../src/features/broker-sync/realOrderExecutionEvidenceReconciliationService";
 
 // PC-030M20AV3D RESPONSIVE CALIBRATION
 export default function TransactionsUpload() {
   const { width: av3dWidth } = useWindowDimensions();
+  const params = useLocalSearchParams();
+
+  const recoveryOrderId = String(
+    params?.recoveryOrderId || ""
+  ).trim();
+
+  const recoverySymbol = String(
+    params?.recoverySymbol || ""
+  ).trim().toUpperCase();
+
+  const recoveryBrokerId = String(
+    params?.recoveryBrokerId || ""
+  ).trim().toUpperCase();
   const [selectedFile, setSelectedFile] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [status, setStatus] = useState("");
@@ -117,7 +131,18 @@ export default function TransactionsUpload() {
 
   async function readFileText(file) {
     if (Platform.OS === "web") {
+      // Prefer the browser File supplied by Expo DocumentPicker.
+      // Fall back to the picker URI when the File object is unavailable.
+      if (file?.file && typeof file.file.text === "function") {
+        return await file.file.text();
+      }
+
       const response = await fetch(file.uri);
+
+      if (!response.ok) {
+        throw new Error("The selected broker file could not be opened.");
+      }
+
       return await response.text();
     }
 
@@ -128,8 +153,21 @@ export default function TransactionsUpload() {
 
   async function readFileBase64(file) {
     if (Platform.OS === "web") {
-      const response = await fetch(file.uri);
-      const arrayBuffer = await response.arrayBuffer();
+      let arrayBuffer;
+
+      // Prefer the browser File supplied by Expo DocumentPicker.
+      // Blob/object-URL fetch remains the compatibility fallback.
+      if (file?.file && typeof file.file.arrayBuffer === "function") {
+        arrayBuffer = await file.file.arrayBuffer();
+      } else {
+        const response = await fetch(file.uri);
+
+        if (!response.ok) {
+          throw new Error("The selected broker file could not be opened.");
+        }
+
+        arrayBuffer = await response.arrayBuffer();
+      }
 
       let binary = "";
       const bytes = new Uint8Array(arrayBuffer);
@@ -270,6 +308,15 @@ export default function TransactionsUpload() {
           value,
           status: readColumn(row, ["Order Status", "Status"]) || "UNKNOWN",
           brokerReference: readColumn(row, ["Broker Reference", "Contract Note", "Contract Note Number", "Trade Reference", "Order Reference"]),
+          fillReference: readColumn(row, [
+            "Fill Reference",
+            "Fill ID",
+            "Execution Reference",
+            "Execution ID",
+            "Trade ID",
+            "Transaction ID",
+            "Deal Number"
+          ]),
           broker: readColumn(row, ["Broker", "Broker Name", "Dealer"]),
           fees: cleanNumber(readColumn(row, ["Total Fees", "Fees", "Brokerage and Fees", "Charges"])),
           settlementStatus: readColumn(row, ["Settlement Status"]),
@@ -334,10 +381,123 @@ export default function TransactionsUpload() {
     );
 
     await rebuildCanonicalPortfolioLedger();
-    await rebuildCanonicalPortfolioLedger();
     await buildSyncStatus();
 
-    Alert.alert("Evidence Reviewed", `${verified.length} verified broker executions saved; ${unverified.length} incomplete records remain UNVERIFIED.`);
+    let recoveryResult = null;
+
+    if (recoveryOrderId) {
+      recoveryResult =
+        await reconcileUncertainRealOrderFromVerifiedEvidence({
+          orderId: recoveryOrderId,
+          records: verified
+        });
+    }
+
+    if (
+      recoveryResult?.status ===
+      "AMBIGUOUS_VERIFIED_MATCH"
+    ) {
+      Alert.alert(
+        "Evidence Saved — Match Ambiguous",
+        `${verified.length} verified broker executions were saved, but ${recoveryResult.matchCount} records could match the uncertain REAL order. GateCEP did not guess. The order remains locked for reconciliation.`,
+        [
+          {
+            text: "Review Recovery",
+            onPress: () =>
+              router.replace("/real-order-recovery")
+          }
+        ]
+      );
+
+      return;
+    }
+
+    if (
+      recoveryResult?.status ===
+      "NO_VERIFIED_MATCH"
+    ) {
+      Alert.alert(
+        "Evidence Saved — No Unique Match",
+        `${verified.length} verified broker executions were saved, but none uniquely matched the uncertain REAL order${recoverySymbol ? ` ${recoverySymbol}` : ""}${recoveryBrokerId ? ` at ${recoveryBrokerId}` : ""}. The order remains locked.`,
+        [
+          {
+            text: "Review Recovery",
+            onPress: () =>
+              router.replace("/real-order-recovery")
+          }
+        ]
+      );
+
+      return;
+    }
+
+    if (
+      recoveryResult?.status ===
+      "VERIFIED_EXECUTION_QUANTITY_EXCEEDS_ORDER"
+    ) {
+      Alert.alert(
+        "Evidence Saved - Quantity Conflict",
+        "Verified broker execution quantity exceeds the GateCEP order quantity. GateCEP saved the broker evidence but did not mutate the OMS order. Review the broker statement and recovery state before taking further action.",
+        [
+          {
+            text: "Review Recovery",
+            onPress: () =>
+              router.replace("/real-order-recovery")
+          }
+        ]
+      );
+
+      return;
+    }
+
+    if (
+      recoveryResult?.status ===
+      "RECONCILIATION_PERSISTENCE_FAILED"
+    ) {
+      Alert.alert(
+        "Evidence Saved — Recovery Not Persisted",
+        "The verified broker execution evidence was saved and uniquely matched the uncertain REAL order, but GateCEP could not persist the OMS recovery state. The order remains locked. Do not resubmit the order; review recovery before taking further action.",
+        [
+          {
+            text: "Review Recovery",
+            onPress: () =>
+              router.replace("/real-order-recovery")
+          }
+        ]
+      );
+
+      return;
+    }
+
+    if (recoveryResult?.resolved === true) {
+      const partial =
+        recoveryResult?.status ===
+        "PARTIAL_FILL_FROM_VERIFIED_BROKER_EXECUTION";
+
+      Alert.alert(
+        partial
+          ? "REAL Order Partially Reconciled"
+          : "REAL Order Reconciled",
+        partial
+          ? "Verified broker execution evidence confirms a partial REAL fill. GateCEP updated only the genuinely executed quantity and kept the remaining quantity open for further reconciliation."
+          : "Verified broker execution evidence fully reconciled the REAL order. No manual fill was created.",
+        [
+          {
+            text: "Review Recovery",
+            onPress: () =>
+              router.replace("/real-order-recovery")
+          }
+        ]
+      );
+
+      return;
+    }
+
+    Alert.alert(
+      "Evidence Reviewed",
+      `${verified.length} verified broker executions saved; ${unverified.length} incomplete records remain UNVERIFIED.`
+    );
+
     router.replace("/portfolio-sync-center");
   }
 

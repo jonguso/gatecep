@@ -15,11 +15,11 @@ import ActiveUserBanner from "../src/components/ActiveUserBanner";
 import {
   clearBasketExecution,
   createBasketExecution,
-  getActiveExecutionOrders,
   loadBasketExecution
 } from "../src/trade/basketExecutionStore";
 import { ORDER_STATUS } from "../src/trade/orderLifecycle";
 import { buildBrokerActionPlanText, clearBrokerActionPlan, loadBrokerActionPlan } from "../src/services/trade/brokerActionPlanStore";
+import { buildExecutionStatusReadModel } from "../src/services/trade/realExecutionStatusReadModel";
 
 // PC-030M20AV3C RESPONSIVE CALIBRATION
 export default function BasketExecution() {
@@ -48,26 +48,62 @@ export default function BasketExecution() {
     setExecution(saved);
   }
 
-  const activeOrders = useMemo(() => {
-    if (brokerPlanMode) return execution?.orders || [];
-    return getActiveExecutionOrders(execution || {}).filter((order) =>
-      [
-        ORDER_STATUS.QUEUED,
-        ORDER_STATUS.ROUTED,
-        ORDER_STATUS.BROKER_RECEIVED,
-        ORDER_STATUS.PARTIAL_FILL
-      ].includes(order.status)
+  function statusViewFor(order) {
+    return buildExecutionStatusReadModel(order, execution);
+  }
+
+  const executionOrders = execution?.orders || [];
+
+  const isRealExecution =
+    !brokerPlanMode &&
+    executionOrders.some(
+      (order) => statusViewFor(order).isReal
     );
+
+  const recoveryOrders =
+    brokerPlanMode
+      ? []
+      : executionOrders.filter(
+          (order) => statusViewFor(order).recoveryRequired
+        );
+
+  const activeOrders = useMemo(() => {
+    if (brokerPlanMode) {
+      return execution?.orders || [];
+    }
+
+    return (execution?.orders || []).filter((order) => {
+      const statusView =
+        buildExecutionStatusReadModel(
+          order,
+          execution
+        );
+
+      return [
+        "QUEUED",
+        "ROUTING_FAILED",
+        "BROKER_SELECTED",
+        "ROUTED",
+        "BROKER_RECEIVED",
+        "PARTIAL_FILL",
+        "RECONCILIATION_REQUIRED"
+      ].includes(statusView.phase);
+    });
   }, [execution, brokerPlanMode]);
 
-  const closedOrders = execution?.orders?.filter((order) =>
-    [
-      ORDER_STATUS.FILLED,
-      ORDER_STATUS.CANCELLED,
-      ORDER_STATUS.REJECTED,
-      ORDER_STATUS.EXPIRED
-    ].includes(order.status)
-  ) || [];
+  const closedOrders =
+    brokerPlanMode
+      ? []
+      : executionOrders.filter((order) =>
+          [
+            ORDER_STATUS.FILLED,
+            ORDER_STATUS.CANCELLED,
+            ORDER_STATUS.REJECTED,
+            ORDER_STATUS.EXPIRED
+          ].includes(
+            statusViewFor(order).rawStatus
+          )
+        );
 
   const totalAmount = activeOrders.reduce(
     (sum, item) => sum + Number(item.amount || item.gross || 0),
@@ -75,11 +111,26 @@ export default function BasketExecution() {
   );
 
   const isComplete =
-    execution?.orders?.length > 0 && activeOrders.length === 0;
+    execution?.orders?.length > 0 &&
+    activeOrders.length === 0 &&
+    recoveryOrders.length === 0;
 
   async function clearExecution() {
-    if (brokerPlanMode) await clearBrokerActionPlan();
-    else await clearBasketExecution();
+    if (brokerPlanMode) {
+      await clearBrokerActionPlan();
+      setExecution(null);
+      return;
+    }
+
+    if (recoveryOrders.length > 0) {
+      Alert.alert(
+        "REAL Broker Reconciliation Required",
+        "This execution cannot be cleared while a REAL broker submission outcome is unresolved. Reconcile genuine broker evidence first."
+      );
+      return;
+    }
+
+    await clearBasketExecution();
     setExecution(null);
   }
 
@@ -95,7 +146,13 @@ export default function BasketExecution() {
   if (!execution || !execution.orders?.length) {
     return (
       <ScrollView style={styles.screen} contentContainerStyle={[styles.content, av3cWidth >= 720 && { width: "100%", maxWidth: 960, alignSelf: "center" }, av3cWidth < 720 && { paddingHorizontal: 16, paddingBottom: 128 }, av3cWidth < 480 && { paddingHorizontal: 12 }]}>
-        <Text style={[styles.title, av3cWidth < 720 && { fontSize: 28, lineHeight: 34 }, av3cWidth < 480 && { fontSize: 25, lineHeight: 31 }]}>{brokerPlanMode ? "Broker Action Plan Review" : "Practice Basket Simulation"}</Text>
+        <Text style={[styles.title, av3cWidth < 720 && { fontSize: 28, lineHeight: 34 }, av3cWidth < 480 && { fontSize: 25, lineHeight: 31 }]}>
+          {brokerPlanMode
+            ? "Broker Action Plan Review"
+            : isRealExecution
+              ? "REAL Basket Execution Status"
+              : "Practice Basket Simulation"}
+        </Text>
         <Text style={styles.subtitle}>{brokerPlanMode ? "No advisory instructions have been saved yet." : "No active basket execution found."}</Text>
 
         <Pressable
@@ -118,7 +175,13 @@ export default function BasketExecution() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={[styles.content, av3cWidth >= 720 && { width: "100%", maxWidth: 960, alignSelf: "center" }, av3cWidth < 720 && { paddingHorizontal: 16, paddingBottom: 128 }, av3cWidth < 480 && { paddingHorizontal: 12 }]}>
       <View style={[styles.headerRow, av3cWidth < 600 && { flexDirection: "column", alignItems: "stretch" }]}>
-        <Text style={[styles.title, av3cWidth < 720 && { fontSize: 28, lineHeight: 34 }, av3cWidth < 480 && { fontSize: 25, lineHeight: 31 }]}>{brokerPlanMode ? "Broker Action Plan Review" : "Practice Basket Simulation"}</Text>
+        <Text style={[styles.title, av3cWidth < 720 && { fontSize: 28, lineHeight: 34 }, av3cWidth < 480 && { fontSize: 25, lineHeight: 31 }]}>
+          {brokerPlanMode
+            ? "Broker Action Plan Review"
+            : isRealExecution
+              ? "REAL Basket Execution Status"
+              : "Practice Basket Simulation"}
+        </Text>
 
         <Pressable
           style={styles.dashboardButton}
@@ -129,10 +192,44 @@ export default function BasketExecution() {
       </View>
 
       <Text style={styles.subtitle}>
-        {brokerPlanMode ? "Review scenario instructions prepared in Trade Lab. This is a broker handoff plan only; saving or sharing it does not place a trade or change any REAL or Practice portfolio." : "Track queued Practice orders and simulated fills. Practice records move to portfolio and trade history."}
+        {brokerPlanMode
+          ? "Review scenario instructions prepared in Trade Lab. This is a broker handoff plan only; saving or sharing it does not place a trade or change any REAL or Practice portfolio."
+          : isRealExecution
+            ? "Track REAL broker-routing and execution status. Queueing or routing does not prove execution; genuine verified broker evidence remains authoritative."
+            : "Track queued Practice orders and simulated fills. Practice records move to portfolio and trade history."}
       </Text>
 
       <ActiveUserBanner />
+
+      {!brokerPlanMode && recoveryOrders.length > 0 ? (
+        <View style={styles.recoveryCard}>
+          <Text style={styles.recoveryTitle}>
+            REAL Broker Reconciliation Required
+          </Text>
+
+          <Text style={styles.recoveryText}>
+            {recoveryOrders.length} REAL order
+            {recoveryOrders.length === 1 ? "" : "s"} require broker-evidence
+            reconciliation. This may include an uncertain submission or a
+            verified partial execution with quantity still remaining. Do not
+            retry, clear, manually fill, or treat these orders as completed
+            until genuine broker evidence establishes the remaining outcome.
+          </Text>
+
+          <Pressable
+            style={styles.recoveryButton}
+            onPress={() =>
+              router.push(
+                "/real-order-recovery"
+              )
+            }
+          >
+            <Text style={styles.recoveryButtonText}>
+              Review REAL Submission Recovery
+            </Text>
+          </Pressable>
+        </View>
+      ) : null}
 
       <View style={styles.summaryCard}>
         <Text style={styles.summaryLabel}>{brokerPlanMode ? "Proposed Broker Instructions" : "Active Execution Orders"}</Text>
@@ -172,8 +269,9 @@ export default function BasketExecution() {
         {!brokerPlanMode && isComplete ? (
           <>
             <Text style={styles.body}>
-              No active execution orders remain. Filled orders should now be
-              reflected in portfolio and trade history.
+              {isRealExecution
+                ? "No active REAL execution orders remain. REAL portfolio and trade-history effects remain determined by genuine verified broker execution evidence."
+                : "No active execution orders remain. Filled Practice orders should now be reflected in portfolio and trade history."}
             </Text>
 
             <Pressable
@@ -232,14 +330,24 @@ export default function BasketExecution() {
                 )}
 
                 <Text style={styles.reason}>
-                  {order.message || "Awaiting lifecycle action"}
+                  {brokerPlanMode
+                    ? order.message || "Awaiting broker action"
+                    : order.message || statusViewFor(order).explanation}
                 </Text>
                 {brokerPlanMode && order.guardPrice ? <Text style={styles.reason}>{order.side === "SELL" ? "Minimum net break-even limit" : "Maximum no-average-increase limit"}: KES {money(order.guardPrice)}</Text> : null}
                 {brokerPlanMode && order.side === "SELL" && order.costBasisMethod ? <Text style={styles.reason}>{order.costBasisMethod} • removed-lot cost KES {money(order.soldCostPerShare)} • projected remaining WAP KES {money(order.projectedRemainingAverage)}</Text> : null}
               </View>
 
-              <Text style={statusStyle(order.status)}>
-                {order.status}
+              <Text
+                style={statusStyle(
+                  brokerPlanMode
+                    ? order.status
+                    : statusViewFor(order).rawStatus
+                )}
+              >
+                {brokerPlanMode
+                  ? order.status
+                  : statusViewFor(order).label}
               </Text>
             </View>
           ))
@@ -329,6 +437,36 @@ function money(value) {
 }
 
 const styles = StyleSheet.create({
+  recoveryCard: {
+    borderWidth: 1,
+    borderColor: "#a16207",
+    backgroundColor: "#221a09",
+    borderRadius: 14,
+    padding: 14,
+    marginBottom: 16
+  },
+  recoveryTitle: {
+    color: "#facc15",
+    fontWeight: "900",
+    fontSize: 16,
+    marginBottom: 6
+  },
+  recoveryText: {
+    color: "#d6c9a4",
+    lineHeight: 19,
+    marginBottom: 10
+  },
+  recoveryButton: {
+    alignSelf: "flex-start",
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 9,
+    backgroundColor: "#854d0e"
+  },
+  recoveryButtonText: {
+    color: "#fef3c7",
+    fontWeight: "800"
+  },
   screen: { flex: 1, backgroundColor: "#020617" },
   content: { padding: 22, paddingTop: 70, paddingBottom: 110 },
   headerRow: {

@@ -1,6 +1,7 @@
 import { buildHistoricalSecurityLotLedger } from "./historicalSecurityLotLedgerService.js";
 import { isCompletedLotExecution } from "./brokerLotHistoryEvidenceService.js";
 import { canonicalSecuritySymbol } from "./securityIdentityService.js";
+import { brokerExecutionFillIdentity } from "../broker-sync/brokerExecutionFillIdentity.js";
 
 const EPSILON = 0.000001;
 const n = (value) => Number.isFinite(Number(value)) ? Number(value) : 0;
@@ -13,14 +14,27 @@ function parseArray(raw) {
 }
 
 function eventKey(row = {}) {
-  return text(row.brokerReference || row.id || `${row.executionDate || row.date}-${canonicalSecuritySymbol(row.canonicalSymbol || row.symbol)}-${row.side}-${row.quantity}-${row.price}`);
+  return (
+    brokerExecutionFillIdentity(row) ||
+    text(
+      row.id ||
+      `${row.executionDate || row.date}-` +
+      `${canonicalSecuritySymbol(row.canonicalSymbol || row.symbol)}-` +
+      `${row.side}-${row.quantity}-${row.price}`
+    )
+  );
 }
 
 export function normalizeCanonicalTradeEvents(records = []) {
   const seen = new Set();
   return (Array.isArray(records) ? records : [])
     .filter(isCompletedLotExecution)
-    .filter((row) => row.canAffectRealPortfolio !== false)
+    // PC-031A16:
+    // Canonical REAL accounting is fail-closed.
+    // A completed-looking row is insufficient by itself;
+    // broker evidence must have been explicitly verified
+    // as eligible to affect the REAL portfolio.
+    .filter((row) => row.canAffectRealPortfolio === true)
     .map((row) => ({
       id: eventKey(row),
       brokerReference: text(row.brokerReference || row.id) || null,

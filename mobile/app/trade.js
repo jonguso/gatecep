@@ -17,8 +17,8 @@ import { savePracticePortfolio } from "../src/features/investor/investorContextS
 import {
   createBasketExecution,
   loadBasketExecution,
-  saveBasketExecution,
-  updateExecutionOrder
+  markExecutionOrderFilled,
+  saveBasketExecution
 } from "../src/trade/basketExecutionStore";
 import {
   analyzeAverageCostSale,
@@ -145,6 +145,20 @@ export default function Trade() {
 
 
 
+  function executionModeOf(execution) {
+    return String(
+      execution?.executionMode ||
+        execution?.orders?.[0]?.executionMode ||
+        "PRACTICE"
+    ).toUpperCase() === "REAL"
+      ? "REAL"
+      : "PRACTICE";
+  }
+
+  function isRealExecution(execution) {
+    return executionModeOf(execution) === "REAL";
+  }
+
   async function load() {
     const practiceRaw = await userGetItem("practicePortfolio");
     const practice = practiceRaw ? JSON.parse(practiceRaw) : {};
@@ -166,7 +180,11 @@ export default function Trade() {
     );
     setGoalEvidence(extractVerifiedGoalEvidence(wealthJourney || {}));
 
-    if (!averageCostMode && execution?.orders?.length) {
+    if (
+      !averageCostMode &&
+      execution?.orders?.length &&
+      !isRealExecution(execution)
+    ) {
       setActiveExecution(execution);
 
       const nextOrder =
@@ -174,6 +192,16 @@ export default function Trade() {
         execution.orders[0];
 
       loadOrderIntoTicket(nextOrder);
+    } else if (
+      !averageCostMode &&
+      execution?.orders?.length &&
+      isRealExecution(execution)
+    ) {
+      // PC-031A20:
+      // REAL OMS executions belong to Orders Review / Queue Manager /
+      // verified broker-evidence recovery. They must never become
+      // active Practice simulator baskets.
+      setActiveExecution(null);
     }
   }
 
@@ -771,6 +799,14 @@ export default function Trade() {
 
   async function confirmTrade() {
     try {
+      if (isRealExecution(activeExecution)) {
+        Alert.alert(
+          "Verified Broker Evidence Required",
+          "A REAL execution cannot be completed in the Practice Trade simulator. Continue through Orders Review and verified broker execution evidence."
+        );
+        return;
+      }
+
       if (!estimate.qty || estimate.qty <= 0) {
         Alert.alert("Invalid Quantity", "Enter a valid quantity.");
         return;
@@ -867,11 +903,14 @@ export default function Trade() {
 
     if (!currentOrder) return;
 
-    const updated = await updateExecutionOrder(currentOrder.id, {
-      status: "FILLED",
-      message: "Simulated trade completed",
-      trade
-    });
+    const updated = await markExecutionOrderFilled(
+      currentOrder.id,
+      {
+        ...trade,
+        source:
+          trade?.source || "GATECEP_BROKER_PRACTICE"
+      }
+    );
 
     setActiveExecution(updated);
 
@@ -891,6 +930,14 @@ export default function Trade() {
       Alert.alert(
         "No Basket",
         "No active basket execution found."
+      );
+      return;
+    }
+
+    if (isRealExecution(activeExecution)) {
+      Alert.alert(
+        "Verified Broker Evidence Required",
+        "A REAL basket cannot be executed in the Practice Trade simulator. Route and reconcile REAL orders through the broker execution workflow."
       );
       return;
     }
@@ -927,6 +974,15 @@ export default function Trade() {
 
   async function runBasketExecution(pendingOrders) {
     try {
+      if (isRealExecution(activeExecution)) {
+        const error = new Error(
+          "REAL_ORDER_REQUIRES_VERIFIED_BROKER_EXECUTION"
+        );
+        error.code =
+          "REAL_ORDER_REQUIRES_VERIFIED_BROKER_EXECUTION";
+        throw error;
+      }
+
       const brokerProfile = await getBrokerProfile();
 
       let workingPortfolio = [...portfolio];

@@ -118,7 +118,18 @@ export default function TransactionImport() {
 
   async function readFileText(file) {
     if (Platform.OS === "web") {
+      // Prefer the browser File supplied by Expo DocumentPicker.
+      // Fall back to the picker URI when the File object is unavailable.
+      if (file?.file && typeof file.file.text === "function") {
+        return await file.file.text();
+      }
+
       const response = await fetch(file.uri);
+
+      if (!response.ok) {
+        throw new Error("The selected broker file could not be opened.");
+      }
+
       return await response.text();
     }
 
@@ -129,8 +140,21 @@ export default function TransactionImport() {
 
   async function readFileBase64(file) {
     if (Platform.OS === "web") {
-      const response = await fetch(file.uri);
-      const arrayBuffer = await response.arrayBuffer();
+      let arrayBuffer;
+
+      // Prefer the browser File supplied by Expo DocumentPicker.
+      // Blob/object-URL fetch remains the compatibility fallback.
+      if (file?.file && typeof file.file.arrayBuffer === "function") {
+        arrayBuffer = await file.file.arrayBuffer();
+      } else {
+        const response = await fetch(file.uri);
+
+        if (!response.ok) {
+          throw new Error("The selected broker file could not be opened.");
+        }
+
+        arrayBuffer = await response.arrayBuffer();
+      }
 
       let binary = "";
       const bytes = new Uint8Array(arrayBuffer);

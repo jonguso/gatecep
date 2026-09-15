@@ -42,7 +42,13 @@ export default function ExecutionAudit() {
         String(event.status || "").toLowerCase().includes(search) ||
         String(event.eventType || "").toLowerCase().includes(search) ||
         String(event.message || "").toLowerCase().includes(search) ||
-        String(event.brokerName || "").toLowerCase().includes(search)
+        String(event.brokerName || "").toLowerCase().includes(search) ||
+        String(event.executionMode || "").toLowerCase().includes(search) ||
+        String(event.brokerStatus || "").toLowerCase().includes(search) ||
+        String(event.brokerAccountId || "").toLowerCase().includes(search) ||
+        String(event.brokerOrderId || "").toLowerCase().includes(search) ||
+        String(event.submissionAttemptId || "").toLowerCase().includes(search) ||
+        String(event.brokerReference || "").toLowerCase().includes(search)
       );
     });
   }, [events, query]);
@@ -68,7 +74,7 @@ export default function ExecutionAudit() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Practice Execution Audit</Text>
+        <Text style={styles.title}>Execution Audit</Text>
 
         <Pressable
           style={styles.dashboardButton}
@@ -79,8 +85,10 @@ export default function ExecutionAudit() {
       </View>
 
       <Text style={styles.subtitle}>
-        Practice-only local audit trail for simulated lifecycle events and routing,
-        confirmations, fills, cancellations, and errors.
+        Local lifecycle evidence for Practice simulation and REAL broker
+        submission/recovery. Audit events are observational only and do not
+        create broker execution, fills, cash movements, holdings, or portfolio
+        accounting effects.
       </Text>
 
       <ActiveUserBanner />
@@ -97,7 +105,7 @@ export default function ExecutionAudit() {
         />
         <Metric
           label="Mode"
-          value="Local Audit"
+          value="Practice + REAL"
         />
       </View>
 
@@ -115,8 +123,8 @@ export default function ExecutionAudit() {
         {filteredEvents.length === 0 ? (
           <Text style={styles.body}>No audit events found yet.</Text>
         ) : (
-          filteredEvents.map((event) => (
-            <View key={event.id} style={styles.eventRow}>
+          filteredEvents.map((event, index) => (
+            <View key={`${event.id || "LEGACY_AUDIT"}:${event.createdAt || ""}:${index}`} style={styles.eventRow}>
               <View style={styles.dot} />
 
               <View style={{ flex: 1 }}>
@@ -125,8 +133,27 @@ export default function ExecutionAudit() {
                 </Text>
 
                 <Text style={styles.eventMeta}>
-                  {event.symbol || "N/A"} • {event.brokerName || "No broker"}
+                  {event.executionMode || "PRACTICE"} • {event.symbol || "N/A"} •{" "}
+                  {event.brokerName || event.brokerId || "No broker"}
                 </Text>
+
+                {event.brokerStatus ? (
+                  <Text style={styles.eventMeta}>
+                    Broker State: {event.brokerStatus}
+                  </Text>
+                ) : null}
+
+                {event.brokerOrderId || event.brokerReference ? (
+                  <Text style={styles.eventMeta}>
+                    Broker Ref: {event.brokerOrderId || event.brokerReference}
+                  </Text>
+                ) : null}
+
+                {event.submissionAttemptId ? (
+                  <Text style={styles.eventMeta}>
+                    Submission: {event.submissionAttemptId}
+                  </Text>
+                ) : null}
 
                 <Text style={styles.body}>
                   {event.message || "No message"}

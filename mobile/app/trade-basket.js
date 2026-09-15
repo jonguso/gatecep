@@ -32,6 +32,12 @@ export default function TradeBasket() {
 
   const items = basket?.items || [];
 
+  const executionMode =
+    String(basket?.executionMode || "PRACTICE").toUpperCase() === "REAL"
+      ? "REAL"
+      : "PRACTICE";
+  const isRealBasket = executionMode === "REAL";
+
   const totalAmount = useMemo(() => {
     return items.reduce((sum, item) => sum + Number(item.amount || 0), 0);
   }, [items]);
@@ -83,7 +89,9 @@ export default function TradeBasket() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Practice Trade Basket</Text>
+        <Text style={styles.title}>
+          {isRealBasket ? "REAL Trade Basket" : "Practice Trade Basket"}
+        </Text>
 
         <Pressable
           style={styles.dashboardButton}
@@ -94,7 +102,9 @@ export default function TradeBasket() {
       </View>
 
       <Text style={styles.subtitle}>
-        Review Coach G recommendations before sending them to the trade screen.
+        {isRealBasket
+          ? "Review REAL orders here before assigning a broker to each order in Orders Review. Broker eligibility, broker-specific cash and broker-specific holdings are validated there before preparation."
+          : "Review Coach G recommendations before sending them to the Practice order review flow."}
       </Text>
 
       <ActiveUserBanner />
@@ -153,8 +163,28 @@ export default function TradeBasket() {
             ))}
           </View>
 
+          {isRealBasket ? (
+            <View style={styles.realRouteCard}>
+              <Text style={styles.cardTitle}>REAL Broker Routing</Text>
+              <Text style={styles.body}>
+                GateCEP does not assign one broker to the whole REAL basket here.
+                Continue to Orders Review, where each order must be assigned to an
+                eligible connected REAL broker using that broker account's own
+                trading space or security holding.
+              </Text>
+              <Text style={styles.realSafetyText}>
+                Broker assignment and queueing do not prove execution and do not
+                change REAL cash, holdings, cost basis, lots or trade history.
+              </Text>
+            </View>
+          ) : null}
+
           <Pressable style={styles.primary} onPress={sendToTrade}>
-            <Text style={styles.primaryText}>Send Basket to Trade</Text>
+            <Text style={styles.primaryText}>
+              {isRealBasket
+                ? "Review Broker Routes in Orders Review"
+                : "Send Practice Basket to Orders Review"}
+            </Text>
           </Pressable>
 
           <Pressable style={styles.secondary} onPress={clearBasket}>
@@ -270,6 +300,21 @@ const styles = StyleSheet.create({
     borderRadius: 18
   },
   primaryText: { color: "white", textAlign: "center", fontWeight: "900" },
+  realRouteCard: {
+    marginTop: 20,
+    backgroundColor: "#0f172a",
+    borderColor: "#334155",
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 16
+  },
+  realSafetyText: {
+    color: "#fbbf24",
+    marginTop: 10,
+    fontSize: 12,
+    lineHeight: 18,
+    fontWeight: "700"
+  },
   secondary: {
     marginTop: 14,
     backgroundColor: "#1e293b",

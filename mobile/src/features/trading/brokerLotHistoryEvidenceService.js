@@ -1,3 +1,5 @@
+import { brokerExecutionFillIdentity } from "../broker-sync/brokerExecutionFillIdentity.js";
+
 function parseArray(raw) {
   if (!raw) return [];
   if (Array.isArray(raw)) return raw;
@@ -23,7 +25,12 @@ export async function loadBrokerLotHistoryEvidence() {
   const combined = [...parseArray(verifiedRaw), ...parseArray(incompleteRaw)];
   const seen = new Set();
   const records = combined.filter(isCompletedLotExecution).filter((row) => {
-    const key = String(row.brokerReference || row.id || `${row.date}-${row.symbol}-${row.side}-${row.quantity}-${row.price}`);
+    const key =
+      brokerExecutionFillIdentity(row) ||
+      String(
+        row.id ||
+        `${row.date}-${row.symbol}-${row.side}-${row.quantity}-${row.price}`
+      );
     if (seen.has(key)) return false;
     seen.add(key);
     return true;

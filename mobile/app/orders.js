@@ -21,6 +21,7 @@ import {
   updateExecutionOrder
 } from "../src/trade/basketExecutionStore";
 import { ORDER_STATUS, isClosedOrder } from "../src/trade/orderLifecycle";
+import { buildExecutionStatusReadModel } from "../src/services/trade/realExecutionStatusReadModel";
 
 const TABS = ["Review", "Queued", "Routed", "Closed"];
 
@@ -47,31 +48,44 @@ export default function Orders() {
 
   const orders = execution?.orders || [];
 
+  function statusViewFor(order) {
+    return buildExecutionStatusReadModel(order, execution);
+  }
+
   const visibleOrders = useMemo(() => {
     const search = query.trim().toLowerCase();
 
     return orders
       .filter((order) => {
-        const status = String(order.status || "").toUpperCase();
+        const statusView = statusViewFor(order);
 
         if (tab === "Review") {
-          return [ORDER_STATUS.DRAFT, ORDER_STATUS.REVIEW, ORDER_STATUS.PENDING].includes(status);
+          return [
+            ORDER_STATUS.DRAFT,
+            ORDER_STATUS.REVIEW,
+            ORDER_STATUS.PENDING
+          ].includes(statusView.rawStatus);
         }
 
         if (tab === "Queued") {
-          return status === ORDER_STATUS.QUEUED;
+          return [
+            "QUEUED",
+            "ROUTING_FAILED"
+          ].includes(statusView.phase);
         }
 
         if (tab === "Routed") {
           return [
-            ORDER_STATUS.ROUTED,
-            ORDER_STATUS.BROKER_RECEIVED,
-            ORDER_STATUS.PARTIAL_FILL
-          ].includes(status);
+            "BROKER_SELECTED",
+            "ROUTED",
+            "BROKER_RECEIVED",
+            "PARTIAL_FILL",
+            "RECONCILIATION_REQUIRED"
+          ].includes(statusView.phase);
         }
 
         if (tab === "Closed") {
-          return isClosedOrder(status);
+          return isClosedOrder(statusView.rawStatus);
         }
 
         return true;
@@ -79,23 +93,55 @@ export default function Orders() {
       .filter((order) => {
         if (!search) return true;
 
+        const statusView = statusViewFor(order);
+
         return (
           String(order.symbol || "").toLowerCase().includes(search) ||
           String(order.name || "").toLowerCase().includes(search) ||
-          String(order.brokerName || "").toLowerCase().includes(search)
+          String(order.brokerName || "").toLowerCase().includes(search) ||
+          String(statusView.label || "").toLowerCase().includes(search) ||
+          String(statusView.phase || "").toLowerCase().includes(search) ||
+          String(statusView.rawStatus || "").toLowerCase().includes(search) ||
+          String(statusView.brokerStatus || "").toLowerCase().includes(search)
         );
       });
-  }, [orders, tab, query]);
+  }, [orders, tab, query, execution]);
 
   const counts = {
-    review: orders.filter((o) =>
-      [ORDER_STATUS.DRAFT, ORDER_STATUS.REVIEW, ORDER_STATUS.PENDING].includes(o.status)
-    ).length,
-    queued: orders.filter((o) => o.status === ORDER_STATUS.QUEUED).length,
-    routed: orders.filter((o) =>
-      [ORDER_STATUS.ROUTED, ORDER_STATUS.BROKER_RECEIVED, ORDER_STATUS.PARTIAL_FILL].includes(o.status)
-    ).length,
-    closed: orders.filter((o) => isClosedOrder(o.status)).length
+    review: orders.filter((order) => {
+      const statusView = statusViewFor(order);
+
+      return [
+        ORDER_STATUS.DRAFT,
+        ORDER_STATUS.REVIEW,
+        ORDER_STATUS.PENDING
+      ].includes(statusView.rawStatus);
+    }).length,
+
+    queued: orders.filter((order) => {
+      const statusView = statusViewFor(order);
+
+      return [
+        "QUEUED",
+        "ROUTING_FAILED"
+      ].includes(statusView.phase);
+    }).length,
+
+    routed: orders.filter((order) => {
+      const statusView = statusViewFor(order);
+
+      return [
+        "BROKER_SELECTED",
+        "ROUTED",
+        "BROKER_RECEIVED",
+        "PARTIAL_FILL",
+        "RECONCILIATION_REQUIRED"
+      ].includes(statusView.phase);
+    }).length,
+
+    closed: orders.filter((order) =>
+      isClosedOrder(statusViewFor(order).rawStatus)
+    ).length
   };
 
   async function sendToBroker(order) {
@@ -115,11 +161,9 @@ export default function Orders() {
   }
 
   async function fillOrder(order) {
-    const executionMode = String(
-      order?.executionMode || execution?.executionMode || "PRACTICE"
-    ).toUpperCase();
+    const statusView = statusViewFor(order);
 
-    if (executionMode === "REAL") {
+    if (statusView.isReal) {
       Alert.alert(
         "Verified Broker Evidence Required",
         "REAL orders cannot be manually filled. GateCEP must receive genuine broker execution evidence before REAL holdings, cash, P&L or FIFO can change."
@@ -164,7 +208,7 @@ export default function Orders() {
   if (!execution || !orders.length) {
     return (
       <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Practice Orders</Text>
+        <Text style={styles.title}>Orders</Text>
         <Text style={styles.subtitle}>No active orders found.</Text>
 
         <Pressable style={styles.primary} onPress={() => router.push("/trade-basket")}>
@@ -177,7 +221,7 @@ export default function Orders() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.headerRow}>
-        <Text style={styles.title}>Practice Orders</Text>
+        <Text style={styles.title}>Orders</Text>
 
         <Pressable
           style={styles.dashboardButton}
@@ -188,7 +232,7 @@ export default function Orders() {
       </View>
 
       <Text style={styles.subtitle}>
-        Practice-only order simulation. REAL executions are imported from broker evidence and cannot be created here.
+        Review Practice and REAL OMS orders. Practice fills may be simulated here; REAL completion requires genuine verified broker execution evidence.
       </Text>
 
       <ActiveUserBanner />
@@ -236,10 +280,12 @@ export default function Orders() {
           <OrderCard
             key={order.id}
             order={order}
+            statusView={statusViewFor(order)}
             tab={tab}
             onSendToBroker={() => sendToBroker(order)}
             onFill={() => fillOrder(order)}
             onCancel={() => cancelOrder(order)}
+            onRecovery={() => router.push("/real-order-recovery")}
             onUpdate={(patch) => updateOrder(order, patch)}
           />
         ))
@@ -259,20 +305,37 @@ export default function Orders() {
 
 function OrderCard({
   order,
+  statusView,
   onSendToBroker,
   onFill,
   onCancel,
+  onRecovery,
   onUpdate
 }) {
-  const status = String(order.status || "").toUpperCase();
-  const canEdit = [ORDER_STATUS.DRAFT, ORDER_STATUS.REVIEW, ORDER_STATUS.PENDING].includes(status);
-  const canRoute = status === ORDER_STATUS.QUEUED;
-  const canFill = [
-    ORDER_STATUS.ROUTED,
-    ORDER_STATUS.BROKER_RECEIVED,
-    ORDER_STATUS.PARTIAL_FILL
+  const status = statusView.rawStatus;
+
+  const canEdit = [
+    ORDER_STATUS.DRAFT,
+    ORDER_STATUS.REVIEW,
+    ORDER_STATUS.PENDING
   ].includes(status);
-  const canCancel = !isClosedOrder(status);
+
+  const canRoute = statusView.canRetryRouting;
+
+  const canFill =
+    !statusView.isReal &&
+    [
+      ORDER_STATUS.ROUTED,
+      ORDER_STATUS.BROKER_RECEIVED,
+      ORDER_STATUS.PARTIAL_FILL
+    ].includes(status);
+
+  const canCancel =
+    !isClosedOrder(status) &&
+    !(
+      statusView.isReal &&
+      statusView.recoveryRequired
+    );
 
   const amount = Number(order.quantity || 0) * Number(order.price || 0);
 
@@ -288,11 +351,13 @@ function OrderCard({
           </Text>
         </View>
 
-        <Text style={statusStyle(status)}>{status}</Text>
+        <Text style={statusStyle(status)}>
+          {statusView.label}
+        </Text>
       </View>
 
       <Text style={styles.reason}>
-        {order.message || order.reason || "Order awaiting action"}
+        {order.message || order.reason || statusView.explanation}
       </Text>
 
       <View style={styles.infoBox}>
@@ -302,6 +367,12 @@ function OrderCard({
         <Text style={styles.infoText}>
           Broker {order.brokerName || "Not routed"}
         </Text>
+
+        {statusView.brokerStatus ? (
+          <Text style={styles.infoText}>
+            Broker Status {statusView.brokerStatus}
+          </Text>
+        ) : null}
       </View>
 
       {canEdit && (
@@ -336,13 +407,23 @@ function OrderCard({
 
       {canRoute && (
         <Pressable style={styles.primarySmall} onPress={onSendToBroker}>
-          <Text style={styles.primaryText}>Route in Practice</Text>
+          <Text style={styles.primaryText}>
+            {statusView.isReal ? "Route to Broker" : "Route in Practice"}
+          </Text>
         </Pressable>
       )}
 
       {canFill && (
         <Pressable style={styles.primarySmall} onPress={onFill}>
           <Text style={styles.primaryText}>Simulate Fill</Text>
+        </Pressable>
+      )}
+
+      {statusView.recoveryRequired && (
+        <Pressable style={styles.primarySmall} onPress={onRecovery}>
+          <Text style={styles.primaryText}>
+            Review REAL Recovery
+          </Text>
         </Pressable>
       )}
 
