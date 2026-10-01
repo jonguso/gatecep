@@ -1,10 +1,12 @@
 import React, { useCallback, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
   Text,
+  useWindowDimensions,
   View
 } from "react-native";
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
@@ -12,36 +14,40 @@ import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import ActiveUserBanner from "../../src/components/ActiveUserBanner";
 import CompanyLogo from "../../src/components/markets/CompanyLogo";
 import useMarketData from "../../src/services/markets/useMarketData";
+import { loadUnifiedPortfolioRuntime } from "../../src/portfolio/unifiedPortfolioApi";
+import MarketDepthModal from "../../src/components/markets/MarketDepthModal";
 import { loadFundamentalRecord } from "../../src/features/fundamentals/fundamentalRepository";
-import { buildSecurityEducationModel, explainMetric } from "../../src/services/markets/securityEducationService";
+import { buildSecurityEducationModel } from "../../src/services/markets/securityEducationService";
 import { buildWatchlistScores } from "../../src/watchlist/watchlistScoring";
 import { generateWatchlistSignals } from "../../src/utils/watchlistSignals";
-import {
-  loadWatchlists,
-  saveWatchlists,
-  WATCHLIST_NAMES
-} from "../../src/watchlist/watchlistStore";
 
 export default function SecurityDetail() {
   const { symbol } = useLocalSearchParams();
+  const { width: windowWidth } = useWindowDimensions();
+  const wideWeb = Platform.OS === "web" && windowWidth >= 1100;
   const targetSymbol = String(symbol || "").toUpperCase();
 
   const { rows, connected, loading, lastUpdated, reload } = useMarketData();
 
-  const [watchlists, setWatchlists] = useState({});
   const [fundamentals, setFundamentals] = useState(null);
+  const [realHoldings, setRealHoldings] = useState([]);
+  const [marketDepthOpen, setMarketDepthOpen] = useState(false);
 
   useFocusEffect(
     useCallback(() => {
-      loadUserWatchlists();
       loadFundamentalRecord(targetSymbol).then(setFundamentals).catch(() => setFundamentals(null));
+
+      loadUnifiedPortfolioRuntime({ broker: "ALL" })
+        .then((runtime) => {
+          setRealHoldings(
+            Array.isArray(runtime?.holdings)
+              ? runtime.holdings
+              : []
+          );
+        })
+        .catch(() => setRealHoldings([]));
     }, [targetSymbol])
   );
-
-  async function loadUserWatchlists() {
-    const saved = await loadWatchlists();
-    setWatchlists(saved);
-  }
 
   const security = useMemo(() => {
     return rows.find(
@@ -63,28 +69,36 @@ export default function SecurityDetail() {
     return buildWatchlistScores(generated)[0] || null;
   }, [security]);
 
+  const realHolding = useMemo(() => {
+    return realHoldings.find(
+      (item) =>
+        String(item?.symbol || "")
+          .trim()
+          .toUpperCase() === targetSymbol &&
+        Number(item?.quantity || 0) > 0
+    ) || null;
+  }, [realHoldings, targetSymbol]);
+
+  const realQuantity = Number(realHolding?.quantity || 0);
+  const ownsSecurity = realQuantity > 0;
+
+  const realAverageCost = Number(
+    realHolding?.averagePrice ??
+    realHolding?.averageCost ??
+    realHolding?.weightedAveragePrice ??
+    0
+  );
+
+  const realMarketValue = Number(
+    realHolding?.marketValue ??
+    realHolding?.value ??
+    (realQuantity * Number(security?.price || security?.lastPrice || 0))
+  );
+
   const education = useMemo(() => buildSecurityEducationModel(security || {}, fundamentals), [security, fundamentals]);
-  const dividendYield = education.fields.dividendYield;
   const price = Number(security?.price || security?.lastPrice || 0);
   const changePct = Number(security?.changePct || 0);
   const positive = changePct >= 0;
-
-  async function addToWatchlist(listName) {
-    const current = watchlists[listName] || [];
-
-    if (current.includes(targetSymbol)) {
-      router.push("/watchlist");
-      return;
-    }
-
-    const next = {
-      ...watchlists,
-      [listName]: [...current, targetSymbol]
-    };
-
-    setWatchlists(next);
-    await saveWatchlists(next);
-  }
 
   if (loading) {
     return (
@@ -112,18 +126,20 @@ export default function SecurityDetail() {
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <View style={styles.screen}>
+      <ScrollView
+        style={styles.scroll}
+        contentContainerStyle={[
+          styles.content,
+          wideWeb && styles.contentWideWeb
+        ]}
+      >
       <View style={styles.headerRow}>
         <Pressable style={styles.backButton} onPress={() => router.replace("/(tabs)/markets")}>
           <Text style={styles.backText}>‹ Back to Markets</Text>
         </Pressable>
 
-        <Pressable
-          style={styles.dashboardButton}
-          onPress={() => router.replace("/(tabs)/dashboard")}
-        >
-          <Text style={styles.dashboardButtonText}>Dashboard</Text>
-        </Pressable>
+
       </View>
 
       <View style={styles.hero}>
@@ -155,10 +171,6 @@ export default function SecurityDetail() {
         </Text>
       </View>
 
-      <View style={styles.actionsRow}>
-        <Pressable style={styles.compactAction} onPress={() => addToWatchlist(WATCHLIST_NAMES[0])}><Text style={styles.compactActionText}>+ Watchlist</Text></Pressable>
-      </View>
-
       <View style={styles.grid}>
         <Metric label="Bid" value={`KES ${money(security.bid || 0)}`} />
         <Metric label="Ask" value={`KES ${money(security.ask || 0)}`} />
@@ -166,6 +178,57 @@ export default function SecurityDetail() {
         <Metric label="Turnover" value={`KES ${money(security.turnover || 0)}`} />
         <Metric label="High" value={`KES ${money(security.high || 0)}`} />
         <Metric label="Low" value={`KES ${money(security.low || 0)}`} />
+      </View>
+
+      <Pressable
+        style={styles.depthButton}
+        onPress={() => setMarketDepthOpen(true)}
+      >
+        <Text style={styles.depthButtonText}>View Market Depth</Text>
+        <Text style={styles.depthButtonHint}>
+          Inspect bid / ask evidence before making a decision
+        </Text>
+      </Pressable>
+
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Your REAL Position</Text>
+
+        {ownsSecurity ? (
+          <>
+            <MetricLine
+              label="Shares owned"
+              value={number(realQuantity)}
+            />
+
+            <MetricLine
+              label="Average cost"
+              value={
+                realAverageCost > 0
+                  ? `KES ${money(realAverageCost)}`
+                  : "N/A"
+              }
+            />
+
+            <MetricLine
+              label="Market value"
+              value={`KES ${money(realMarketValue)}`}
+            />
+
+            <Text style={styles.positionEvidence}>
+              REAL READ-ONLY | Broker-evidenced portfolio
+            </Text>
+          </>
+        ) : (
+          <>
+            <Text style={styles.body}>
+              You do not currently own {targetSymbol} in the verified REAL portfolio.
+            </Text>
+
+            <Text style={styles.positionEvidence}>
+              REAL READ-ONLY | No sellable position
+            </Text>
+          </>
+        )}
       </View>
 
       <View style={styles.card}>
@@ -189,168 +252,95 @@ export default function SecurityDetail() {
         </Text>
       </View>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Understand the company</Text>
-        <Text style={styles.body}>{education.profile.description || "A verified company description has not been imported yet."}</Text>
-        <MetricLine label="Sector" value={education.profile.sector || "N/A"} />
-        <MetricLine label="Industry" value={education.profile.industry || "N/A"} />
-        <MetricLine label="Fiscal period" value={education.fiscalPeriod || "N/A"} />
-      </View>
+      <Pressable
+        style={styles.companyDetailsButton}
+        onPress={() =>
+          router.push({
+            pathname: "/company/[symbol]",
+            params: {
+              symbol: targetSymbol
+            }
+          })
+        }
+      >
+        <View style={styles.companyDetailsCopy}>
+          <Text style={styles.companyDetailsTitle}>Company Details</Text>
+          <Text style={styles.companyDetailsHint}>
+            Review valuation, profitability, income and financial position
+          </Text>
+        </View>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Valuation — what the market is paying</Text>
-        <EducationMetric label="Market capitalisation" value={largeMoney(education.fields.marketCap)} />
-        <EducationMetric label="P/E ratio" value={ratio(education.fields.pe)} help={explainMetric("pe")} />
-        <EducationMetric label="Price / book" value={ratio(education.fields.pb)} help={explainMetric("pb")} />
-        <EducationMetric label="Earnings per share" value={kes(education.fields.eps)} help={explainMetric("eps")} />
-      </View>
+        <Text style={styles.companyDetailsArrow}>�</Text>
+      </Pressable>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Income & shareholder return</Text>
-        <EducationMetric label="Dividend per share" value={kes(education.fields.dps)} />
-        <EducationMetric label="Dividend yield" value={percent(education.fields.dividendYield)} help={explainMetric("dividendYield")} />
-        <Text style={styles.lesson}>Dividends are not guaranteed. Confirm declaration, book-closure, ex-dividend and payment dates before relying on expected income.</Text>
-      </View>
+      <MarketDepthModal
+        visible={marketDepthOpen}
+        security={security}
+        onClose={() => setMarketDepthOpen(false)}
+      />
+      </ScrollView>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Financial strength</Text>
-        <EducationMetric label="Revenue" value={largeMoney(education.fields.revenue)} />
-        <EducationMetric label="Net income" value={largeMoney(education.fields.netIncome)} />
-        <EducationMetric label="Total assets" value={largeMoney(education.fields.assets)} />
-        <EducationMetric label="Shareholders’ equity" value={largeMoney(education.fields.equity)} />
-        <EducationMetric label="Debt / borrowings" value={largeMoney(education.fields.debt)} help={explainMetric("debt")} />
-      </View>
-
-      <View style={education.evidence.available ? styles.evidenceCard : styles.missingCard}>
-        <Text style={styles.cardTitle}>{education.evidence.available ? "Fundamental evidence" : "Fundamentals not yet available"}</Text>
-        {education.evidence.available ? <>
-          <MetricLine label="Verified metrics" value={String(education.evidence.count)} />
-          <MetricLine label="Provider" value={education.evidence.provider || "Imported verified filing"} />
-          <MetricLine label="Reference" value={education.evidence.reference || "Stored source record"} />
-          <MetricLine label="Verified at" value={education.evidence.verifiedAt || "N/A"} />
-        </> : <>
-          <Text style={styles.body}>GateCEP will not estimate P/E, dividends, revenue or debt from the share price. Import an approved issuer filing to unlock evidence-based analysis.</Text>
-          <Pressable style={styles.watchButton} onPress={() => router.push("/fundamental-data-hub")}><Text style={styles.watchButtonText}>Open Fundamental Data Hub</Text></Pressable>
-        </>}
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Investor learning checklist</Text>
-        <Text style={styles.lesson}>1. Understand how the company earns money.</Text>
-        <Text style={styles.lesson}>2. Compare several years of earnings and cash flow.</Text>
-        <Text style={styles.lesson}>3. Compare valuation with similar NSE companies.</Text>
-        <Text style={styles.lesson}>4. Check debt, dilution, governance and sector risks.</Text>
-        <Text style={styles.lesson}>5. Decide whether the security fits your goal, horizon and portfolio concentration.</Text>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Investment Profile</Text>
-
-        <MetricLine label="Dividend Yield" value={percent(dividendYield)} />
-        <MetricLine
-          label="Income Suitability"
-          value={dividendYield === null ? "Not enough evidence" : dividendYield >= 5 ? "Review for income" : dividendYield > 0 ? "Moderate reported yield" : "No reported yield"}
-        />
-        <MetricLine
-          label="Growth Signal"
-          value={Number(scored?.confidence || 0) >= 75 ? "High" : "Watch"}
-        />
-        <MetricLine
-          label="Risk View"
-          value={Math.abs(changePct) >= 3 ? "Elevated volatility" : "Normal"}
-        />
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Coach G Opinion</Text>
-
-        <Text style={styles.body}>
-          {buildOpinion({
-            symbol: targetSymbol,
-            name: security.name,
-            sector: security.sector,
-            dividendYield,
-            action: scored?.action,
-            confidence: scored?.confidence,
-            changePct
-          })}
-        </Text>
-      </View>
-
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Add To Strategy Watchlist</Text>
-
-        {WATCHLIST_NAMES.map((name) => {
-          const selected = (watchlists[name] || []).includes(targetSymbol);
-
-          return (
-            <Pressable
-              key={name}
-              style={selected ? styles.watchSelected : styles.watchButton}
-              onPress={() => addToWatchlist(name)}
-            >
-              <Text style={selected ? styles.watchSelectedText : styles.watchButtonText}>
-                {selected ? `✓ ${name}` : `+ ${name}`}
-              </Text>
-            </Pressable>
-          );
-        })}
-      </View>
-
-      <View style={styles.actions}>
-        <Pressable
-          style={styles.secondary}
-          onPress={() => router.push("/watchlist")}
+      <View style={styles.decisionDock}>
+        <View
+          style={[
+            styles.decisionDockInner,
+            wideWeb && styles.decisionDockInnerWide
+          ]}
         >
-          <Text style={styles.secondaryText}>Open Watchlist</Text>
-        </Pressable>
+          <Pressable
+            style={styles.buyButton}
+            onPress={() =>
+              router.push({
+                pathname: "/trade",
+                params: {
+                  symbol: targetSymbol,
+                  side: "BUY",
+                  mode: "AVERAGE_COST"
+                }
+              })
+            }
+          >
+            <Text style={styles.decisionButtonText}>BUY</Text>
+          </Pressable>
+
+          <Pressable
+            disabled={!ownsSecurity}
+            style={[
+              styles.sellButton,
+              !ownsSecurity && styles.sellButtonDisabled
+            ]}
+            onPress={() => {
+              if (!ownsSecurity) return;
+
+              router.push({
+                pathname: "/trade",
+                params: {
+                  symbol: targetSymbol,
+                  side: "SELL",
+                  mode: "AVERAGE_COST"
+                }
+              });
+            }}
+          >
+            <Text
+              style={[
+                styles.decisionButtonText,
+                !ownsSecurity && styles.sellButtonDisabledText
+              ]}
+            >
+              SELL
+            </Text>
+          </Pressable>
+        </View>
+
+        {!ownsSecurity ? (
+          <Text style={styles.sellGuardDock}>
+            SELL unavailable - no verified REAL position is owned.
+          </Text>
+        ) : null}
       </View>
-    </ScrollView>
+    </View>
   );
-}
-
-function buildOpinion({
-  symbol,
-  name,
-  sector,
-  dividendYield,
-  action,
-  confidence,
-  changePct
-}) {
-  const parts = [];
-
-  parts.push(
-    `${name || symbol} is classified under ${sector || "the NSE market"}.`
-  );
-
-  if (dividendYield >= 5) {
-    parts.push(
-      "It appears suitable for Dividend Income investors because of its stronger estimated yield."
-    );
-  } else if (dividendYield > 0) {
-    parts.push(
-      "It may fit Balanced Growth investors where income is useful but not the only objective."
-    );
-  } else {
-    parts.push(
-      "It is more suitable for growth or tactical monitoring than income generation."
-    );
-  }
-
-  if (action) {
-    parts.push(
-      `Coach G currently marks it as ${action} with ${confidence || 0}% confidence.`
-    );
-  }
-
-  if (Math.abs(Number(changePct || 0)) >= 3) {
-    parts.push(
-      "Recent movement is elevated, so avoid chasing price action without confirming your risk level."
-    );
-  }
-
-  return parts.join(" ");
 }
 
 function Metric({ label, value }) {
@@ -371,19 +361,6 @@ function MetricLine({ label, value }) {
   );
 }
 
-function EducationMetric({ label, value, help }) {
-  return <View style={styles.educationMetric}>
-    <View style={styles.educationMetricTop}><Text style={styles.lineLabel}>{label}</Text><Text style={styles.lineValue}>{value}</Text></View>
-    {help ? <Text style={styles.metricHelp}>{help}</Text> : null}
-  </View>;
-}
-
-function nullable(value) { if (value === null || value === undefined || value === "") return null; return Number.isFinite(Number(value)) ? Number(value) : null; }
-function ratio(value) { const n = nullable(value); return n === null ? "N/A" : `${n.toFixed(2)}×`; }
-function percent(value) { const n = nullable(value); return n === null ? "N/A" : `${n.toFixed(2)}%`; }
-function kes(value) { const n = nullable(value); return n === null ? "N/A" : `KES ${money(n)}`; }
-function largeMoney(value) { const n = nullable(value); if (n === null) return "N/A"; const abs = Math.abs(n); if (abs >= 1e9) return `KES ${(n / 1e9).toFixed(2)}B`; if (abs >= 1e6) return `KES ${(n / 1e6).toFixed(2)}M`; return `KES ${money(n)}`; }
-
 function money(value) {
   return Number(value || 0).toLocaleString(undefined, {
     minimumFractionDigits: 2,
@@ -400,8 +377,22 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#020617"
   },
-  content: { /* PC-030M20AV3P RESPONSIVE CALIBRATION */ width: "100%", maxWidth: 960, alignSelf: "center", padding: 22,
-    paddingTop: 70, paddingBottom: 128 },
+  scroll: {
+    flex: 1
+  },
+  content: {
+    width: "100%",
+    maxWidth: 960,
+    alignSelf: "center",
+    padding: 22,
+    paddingTop: 76,
+    paddingBottom: 36
+  },
+  contentWideWeb: {
+    maxWidth: 1240,
+    paddingHorizontal: 28,
+    paddingTop: 24
+  },
   center: {
     flex: 1,
     backgroundColor: "#020617",
@@ -524,9 +515,6 @@ const styles = StyleSheet.create({
     color: "#94a3b8",
     marginTop: 6
   },
-  actionsRow: { marginTop: 12, flexDirection: "row", gap: 10 },
-  compactAction: { flex: 1, backgroundColor: "#0e7490", borderRadius: 14, padding: 13, alignItems: "center" },
-  compactActionText: { color: "white", fontWeight: "900" },
   grid: {
     marginTop: 18,
     flexDirection: "row",
@@ -630,6 +618,113 @@ const styles = StyleSheet.create({
     color: "#86efac",
     textAlign: "center",
     fontWeight: "900"
+  },
+  companyDetailsButton: {
+    marginTop: 18,
+    backgroundColor: "#0f172a",
+    borderColor: "#334155",
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 16
+  },
+  companyDetailsCopy: {
+    flex: 1
+  },
+  companyDetailsTitle: {
+    color: "#67e8f9",
+    fontSize: 16,
+    fontWeight: "900"
+  },
+  companyDetailsHint: {
+    color: "#94a3b8",
+    marginTop: 5,
+    fontSize: 12,
+    lineHeight: 18
+  },
+  companyDetailsArrow: {
+    color: "#67e8f9",
+    fontSize: 28,
+    fontWeight: "700"
+  },
+
+  depthButton: {
+    marginTop: 18,
+    backgroundColor: "#082f49",
+    borderColor: "#0891b2",
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 16
+  },
+  depthButtonText: {
+    color: "#67e8f9",
+    fontWeight: "900",
+    fontSize: 16
+  },
+  depthButtonHint: {
+    color: "#94a3b8",
+    marginTop: 5,
+    fontSize: 12
+  },
+  positionEvidence: {
+    color: "#67e8f9",
+    fontSize: 12,
+    fontWeight: "800",
+    marginTop: 12
+  },
+  decisionDock: {
+    backgroundColor: "rgba(2,6,23,0.97)",
+    borderTopColor: "#1e293b",
+    borderTopWidth: 1,
+    paddingHorizontal: 16,
+    paddingTop: 10,
+    paddingBottom: 12
+  },
+  decisionDockInner: {
+    width: "100%",
+    maxWidth: 960,
+    alignSelf: "center",
+    flexDirection: "row",
+    gap: 12
+  },
+  decisionDockInnerWide: {
+    maxWidth: 760
+  },
+  buyButton: {
+    flex: 1,
+    backgroundColor: "#15803d",
+    borderRadius: 14,
+    paddingVertical: 15,
+    alignItems: "center"
+  },
+  sellButton: {
+    flex: 1,
+    backgroundColor: "#b91c1c",
+    borderRadius: 14,
+    paddingVertical: 15,
+    alignItems: "center"
+  },
+  sellButtonDisabled: {
+    backgroundColor: "#1e293b",
+    borderColor: "#334155",
+    borderWidth: 1
+  },
+  sellButtonDisabledText: {
+    color: "#64748b"
+  },
+  decisionButtonText: {
+    color: "white",
+    fontWeight: "900",
+    fontSize: 16
+  },
+  sellGuardDock: {
+    color: "#94a3b8",
+    fontSize: 11,
+    marginTop: 6,
+    textAlign: "center"
   },
   actions: {
     marginTop: 22

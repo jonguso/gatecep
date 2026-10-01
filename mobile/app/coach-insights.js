@@ -11,13 +11,18 @@ import {
   View
 } from "react-native";
 import { router, useFocusEffect } from "expo-router";
-import { createBasketExecution } from "../src/trade/basketExecutionStore";
+import {
+  createBasketExecution,
+  loadBasketExecution
+} from "../src/trade/basketExecutionStore";
+import { isActiveOrder } from "../src/trade/orderLifecycle";
 import {
   RECOMMENDATION_STATUS
 } from "../src/coach/recommendationLifecycleStore";
 
-import { loadUnifiedPortfolio } from "../src/portfolio/unifiedPortfolioApi";
+import { loadInvestorContext } from "../src/features/investor/investorContextStore";
 import ActiveUserBanner from "../src/components/ActiveUserBanner";
+import { InvestorTopChromeHeader } from "../src/components/mobile/MobileUI";
 import { buildCoachPortfolioReview } from "../src/portfolio/coachPortfolioReview";
 import { saveTradeBasket } from "../src/trade/tradeBasketStore";
 import {
@@ -30,6 +35,7 @@ export default function Coach() {
   const isCompactViewport = viewportWidth < 720;
   const isNarrowViewport = viewportWidth < 480;
   const [portfolio, setPortfolio] = useState([]);
+  const [practiceCash, setPracticeCash] = useState(0);
   const [dashboardContext, setDashboardContext] = useState(null);
   const [recommendationHistory, setRecommendationHistory] = useState([]);
 
@@ -37,12 +43,10 @@ export default function Coach() {
   const [sectorPlan, setSectorPlan] = useState([]);
   const [selectedSector, setSelectedSector] = useState(null);
 
+  const [investorDNA, setInvestorDNA] = useState(null);
+  const [wealthBlueprint, setWealthBlueprint] = useState(null);
+
   const [showSimulator, setShowSimulator] = useState(false);
-  const [goal, setGoal] = useState("Dividend Income");
-  const [scenario, setScenario] = useState("Balanced");
-  const [intensity, setIntensity] = useState(50);
-  const [goalOpen, setGoalOpen] = useState(false);
-  const [scenarioOpen, setScenarioOpen] = useState(false);
   const [showResults, setShowResults] = useState(false);
 
   useFocusEffect(
@@ -52,18 +56,55 @@ export default function Coach() {
   );
 
   async function load() {
-    const portfolioData = await loadUnifiedPortfolio();
-    const savedPortfolio = portfolioData?.holdings || [];
+    const investorContext = await loadInvestorContext();
+    const practice = investorContext?.practicePortfolio || null;
+
+    const savedPortfolio = Array.isArray(practice?.holdings)
+      ? practice.holdings
+      : [];
+
+    const savedPracticeCash = Number(
+      practice?.availableCash || 0
+    );
+
     const contextRaw = await userGetItem("coachContext");
-    const historyRaw = await userGetItem("practiceCoachRecommendationHistory");
+    const historyRaw = await userGetItem(
+      "practiceCoachRecommendationHistory"
+    );
 
     setPortfolio(savedPortfolio);
+    setPracticeCash(
+      Number.isFinite(savedPracticeCash)
+        ? savedPracticeCash
+        : 0
+    );
+
+    setInvestorDNA(
+      investorContext?.investorDNA || null
+    );
+
+    setWealthBlueprint(
+      investorContext?.wealthBlueprint || null
+    );
+
+    const dnaStartingAmount = Number(
+      investorContext?.investorDNA?.amount || 0
+    );
+
+    if (
+      Number.isFinite(dnaStartingAmount) &&
+      dnaStartingAmount > 0
+    ) {
+      setAmount(dnaStartingAmount);
+    }
 
     if (contextRaw) {
       setDashboardContext(JSON.parse(contextRaw));
     }
 
-    setRecommendationHistory(historyRaw ? JSON.parse(historyRaw) : []);
+    setRecommendationHistory(
+      historyRaw ? JSON.parse(historyRaw) : []
+    );
   }
 
   const value = useMemo(() => {
@@ -121,7 +162,7 @@ export default function Coach() {
   const portfolioReview = useMemo(() => {
     return buildCoachPortfolioReview({
       holdings: portfolio,
-      cash: dashboardContext?.cash || 0,
+      cash: practiceCash,
       currentValue: value,
       sectorRows,
       health: {
@@ -131,10 +172,38 @@ export default function Coach() {
         watchlist: dashboardContext?.healthWatchlist || []
       }
     });
-  }, [portfolio, dashboardContext, value, sectorRows]);
+  }, [portfolio, practiceCash, dashboardContext, value, sectorRows]);
 
   const latestStrategy = recommendationHistory[0];
 
+  const assessedGoal =
+    investorDNA?.goal ||
+    wealthBlueprint?.goal ||
+    "Not available";
+
+  const assessedRiskProfile =
+    investorDNA?.riskProfile ||
+    wealthBlueprint?.riskProfile ||
+    "Not available";
+
+  const assessedInvestorType =
+    investorDNA?.investorType ||
+    wealthBlueprint?.investorType ||
+    "Developing Investor";
+
+  const assessedTimeHorizon =
+    investorDNA?.timeHorizon ||
+    wealthBlueprint?.timeHorizon ||
+    null;
+
+  /*
+   * Investor DNA and Wealth Blueprint are authoritative for
+   * investor goal / risk context.
+   *
+   * The Practice recommendation below remains a simulated
+   * diversification proposal. It does not recalculate or
+   * overwrite Investor DNA.
+   */
   function buildSectorRecommendation() {
     if (largestSector === "Banking") {
       return [
@@ -171,9 +240,11 @@ export default function Coach() {
     portfolioValue: value,
     largestSector,
     amount,
-    goal,
-    scenario,
-    intensity,
+    goal: assessedGoal,
+    riskProfile: assessedRiskProfile,
+    investorType: assessedInvestorType,
+    timeHorizon: assessedTimeHorizon,
+    assessmentSource: "INVESTOR_DNA_WEALTH_BLUEPRINT",
     sectorPlan,
     status: RECOMMENDATION_STATUS.SAVED,
     executionStatus: "NOT_STARTED",
@@ -194,6 +265,42 @@ export default function Coach() {
 }
 
   async function createTradeBasketFromRecommendation() {
+    /*
+     * PC-031B4M7C5D7F5H2
+     *
+     * Caller UX guard only.
+     *
+     * Check canonical persisted OMS state before saveTradeBasket().
+     * This prevents a new Coach G proposal from replacing the trade-basket
+     * input while an execution is still recoverable/active.
+     *
+     * D7F5G remains the authoritative store-level replacement guard.
+     */
+    const existingExecution = await loadBasketExecution();
+    const hasActiveExecution =
+      existingExecution?.orders?.some((order) =>
+        isActiveOrder(order.status)
+      ) === true;
+
+    if (hasActiveExecution) {
+      Alert.alert(
+        "Practice Execution Already Active",
+        "Complete or resume the current Practice execution before creating another Coach G basket. The current execution has not been replaced.",
+        [
+          {
+            text: "Cancel",
+            style: "cancel"
+          },
+          {
+            text: "Open Current Execution",
+            onPress: () =>
+              router.push("/basket-execution")
+          }
+        ]
+      );
+      return;
+    }
+
     const actionableSectors = sectorPlan.filter((item) => !item.reserve);
     const basketItems = [];
 
@@ -208,7 +315,7 @@ export default function Coach() {
           amount: holding.invested,
           quantity: holding.qty,
           price: holding.price,
-          reason: `${sector.sector} allocation from Coach G ${goal} strategy`
+          reason: `${sector.sector} Practice allocation from Coach G for ${assessedGoal}`
         });
       });
     });
@@ -231,12 +338,22 @@ export default function Coach() {
       }
     );
 
-await createBasketExecution();
+    const nextExecution = await createBasketExecution({
+      forceNew: true
+    });
+
+    if (!nextExecution?.orders?.length) {
+      Alert.alert(
+        "Practice Basket Unavailable",
+        "GateCEP could not create the Practice basket review. No Practice order was executed."
+      );
+      return;
+    }
 
 setShowResults(false);
 setShowSimulator(false);
 
-router.push("/(tabs)/trading");
+router.push("/basket-execution");
   }
 
   function buildSectorDetails(sector) {
@@ -246,7 +363,6 @@ router.push("/(tabs)/trading");
       "Mfg. and Allied": [
         ["EABL", 248, "Breweries and manufacturing exposure", "East African Breweries", 5.2],
         ["BAT", 520, "Consumer defensive manufacturer", "BAT Kenya", 7.8],
-        ["BAMB", 37, "Cement and building materials exposure", "Bamburi Cement", 3.5]
       ],
       Telecom: [
         ["SCOM", 30.6, "Telecom and mobile money exposure", "Safaricom", 4.7]
@@ -341,25 +457,18 @@ router.push("/(tabs)/trading");
   return (
     <ScrollView style={styles.screen} contentContainerStyle={[styles.content, styles.av3aeContent, !isCompactViewport && styles.av3aeContentWide, isCompactViewport && styles.av3aeContentCompact, isNarrowViewport && styles.av3aeContentNarrow]}>
       <View style={[styles.headerRow, isCompactViewport && styles.av3aeHeaderCompact]}>
-        <Text style={[styles.title, isCompactViewport && styles.av3aeTitleCompact, isNarrowViewport && styles.av3aeTitleNarrow]}>Practice Coach G Lab</Text>
-
-        <Pressable
-          style={[styles.dashboardButton, isCompactViewport && styles.av3aeHeaderButtonCompact]}
-          onPress={() => router.replace("/(tabs)/dashboard")}
+        <InvestorTopChromeHeader
+          compact={isCompactViewport}
+          reserveRight={false}
+          style={styles.coachInsightsIdentity}
+          testID="coach-insights-top-chrome"
         >
-          <Text style={styles.dashboardButtonText}>Dashboard</Text>
-        </Pressable>
-
-        <Pressable
-          style={[styles.dashboardButton, isCompactViewport && styles.av3aeHeaderButtonCompact]}
-          onPress={() =>
-            router.replace("/(tabs)/coach")
-          }
-        >
-          <Text style={styles.dashboardButtonText}>
-            REAL Coach G
+          <Text style={[styles.title, isCompactViewport && styles.av3aeTitleCompact, isNarrowViewport && styles.av3aeTitleNarrow]}>
+            Practice Coach G Lab
           </Text>
-        </Pressable>
+        </InvestorTopChromeHeader>
+
+
       </View>
 
       <ActiveUserBanner />
@@ -367,7 +476,7 @@ router.push("/(tabs)/trading");
       <View style={styles.practiceBanner}>
         <Text style={styles.practiceLabel}>PRACTICE ONLY</Text>
         <Text style={styles.practiceText}>
-          Simulations use your REAL portfolio as a read-only baseline. They never place broker orders, change REAL holdings, or create REAL execution evidence.
+          Simulations use your Practice Portfolio as the baseline. They never place broker orders, change REAL holdings or cash, or create REAL execution evidence.
         </Text>
       </View>
 
@@ -470,18 +579,12 @@ router.push("/(tabs)/trading");
       <SimulatorModal
         visible={showSimulator}
         onClose={() => setShowSimulator(false)}
-        goal={goal}
-        setGoal={setGoal}
-        scenario={scenario}
-        setScenario={setScenario}
         amount={amount}
         setAmount={setAmount}
-        intensity={intensity}
-        setIntensity={setIntensity}
-        goalOpen={goalOpen}
-        setGoalOpen={setGoalOpen}
-        scenarioOpen={scenarioOpen}
-        setScenarioOpen={setScenarioOpen}
+        investorType={assessedInvestorType}
+        assessedGoal={assessedGoal}
+        riskProfile={assessedRiskProfile}
+        timeHorizon={assessedTimeHorizon}
         simulate={simulate}
         sectorPlan={sectorPlan}
         projectedValue={value + Number(amount || 0)}
@@ -501,6 +604,28 @@ router.push("/(tabs)/trading");
   );
 }
 
+function humanizeAssessment(value) {
+  const text = String(value || "").trim();
+
+  if (!text) {
+    return "Not available";
+  }
+
+  return text
+    .replace(/_/g, " ")
+    .toLowerCase()
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function AssessmentItem({ label, value }) {
+  return (
+    <View style={styles.dnaAssessmentItem}>
+      <Text style={styles.dnaAssessmentLabel}>{label}</Text>
+      <Text style={styles.dnaAssessmentValue}>{value}</Text>
+    </View>
+  );
+}
+
 function QuickCard({ title, desc, route }) {
   const { width } = useWindowDimensions();
   return (
@@ -514,18 +639,12 @@ function QuickCard({ title, desc, route }) {
 function SimulatorModal({
   visible,
   onClose,
-  goal,
-  setGoal,
-  scenario,
-  setScenario,
   amount,
   setAmount,
-  intensity,
-  setIntensity,
-  goalOpen,
-  setGoalOpen,
-  scenarioOpen,
-  setScenarioOpen,
+  investorType,
+  assessedGoal,
+  riskProfile,
+  timeHorizon,
   simulate,
   sectorPlan,
   showResults,
@@ -556,36 +675,50 @@ function SimulatorModal({
             </Pressable>
           </View>
 
-          <View style={[styles.dropdownRow, compact && styles.av3aeStackCompact]}>
-            <View style={styles.dropdownHalf}>
-              <Dropdown
-                label="Investment Goal"
-                value={goal}
-                open={goalOpen}
-                setOpen={setGoalOpen}
-                options={[
-                  "Dividend Income",
-                  "Balanced Growth",
-                  "Capital Growth",
-                  "Risk Reduction"
-                ]}
-                onSelect={setGoal}
+          <View style={styles.dnaAssessmentCard}>
+            <Text style={styles.dnaAssessmentEyebrow}>
+              COACH G ASSESSMENT
+            </Text>
+
+            <Text style={styles.dnaAssessmentIntro}>
+              Prepared from your Investor DNA, Wealth Blueprint,
+              and current Practice Portfolio.
+            </Text>
+
+            <View style={styles.dnaAssessmentGrid}>
+              <AssessmentItem
+                label="Investor Type"
+                value={humanizeAssessment(investorType)}
               />
+
+              <AssessmentItem
+                label="Goal"
+                value={humanizeAssessment(assessedGoal)}
+              />
+
+              <AssessmentItem
+                label="Comfort Profile"
+                value={humanizeAssessment(riskProfile)}
+              />
+
+              {timeHorizon ? (
+                <AssessmentItem
+                  label="Time Horizon"
+                  value={humanizeAssessment(timeHorizon)}
+                />
+              ) : null}
             </View>
 
-            <View style={styles.dropdownHalf}>
-              <Dropdown
-                label="Scenario"
-                value={scenario}
-                open={scenarioOpen}
-                setOpen={setScenarioOpen}
-                options={["Conservative", "Balanced", "Aggressive"]}
-                onSelect={setScenario}
-              />
-            </View>
+            <Text style={styles.dnaAssessmentNote}>
+              Coach G uses this assessment as context. The
+              simulation below is a Practice diversification
+              proposal and does not change your Investor DNA.
+            </Text>
           </View>
 
-          <Text style={styles.inputLabel}>Amount to Invest</Text>
+          <Text style={styles.inputLabel}>
+            Amount to Simulate
+          </Text>
 
           <TextInput
             value={String(amount)}
@@ -593,31 +726,6 @@ function SimulatorModal({
             keyboardType="numeric"
             style={styles.input}
           />
-
-          <Text style={styles.inputLabel}>Rebalance Intensity: {intensity}%</Text>
-
-          <View style={[styles.sliderRow, narrow && styles.av3aeSliderWrap]}>
-            {[25, 50, 75, 100].map((level) => (
-              <Pressable
-                key={level}
-                style={[
-                  styles.sliderChip,
-                  intensity === level && styles.sliderChipActive
-                ]}
-                onPress={() => setIntensity(level)}
-              >
-                <Text
-                  style={
-                    intensity === level
-                      ? styles.sliderTextActive
-                      : styles.sliderText
-                  }
-                >
-                  {level}%
-                </Text>
-              </Pressable>
-            ))}
-          </View>
 
           <Pressable
             style={styles.primary}
@@ -641,13 +749,17 @@ function SimulatorModal({
                 </View>
 
                 <View style={styles.resultCard}>
-                  <Text style={styles.section}>Projected Value</Text>
+                  <Text style={styles.section}>Portfolio Value After Hypothetical Addition</Text>
                   <Text style={styles.metric2}>KES {money(projectedValue)}</Text>
-                  <Text style={styles.body}>Risk Direction: IMPROVING</Text>
+                  <Text style={styles.body}>
+                    Practice diversification proposal based on the amount
+                    you entered. This is not a return forecast or a claim
+                    that portfolio risk will improve.
+                  </Text>
                 </View>
 
                 <View style={styles.buyCard}>
-                  <Text style={styles.section}>Buy Recommendations</Text>
+                  <Text style={styles.section}>Practice Allocation Proposal</Text>
 
                   {sectorPlan
                     .filter((s) => !s.reserve)
@@ -804,8 +916,63 @@ function money(v) {
 }
 
 const styles = StyleSheet.create({
+  dnaAssessmentCard: {
+    marginTop: 18,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#155e75",
+    backgroundColor: "#082f49",
+    borderRadius: 16,
+    padding: 16
+  },
+  dnaAssessmentEyebrow: {
+    color: "#67e8f9",
+    fontSize: 10,
+    fontWeight: "900"
+  },
+  dnaAssessmentIntro: {
+    color: "#e2e8f0",
+    marginTop: 6,
+    lineHeight: 20
+  },
+  dnaAssessmentGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 14
+  },
+  dnaAssessmentItem: {
+    flexGrow: 1,
+    flexBasis: 180,
+    minWidth: 0,
+    backgroundColor: "#0f172a",
+    borderRadius: 12,
+    padding: 12
+  },
+  dnaAssessmentLabel: {
+    color: "#94a3b8",
+    fontSize: 10,
+    fontWeight: "800"
+  },
+  dnaAssessmentValue: {
+    color: "#f8fafc",
+    fontSize: 14,
+    fontWeight: "900",
+    marginTop: 4
+  },
+  dnaAssessmentNote: {
+    color: "#bae6fd",
+    fontSize: 11,
+    lineHeight: 17,
+    marginTop: 14
+  },
+
   screen: { flex: 1, backgroundColor: "#020617" },
   content: { padding: 20, paddingTop: 60, paddingBottom: 120 },
+  coachInsightsIdentity: {
+    flex: 1,
+    minWidth: 0
+  },
   title: { fontSize: 34, fontWeight: "900", color: "white" },
   card: {
     marginTop: 18,
@@ -1153,13 +1320,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12
   },
   av3aeHeaderCompact: {
-    flexWrap: "wrap",
+    flexDirection: "column",
     alignItems: "stretch"
-  },
-  av3aeHeaderButtonCompact: {
-    flexGrow: 1,
-    minWidth: 132,
-    alignItems: "center"
   },
   av3aeTitleCompact: {
     width: "100%",

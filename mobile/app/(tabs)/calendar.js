@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from "react";
 import { Linking, Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-native";
 import { router } from "expo-router";
 import ActiveUserBanner from "../../src/components/ActiveUserBanner";
+import { InvestorTopChromeHeader } from "../../src/components/mobile/MobileUI";
 import { useAuth } from "../../src/features/auth/hooks/useAuth";
 import { buildCalendarMonthDays, buildVerifiedCalendarEvents, calendarRangeForTab, getCalendarSummary, monthLabel } from "../../src/calendar/calendarHubData";
 import { loadVerifiedCalendar } from "../../src/services/calendar/verifiedCalendarApi";
@@ -53,8 +54,12 @@ export default function Calendar() {
   const moveMonth = (offset) => setVisibleMonth((current) => new Date(current.getFullYear(), current.getMonth() + offset, 1));
 
   return <ScrollView style={s.screen} contentContainerStyle={s.content}>
-    <Text style={s.title}>Calendar</Text>
-    <Text style={s.subtitle}>Verified corporate actions and explicitly dated market events.</Text>
+    <InvestorTopChromeHeader testID="calendar-top-chrome">
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={s.title}>Calendar</Text>
+        <Text style={s.subtitle}>Verified corporate actions and explicitly dated market events.</Text>
+      </View>
+    </InvestorTopChromeHeader>
     <ActiveUserBanner />
     <View style={s.monthNav}><Pressable accessibilityLabel="Previous month" style={s.navButton} onPress={() => moveMonth(-1)}><Text style={s.navText}>‹</Text></Pressable><View style={s.monthCenter}><Text style={s.monthTitle}>{monthLabel(visibleMonth)}</Text><Pressable onPress={() => setVisibleMonth(new Date())}><Text style={s.today}>Today</Text></Pressable></View><Pressable accessibilityLabel="Next month" style={s.navButton} onPress={() => moveMonth(1)}><Text style={s.navText}>›</Text></Pressable></View>
     <View style={s.summary}><Metric label="Events" value={summary.total}/><Metric label="Dividends" value={summary.dividends}/><Metric label="Deadlines" value={summary.deadlines}/><Metric label="Securities" value={summary.actions}/></View>

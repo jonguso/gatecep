@@ -5,13 +5,20 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  View
+  View,
+  useWindowDimensions
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router, useFocusEffect } from "expo-router";
-import { ContainedPanel } from "../src/components/mobile/MobileUI";
+import {
+  ContainedPanel,
+  InvestorTopChromeHeader
+} from "../src/components/mobile/MobileUI";
 import { loadCanonicalRealTransactionHistory } from "../src/features/wealth-journey/canonicalRealBehaviorHistoryService";
 export default function PortfolioActivity() {
+  const { width: windowWidth } = useWindowDimensions();
+  const isCompactViewport = windowWidth < 600;
+
   const [loading, setLoading] = useState(true);
   const [events, setEvents] = useState([]);
 
@@ -104,13 +111,22 @@ export default function PortfolioActivity() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <View style={styles.headerRow}>
-        <View style={{ flex: 1 }}>
+      <View
+        style={[
+          styles.headerRow,
+          isCompactViewport && styles.headerRowCompact
+        ]}
+      >
+        <InvestorTopChromeHeader
+          compact={isCompactViewport}
+          style={styles.portfolioActivityIdentity}
+          testID="portfolio-activity-top-chrome"
+        >
           <Text style={styles.title}>Portfolio Activity</Text>
           <Text style={styles.subtitle}>
             Audit trail for verified uploads, cash updates, imports, and Coach G actions.
           </Text>
-        </View>
+        </InvestorTopChromeHeader>
 
         <Pressable
           style={styles.dashboardButton}
@@ -205,6 +221,14 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     gap: 14,
     alignItems: "flex-start"
+  },
+  headerRowCompact: {
+    flexDirection: "column",
+    alignItems: "stretch"
+  },
+  portfolioActivityIdentity: {
+    flex: 1,
+    minWidth: 0
   },
   title: { color: "white", fontSize: 32, fontWeight: "900" },
   subtitle: { color: "#94a3b8", marginTop: 8, lineHeight: 21 },

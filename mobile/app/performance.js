@@ -27,8 +27,8 @@ import {
 import {
   buildPerformanceBenchmarkGoalIntelligence
 } from "../src/features/performance/performanceBenchmarkGoalIntelligenceService";
-import { calculateResponsivePanelHeight } from "../src/components/mobile/MobileUI";
 import InvestorJourneyNavigation from "../src/components/mobile/InvestorJourneyNavigation";
+import { InvestorTopChromeHeader } from "../src/components/mobile/MobileUI";
 
 const PERFORMANCE_SECTIONS = [
   { id: "timeline", title: "Portfolio Value Timeline", summary: "Inspect genuine net-worth, holdings, and cash observations." },
@@ -73,7 +73,25 @@ const [historicalSummary, setHistoricalSummary] = useState(null);
   const nextSection = activeSectionIndex >= 0 && activeSectionIndex < PERFORMANCE_SECTIONS.length - 1
     ? PERFORMANCE_SECTIONS[activeSectionIndex + 1]
     : null;
-  const detailPanelHeight = calculateResponsivePanelHeight(windowHeight);
+  /*
+   * PC-031M4R5B1
+   *
+   * Focused Performance detail is a bounded working region.
+   * Do not use the legacy ratio-based panel calculator here.
+   *
+   * The overview remains a normal document/flow page. Only
+   * active detail mode receives a viewport budget so its inner
+   * ScrollView owns variable detail content predictably.
+   *
+   * This is the migration boundary before Performance adopts
+   * the shared contained-screen shell.
+   */
+  const detailViewportReserve = isCompactViewport ? 250 : 210;
+  const detailPanelHeight = Math.max(
+    280,
+    Number(windowHeight || 720) - detailViewportReserve
+  );
+
   const moveToSection = (sectionId) => {
     setActiveSection(sectionId);
     requestAnimationFrame(() => scrollRef.current?.scrollTo({ y: 0, animated: false }));
@@ -283,14 +301,18 @@ const [historicalSummary, setHistoricalSummary] = useState(null);
   return (
     <ScrollView ref={scrollRef} style={styles.screen} contentContainerStyle={[styles.content, styles.av3afContent, !isCompactViewport && styles.av3afContentWide, isCompactViewport && styles.av3afContentCompact, isNarrowViewport && styles.av3afContentNarrow]}>
       <View style={[styles.headerRow, isCompactViewport && styles.av3afHeaderCompact]}>
-        <View style={{ flex: 1 }}>
+        <InvestorTopChromeHeader
+          compact={isCompactViewport}
+          style={styles.performanceIdentity}
+          testID="performance-top-chrome-header"
+        >
           <Text style={[styles.title, isCompactViewport && styles.av3afTitleCompact, isNarrowViewport && styles.av3afTitleNarrow]}>Performance</Text>
           <Text style={styles.subtitle}>
             {activeSection
               ? PERFORMANCE_SECTIONS.find((section) => section.id === activeSection)?.title
               : "Portfolio value, gains, cash, and health over time."}
           </Text>
-        </View>
+        </InvestorTopChromeHeader>
 
         <View style={[styles.headerActions, isCompactViewport && styles.av3afHeaderActionsCompact]}>
           <Pressable style={[styles.dashboardButton, isCompactViewport && styles.av3afHeaderButtonCompact]} onPress={() => activeSection ? moveToSection(null) : exitPerformance()}>
@@ -387,8 +409,19 @@ const [historicalSummary, setHistoricalSummary] = useState(null);
           ) : null}
 
           {activeSection ? (
-          <View style={[styles.detailPanel, { height: detailPanelHeight }]}>
-          <ScrollView style={styles.detailPanelScroll} contentContainerStyle={styles.detailPanelContent} nestedScrollEnabled showsVerticalScrollIndicator>
+          <View
+            style={[
+              styles.detailPanel,
+              styles.performanceDetailWorkspace,
+              { height: detailPanelHeight }
+            ]}
+          >
+          <ScrollView
+            style={styles.detailPanelScroll}
+            contentContainerStyle={styles.detailPanelContent}
+            nestedScrollEnabled
+            showsVerticalScrollIndicator
+          >
           <View style={[styles.card, isNarrowViewport && styles.av3afCardNarrow, activeSection !== "timeline" && styles.hidden]}>
             <View style={[styles.sectionHeaderRow, isNarrowViewport && styles.av3afSectionHeaderNarrow]}>
               <View style={{ flex: 1 }}>
@@ -2843,8 +2876,18 @@ const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#020617" },
   content: { padding: 20, paddingTop: 60, paddingBottom: 120 },
   detailPanel: { marginTop: 14, overflow: "hidden" },
-  detailPanelScroll: { flex: 1 },
-  detailPanelContent: { paddingBottom: 8 },
+
+  // PC-031M4R5B1 — focused Performance working region.
+  performanceDetailWorkspace: {
+    minHeight: 0
+  },
+  detailPanelScroll: {
+    flex: 1,
+    minHeight: 0
+  },
+  detailPanelContent: {
+    paddingBottom: 8
+  },
   hidden: { display: "none" },
   center: {
     flex: 1,
@@ -2858,6 +2901,14 @@ const styles = StyleSheet.create({
     gap: 14,
     alignItems: "flex-start"
   },
+
+  // PC-031M4R5C2B — Performance identity cooperates with
+  // global Menu / Coach G top chrome without changing page flow.
+  performanceIdentity: {
+    flex: 1,
+    minWidth: 0
+  },
+
   title: { color: "white", fontSize: 32, fontWeight: "900" },
   subtitle: { color: "#94a3b8", marginTop: 8, lineHeight: 21 },
   dashboardButton: {

@@ -11,107 +11,183 @@ import {
 import { router } from "expo-router";
 
 import { validateOrder } from "../src/utils/orderValidator";
-import { useMarketData } from "../src/services/markets/useMarketData";
+import useMarketData from "../src/services/markets/useMarketData";
 
 import {
-  loadInvestorContext,
-  savePracticePortfolio
+  loadInvestorContext
 } from "../src/features/investor/investorContextStore";
 import {
   userGetItem,
   userSetItem
 } from "../src/auth/userStorage";
-
-const STOCKS = [
-  {
-    symbol: "SCOM",
-    name: "Safaricom",
-    sector: "Telecom",
-    price: null,
-    reason: "Beginner-friendly telecom and mobile money exposure."
-  },
-  {
-    symbol: "KCB",
-    name: "KCB Group",
-    sector: "Banking",
-    price: null,
-    reason: "Large banking exposure with regional presence."
-  },
-  {
-    symbol: "EQT",
-    name: "Equity Group",
-    sector: "Banking",
-    price: null,
-    reason: "Strong retail and regional banking franchise."
-  },
-  {
-    symbol: "COOP",
-    name: "Co-operative Bank",
-    sector: "Banking",
-    price: null,
-    reason: "Lower-priced banking exposure for starter portfolios."
-  },
-  {
-    symbol: "EABL",
-    name: "East African Breweries",
-    sector: "Mfg. and Allied",
-    price: null,
-    reason: "Defensive consumer income exposure."
-  },
-  {
-    symbol: "BAT",
-    name: "BAT Kenya",
-    sector: "Mfg. and Allied",
-    price: null,
-    reason: "High dividend defensive stock."
-  }
-];
+import {
+  createBasketExecution,
+  loadBasketExecution
+} from "../src/trade/basketExecutionStore";
+import { isActiveOrder } from "../src/trade/orderLifecycle";
+import { saveTradeBasket } from "../src/trade/tradeBasketStore";
 
 export default function FirstTrade() {
   const marketRuntime = useMarketData();
-  const marketRows =
-    marketRuntime?.data ||
-    marketRuntime?.quotes ||
-    marketRuntime?.stocks ||
-    marketRuntime?.marketData ||
-    [];
+  const marketRows = Array.isArray(marketRuntime?.rows)
+    ? marketRuntime.rows
+    : [];
 
-  const quoteBySymbol = new Map(
-    (Array.isArray(marketRows) ? marketRows : [])
-      .filter((row) => row?.symbol)
-      .map((row) => [String(row.symbol).toUpperCase(), row])
+  const quoteBySymbol = useMemo(
+    () =>
+      new Map(
+        marketRows
+          .filter((row) => row?.symbol)
+          .map((row) => [
+            String(row.symbol).trim().toUpperCase(),
+            row
+          ])
+      ),
+    [marketRows]
   );
 
-  const liveStocks = liveStocks.map((stock) => {
-    const quote = quoteBySymbol.get(String(stock.symbol).toUpperCase());
-    const resolvedPrice = Number(
-      quote?.price ?? quote?.lastPrice ?? quote?.currentPrice ?? NaN
-    );
+  const liveStocks = useMemo(
+    () =>
+      marketRows
+        .filter((row) => row?.symbol)
+        .map((row) => {
+          const resolvedPrice = Number(
+            row?.price ?? row?.lastPrice ?? row?.currentPrice ?? NaN
+          );
 
-    return {
-      ...stock,
-      price: Number.isFinite(resolvedPrice) ? resolvedPrice : null,
-      priceSource: quote?.source || quote?.provider || quote?.priceSource || null,
-      priceAsOf:
-        quote?.asOf ||
-        quote?.marketDate ||
-        quote?.updatedAt ||
-        quote?.timestamp ||
-        null,
-    };
-  });
+          return {
+            ...row,
+            symbol: String(row.symbol).trim().toUpperCase(),
+            name: row?.name || row?.companyName || row?.symbol,
+            sector: row?.sector || "NSE",
+            reason: row?.reason || "NSE listed security.",
+            price:
+              Number.isFinite(resolvedPrice) && resolvedPrice > 0
+                ? resolvedPrice
+                : null,
+            priceSource:
+              row?.source ||
+              row?.provider ||
+              row?.priceSource ||
+              marketRuntime?.provider ||
+              null,
+            priceAsOf:
+              row?.asOf ||
+              row?.marketDate ||
+              row?.updatedAt ||
+              row?.timestamp ||
+              marketRuntime?.lastUpdated ||
+              null
+          };
+        }),
+    [
+      marketRows,
+      marketRuntime?.provider,
+      marketRuntime?.lastUpdated
+    ]
+  );
 
   const [portfolio, setPortfolio] = useState([]);
   const [cash, setCash] = useState(0);
-  const [selectedStock, setSelectedStock] = useState(STOCKS[0]);
+  const [selectedStock, setSelectedStock] = useState(null);
   const [side, setSide] = useState("BUY");
   const [quantity, setQuantity] = useState("1");
-  const [limitPrice, setLimitPrice] = useState(String(STOCKS[0].price));
+  const [limitPrice, setLimitPrice] = useState("");
   const [confirmedTrade, setConfirmedTrade] = useState(null);
+  const [securityDropdownOpen, setSecurityDropdownOpen] = useState(false);
+  const [securityQuery, setSecurityQuery] = useState("");
 
   useEffect(() => {
     load();
   }, []);
+
+  const heldSymbols = useMemo(
+    () =>
+      new Set(
+        portfolio
+          .filter((holding) => Number(holding?.quantity || 0) > 0)
+          .map((holding) => String(holding?.symbol || "").trim().toUpperCase())
+          .filter(Boolean)
+      ),
+    [portfolio]
+  );
+
+  const selectableStocks = useMemo(
+    () =>
+      side === "SELL"
+        ? liveStocks.filter((stock) => heldSymbols.has(stock.symbol))
+        : liveStocks,
+    [side, liveStocks, heldSymbols]
+  );
+
+  useEffect(() => {
+    if (!selectableStocks.length) {
+      setSelectedStock(null);
+      setLimitPrice("");
+      return;
+    }
+
+    const currentSymbol = String(selectedStock?.symbol || "")
+      .trim()
+      .toUpperCase();
+
+    if (
+      currentSymbol &&
+      selectableStocks.some((stock) => stock.symbol === currentSymbol)
+    ) {
+      return;
+    }
+
+    setSelectedStock(null);
+    setLimitPrice("");
+    setConfirmedTrade(null);
+    setSecurityDropdownOpen(false);
+    setSecurityQuery("");
+  }, [side, selectableStocks, selectedStock?.symbol]);
+
+  useEffect(() => {
+    if (!selectedStock?.symbol) {
+      return;
+    }
+
+    const resolved = liveStocks.find(
+      (stock) => stock.symbol === selectedStock.symbol
+    );
+
+    if (!resolved) {
+      return;
+    }
+
+    const resolvedPrice = Number(resolved.price);
+
+    setSelectedStock((current) => {
+      const currentPrice = Number(current?.price);
+
+      if (
+        current?.symbol === resolved.symbol &&
+        currentPrice === resolvedPrice &&
+        current?.priceSource === resolved.priceSource &&
+        current?.priceAsOf === resolved.priceAsOf
+      ) {
+        return current;
+      }
+
+      return {
+        ...current,
+        ...resolved
+      };
+    });
+
+    if (Number.isFinite(resolvedPrice) && resolvedPrice > 0) {
+      setLimitPrice((current) => {
+        const currentPrice = Number(current);
+
+        return Number.isFinite(currentPrice) && currentPrice > 0
+          ? current
+          : String(resolvedPrice);
+      });
+    }
+  }, [marketRuntime?.rows, selectedStock?.symbol]);
 
   async function load() {
     const context = await loadInvestorContext();
@@ -121,15 +197,54 @@ export default function FirstTrade() {
     setCash(Number(practice?.availableCash || 0));
   }
 
+  const filteredSelectableStocks = useMemo(() => {
+    const query = String(securityQuery || "").trim().toUpperCase();
+
+    if (!query) {
+      return selectableStocks;
+    }
+
+    return selectableStocks.filter((stock) => {
+      const symbol = String(stock?.symbol || "").toUpperCase();
+      const name = String(stock?.name || "").toUpperCase();
+      const sector = String(stock?.sector || "").toUpperCase();
+
+      return (
+        symbol.includes(query) ||
+        name.includes(query) ||
+        sector.includes(query)
+      );
+    });
+  }, [selectableStocks, securityQuery]);
+
   function selectStock(stock) {
     setSelectedStock(stock);
-    setLimitPrice(String(stock.price));
+
+    const resolvedPrice = Number(stock?.price);
+
+    setLimitPrice(
+      Number.isFinite(resolvedPrice) && resolvedPrice > 0
+        ? String(resolvedPrice)
+        : ""
+    );
+
     setConfirmedTrade(null);
+    setSecurityDropdownOpen(false);
+    setSecurityQuery("");
   }
+
+  const selectedMarketQuote = selectedStock?.symbol
+    ? quoteBySymbol.get(String(selectedStock.symbol).trim().toUpperCase()) ||
+      liveStocks.find((stock) => stock.symbol === selectedStock.symbol)
+    : null;
+
+  const verifiedMarketPrice = Number(selectedMarketQuote?.price);
+  const hasVerifiedMarketPrice =
+    Number.isFinite(verifiedMarketPrice) && verifiedMarketPrice > 0;
 
   const estimate = useMemo(() => {
     const qty = Number(quantity || 0);
-    const price = Number(limitPrice || selectedStock.price || 0);
+    const price = Number(limitPrice || 0);
     const gross = qty * price;
 
     const brokerFee = gross * 0.012;
@@ -154,6 +269,24 @@ export default function FirstTrade() {
   }, [quantity, limitPrice, selectedStock, side, cash]);
 
   async function confirmTrade() {
+    if (!selectedStock?.symbol) {
+      Alert.alert(
+        "Security Required",
+        side === "SELL"
+          ? "Select one of your owned Practice positions."
+          : "Select a security before confirming the simulated trade."
+      );
+      return;
+    }
+
+    if (!hasVerifiedMarketPrice) {
+      Alert.alert(
+        "Verified Price Unavailable",
+        `A verified market price is not available for ${selectedStock?.symbol || "the selected security"}. Simulation is disabled until market evidence is available.`
+      );
+      return;
+    }
+
     if (!estimate.qty || estimate.qty <= 0) {
       Alert.alert("Invalid Quantity", "Enter a valid quantity.");
       return;
@@ -301,54 +434,95 @@ export default function FirstTrade() {
       }
     }
 
-    const trade = {
-      id: `TRD-${Date.now()}`,
-      symbol: selectedStock.symbol,
-      name: selectedStock.name,
-      sector: selectedStock.sector,
-      side,
-      quantity: estimate.qty,
-      price: estimate.price,
-      gross: estimate.gross,
-      brokerFee: estimate.brokerFee,
-      regulatoryFee: estimate.regulatoryFee,
-      totalFees: estimate.totalFees,
-      totalCost: estimate.totalCost,
-      cashBefore: cash,
-      cashAfter: estimate.remainingCash,
-      tradedAt: new Date().toISOString(),
-      status: "SIMULATED_EXECUTED",
-      orderType: "MARKET",
-      settlementStatus: "SETTLED",
-      source: "FIRST_TRADE_SIMULATION",
-      isPractice: true,
-      isReal: false,
-      sourceType: "PRACTICE"
-    };
+    /*
+     * PC-032G8D7D2B9
+     *
+     * First Trade is an order-entry experience only.
+     *
+     * It must not mutate Practice holdings, Practice cash,
+     * simulated trade history, or manufacture a completed fill.
+     *
+     * Canonical ownership:
+     *
+     * First Trade
+     *   -> saveTradeBasket()
+     *   -> createBasketExecution()
+     *   -> REVIEW
+     *   -> Orders Review
+     *   -> Practice funding acceptance
+     *   -> QUEUED
+     *   -> canonical Practice orchestrator
+     *   -> BROKER_RECEIVED
+     *   -> canonical Practice settlement
+     *   -> FILLED
+     */
+    const existingExecution =
+      await loadBasketExecution();
 
-    const tradeRaw = await userGetItem("practiceSimulatedTrades");
-    const trades = tradeRaw ? JSON.parse(tradeRaw) : [];
+    const activeOrders =
+      existingExecution?.orders?.filter(
+        (order) => isActiveOrder(order?.status)
+      ) || [];
 
-    trades.unshift(trade);
+    if (activeOrders.length > 0) {
+      Alert.alert(
+        "Active Orders Already Exist",
+        "Review or complete the current Practice order execution before creating another First Trade.",
+        [
+          {
+            text: "Cancel",
+            style: "cancel"
+          },
+          {
+            text: "Open Orders Review",
+            onPress: () =>
+              router.push("/orders-review")
+          }
+        ]
+      );
 
-    await savePracticePortfolio({
-      ...(await loadInvestorContext())?.practicePortfolio,
-      holdings: nextPortfolio,
-      availableCash: estimate.remainingCash,
-      status: "ACTIVE",
-      lastActivityType: "FIRST_TRADE_SIMULATION"
-    });
-    await userSetItem("practiceSimulatedTrades", JSON.stringify(trades));
-    await userSetItem("practiceFirstTradeCompleted", "true");
+      return;
+    }
 
-    setPortfolio(nextPortfolio);
-    setCash(estimate.remainingCash);
-    setConfirmedTrade(trade);
-
-    Alert.alert(
-      "Trade Complete",
-      `${side} ${estimate.qty} ${selectedStock.symbol} simulated.`
+    await saveTradeBasket(
+      [
+        {
+          symbol: selectedStock.symbol,
+          name:
+            selectedStock.name ||
+            selectedStock.symbol,
+          sector:
+            selectedStock.sector ||
+            "Unknown",
+          side,
+          quantity: estimate.qty,
+          price: estimate.price,
+          amount: estimate.totalCost,
+          reason: "Practice First Trade"
+        }
+      ],
+      "FIRST_TRADE_PRACTICE",
+      {
+        executionMode: "PRACTICE",
+        brokerId: "GATECEP_PRACTICE"
+      }
     );
+
+    const nextExecution =
+      await createBasketExecution({
+        forceNew: true
+      });
+
+    if (!nextExecution?.orders?.length) {
+      throw new Error(
+        "PRACTICE_EXECUTION_CREATION_FAILED"
+      );
+    }
+
+    setConfirmedTrade(null);
+
+    router.push("/orders-review");
+    return;
   }
 
   return (
@@ -370,7 +544,10 @@ export default function FirstTrade() {
 
       <View style={styles.summaryCard}>
         <Metric label="Available Cash" value={`KES ${money(cash)}`} />
-        <Metric label="Selected Stock" value={selectedStock.symbol} />
+        <Metric
+          label="Selected Stock"
+          value={selectedStock?.symbol || "None"}
+        />
         <Metric label="Side" value={side} />
         <Metric label="Portfolio Positions" value={String(portfolio.length)} />
       </View>
@@ -378,26 +555,124 @@ export default function FirstTrade() {
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Choose Security</Text>
 
-        {liveStocks.map((stock) => (
-          <Pressable
-            key={stock.symbol}
-            style={[
-              styles.stockRow,
-              selectedStock.symbol === stock.symbol && styles.stockActive
-            ]}
-            onPress={() => selectStock(stock)}
-          >
-            <View style={{ flex: 1 }}>
-              <Text style={styles.symbol}>{stock.symbol}</Text>
-              <Text style={styles.small}>
-                {stock.name} • {stock.sector}
-              </Text>
-              <Text style={styles.reason}>{stock.reason}</Text>
-            </View>
+        {selectableStocks.length === 0 ? (
+          <View style={styles.warningBox}>
+            <Text style={styles.warningTitle}>
+              {side === "SELL"
+                ? "No Practice Holdings Available"
+                : "Security Universe Unavailable"}
+            </Text>
+            <Text style={styles.warningText}>
+              {side === "SELL"
+                ? "There are no owned Practice positions available to sell."
+                : marketRuntime?.loading
+                ? "Loading the canonical NSE security universe…"
+                : "GateCEP could not load the canonical NSE security universe."}
+            </Text>
+          </View>
+        ) : (
+          <>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel="Select NSE security"
+              style={[
+                styles.securityDropdown,
+                securityDropdownOpen && styles.securityDropdownOpen
+              ]}
+              onPress={() =>
+                setSecurityDropdownOpen((current) => !current)
+              }
+            >
+              <View style={styles.securityDropdownValue}>
+                <Text
+                  style={[
+                    styles.securityDropdownSymbol,
+                    !selectedStock && styles.securityDropdownPlaceholder
+                  ]}
+                >
+                  {selectedStock
+                    ? `${selectedStock.symbol} — ${selectedStock.name}`
+                    : side === "SELL"
+                    ? "Select Practice holding"
+                    : "Select NSE security"}
+                </Text>
 
-            <Text style={styles.price}>KES {money(stock.price)}</Text>
-          </Pressable>
-        ))}
+                {selectedStock ? (
+                  <Text style={styles.securityDropdownMeta}>
+                    {selectedStock.sector || "NSE listed security"}
+                    {" • "}
+                    {Number.isFinite(Number(selectedStock.price)) &&
+                    Number(selectedStock.price) > 0
+                      ? `KES ${money(selectedStock.price)}`
+                      : "Price unavailable"}
+                  </Text>
+                ) : null}
+              </View>
+
+              <Text style={styles.securityDropdownArrow}>
+                {securityDropdownOpen ? "▲" : "▼"}
+              </Text>
+            </Pressable>
+
+            {securityDropdownOpen ? (
+              <View style={styles.securityDropdownPanel}>
+                <TextInput
+                  value={securityQuery}
+                  onChangeText={setSecurityQuery}
+                  placeholder="Search symbol, company, or sector"
+                  placeholderTextColor="#64748b"
+                  autoCapitalize="characters"
+                  autoCorrect={false}
+                  style={styles.securitySearchInput}
+                />
+
+                <ScrollView
+                  style={styles.securityDropdownList}
+                  nestedScrollEnabled
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {filteredSelectableStocks.length ? (
+                    filteredSelectableStocks.map((stock) => (
+                      <Pressable
+                        key={stock.symbol}
+                        style={[
+                          styles.securityDropdownItem,
+                          selectedStock?.symbol === stock.symbol &&
+                            styles.stockActive
+                        ]}
+                        onPress={() => selectStock(stock)}
+                      >
+                        <View style={styles.securityDropdownItemBody}>
+                          <Text style={styles.symbol}>
+                            {stock.symbol}
+                          </Text>
+                          <Text style={styles.small}>
+                            {stock.name} • {stock.sector}
+                          </Text>
+                        </View>
+
+                        <Text style={styles.price}>
+                          {Number.isFinite(Number(stock.price)) &&
+                          Number(stock.price) > 0
+                            ? `KES ${money(stock.price)}`
+                            : marketRuntime?.loading
+                            ? "Loading…"
+                            : "Unavailable"}
+                        </Text>
+                      </Pressable>
+                    ))
+                  ) : (
+                    <View style={styles.securityNoResults}>
+                      <Text style={styles.warningText}>
+                        No security matches "{securityQuery}".
+                      </Text>
+                    </View>
+                  )}
+                </ScrollView>
+              </View>
+            ) : null}
+          </>
+        )}
       </View>
 
       <View style={styles.card}>
@@ -419,6 +694,17 @@ export default function FirstTrade() {
             </Pressable>
           ))}
         </View>
+
+        {!hasVerifiedMarketPrice && (
+          <View style={styles.warningBox}>
+            <Text style={styles.warningTitle}>Verified Price Unavailable</Text>
+            <Text style={styles.warningText}>
+              GateCEP does not have verified market evidence for{" "}
+              {selectedStock?.symbol || "the selected security"}. Simulated execution is disabled until a
+              verified price is available.
+            </Text>
+          </View>
+        )}
 
         {side === "BUY" && estimate.remainingCash < 0 && (
           <View style={styles.warningBox}>
@@ -478,13 +764,25 @@ export default function FirstTrade() {
       <Pressable
         style={[
           styles.primary,
-          side === "BUY" && estimate.remainingCash < 0 && styles.disabledButton
+          (!hasVerifiedMarketPrice ||
+            (side === "BUY" && estimate.remainingCash < 0)) &&
+            styles.disabledButton
         ]}
-        disabled={side === "BUY" && estimate.remainingCash < 0}
+        disabled={
+          !hasVerifiedMarketPrice ||
+          (side === "BUY" && estimate.remainingCash < 0)
+        }
+        accessibilityState={{
+          disabled:
+            !hasVerifiedMarketPrice ||
+            (side === "BUY" && estimate.remainingCash < 0)
+        }}
         onPress={confirmTrade}
       >
         <Text style={styles.primaryText}>
-          {side === "BUY" && estimate.remainingCash < 0
+          {!hasVerifiedMarketPrice
+            ? "Verified Price Unavailable"
+            : side === "BUY" && estimate.remainingCash < 0
             ? "Insufficient Cash"
             : `Confirm Simulated ${side}`}
         </Text>
@@ -628,6 +926,83 @@ const styles = StyleSheet.create({
     flexWrap: "wrap",
     gap: 12,
     justifyContent: "space-between"
+  },
+  securityDropdown: {
+    marginTop: 14,
+    minHeight: 64,
+    backgroundColor: "#020617",
+    borderColor: "#334155",
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between"
+  },
+  securityDropdownOpen: {
+    borderColor: "#9333ea"
+  },
+  securityDropdownValue: {
+    flex: 1,
+    minWidth: 0
+  },
+  securityDropdownSymbol: {
+    color: "white",
+    fontWeight: "900",
+    fontSize: 15
+  },
+  securityDropdownPlaceholder: {
+    color: "#94a3b8"
+  },
+  securityDropdownMeta: {
+    color: "#94a3b8",
+    fontSize: 12,
+    marginTop: 5
+  },
+  securityDropdownArrow: {
+    color: "#67e8f9",
+    fontWeight: "900",
+    marginLeft: 12
+  },
+  securityDropdownPanel: {
+    marginTop: 8,
+    backgroundColor: "#020617",
+    borderColor: "#334155",
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 10
+  },
+  securitySearchInput: {
+    backgroundColor: "#0f172a",
+    borderColor: "#334155",
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+    color: "white",
+    marginBottom: 8
+  },
+  securityDropdownList: {
+    maxHeight: 320
+  },
+  securityDropdownItem: {
+    minHeight: 62,
+    borderBottomColor: "#1e293b",
+    borderBottomWidth: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12
+  },
+  securityDropdownItemBody: {
+    flex: 1,
+    minWidth: 0
+  },
+  securityNoResults: {
+    paddingVertical: 18,
+    paddingHorizontal: 10
   },
   stockActive: {
     borderColor: "#9333ea",

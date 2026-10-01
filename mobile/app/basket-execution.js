@@ -1,8 +1,8 @@
 import React, { useCallback, useMemo, useState } from "react";
 import {
   Alert,
+  Platform,
   Pressable,
-  ScrollView,
   Share,
   StyleSheet,
   Text,
@@ -13,11 +13,22 @@ import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 
 import ActiveUserBanner from "../src/components/ActiveUserBanner";
 import {
+  InvestorTopChromeHeader,
+  ResponsiveScreen,
+  ResponsiveWorkingRegion
+} from "../src/components/mobile/MobileUI";
+import {
   clearBasketExecution,
-  createBasketExecution,
   loadBasketExecution
 } from "../src/trade/basketExecutionStore";
-import { ORDER_STATUS } from "../src/trade/orderLifecycle";
+import {
+  ORDER_STATUS
+} from "../src/trade/orderLifecycle";
+import {
+  RECOMMENDATION_STATUS,
+  loadRecommendationHistory,
+  saveRecommendationRecord
+} from "../src/services/coach/recommendationLifecycleStore";
 import { buildBrokerActionPlanText, clearBrokerActionPlan, loadBrokerActionPlan } from "../src/services/trade/brokerActionPlanStore";
 import { buildExecutionStatusReadModel } from "../src/services/trade/realExecutionStatusReadModel";
 
@@ -27,6 +38,16 @@ export default function BasketExecution() {
   const { mode } = useLocalSearchParams();
   const brokerPlanMode = String(mode || "").toUpperCase() === "BROKER_PLAN";
   const [execution, setExecution] = useState(null);
+  const [showUatDiagnostics, setShowUatDiagnostics] = useState(false);
+
+  // PC-032G4B1C7E1B:
+  // Alert.alert is not a reliable investor interaction boundary on web.
+  // Browser flows use explicit inline feedback/confirmation while native
+  // retains the established Alert behavior.
+  const webOrderReviewInteraction = Platform.OS === "web";
+  const [recommendationFeedback, setRecommendationFeedback] = useState(null);
+  const [recommendationConfirmation, setRecommendationConfirmation] = useState(null);
+  const [savedRecommendation, setSavedRecommendation] = useState(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -36,15 +57,44 @@ export default function BasketExecution() {
 
   async function load() {
     if (brokerPlanMode) {
-      setExecution(await loadBrokerActionPlan());
+      const [plan, recommendationHistory] = await Promise.all([
+        loadBrokerActionPlan(),
+        loadRecommendationHistory()
+      ]);
+
+      setExecution(plan);
+
+      const planId = String(plan?.id || "").trim();
+
+      const existingRecommendation =
+        planId
+          ? (recommendationHistory || []).find(
+              (item) =>
+                item?.type === "GOAL_RECOVERY_REVIEW" &&
+                item?.source === "GOAL_RECOVERY_REVIEW" &&
+                String(item?.brokerActionPlanId || "").trim() === planId
+            ) || null
+          : null;
+
+      setSavedRecommendation(existingRecommendation);
       return;
     }
-    let saved = await loadBasketExecution();
+    const saved = await loadBasketExecution();
 
-    if (!saved) {
-      saved = await createBasketExecution();
-    }
-
+    /*
+     * PC-031B4M7C5D7F5J2C1:
+     *
+     * This screen is an OMS observer, not an execution
+     * creation authority.
+     *
+     * An empty activeBasketExecution slot must remain empty.
+     * In particular, do not recreate OMS REVIEW orders from
+     * a previously persisted activeTradeBasket merely because
+     * this screen is opened, focused, refreshed, or revisited.
+     *
+     * Fresh execution creation belongs to an explicit investor
+     * workflow such as Coach G / Trade basket confirmation.
+     */
     setExecution(saved);
   }
 
@@ -80,6 +130,7 @@ export default function BasketExecution() {
         );
 
       return [
+        "REVIEW",
         "QUEUED",
         "ROUTING_FAILED",
         "BROKER_SELECTED",
@@ -110,6 +161,16 @@ export default function BasketExecution() {
     0
   );
 
+  const reviewOrders =
+    brokerPlanMode
+      ? []
+      : executionOrders.filter(
+          (order) =>
+            statusViewFor(order).phase === "REVIEW"
+        );
+
+  const hasReviewOrders = reviewOrders.length > 0;
+
   const isComplete =
     execution?.orders?.length > 0 &&
     activeOrders.length === 0 &&
@@ -134,6 +195,198 @@ export default function BasketExecution() {
     setExecution(null);
   }
 
+  async function saveReviewedRecoveryRecommendation(reviewedActions) {
+    try {
+      const record = await saveRecommendationRecord({
+        type: "GOAL_RECOVERY_REVIEW",
+        source: "GOAL_RECOVERY_REVIEW",
+        status: RECOMMENDATION_STATUS.SAVED,
+        executionStatus: "NOT_STARTED",
+        executionMode: "BROKER_HANDOFF_ONLY",
+        goal: execution?.goalContext?.goal || execution?.goal || null,
+        actions: reviewedActions,
+        brokerActionPlanId: execution?.id || null,
+        brokerActionPlanSource: execution?.source || "COACH_G_ADVISORY",
+        scenarioSource: execution?.scenarioSource || "GOAL_RECOVERY",
+        goalContext: execution?.goalContext || {},
+        costSummary: execution?.costSummary || {},
+        recommendationEvidence: {
+          brokerPlanUpdatedAt: execution?.updatedAt || null,
+          reviewedAt: new Date().toISOString(),
+          advisoryOnly: true,
+          brokerExecutionConfirmed: false,
+          realPortfolioMutationAllowed: false,
+          practicePortfolioMutationAllowed: false
+        }
+      });
+
+      const message =
+        "Reviewed recovery recommendation saved. This records the investor decision only. It does not create an OMS order, submit anything to a broker, or change REAL or Practice portfolio values.";
+
+      setRecommendationConfirmation(null);
+      setSavedRecommendation(record);
+
+      if (webOrderReviewInteraction) {
+        setRecommendationFeedback({
+          title: "Recommendation Saved",
+          message
+        });
+      } else {
+        Alert.alert("Recommendation Saved", message);
+      }
+
+      return record;
+    } catch (error) {
+      console.error(
+        "Unable to save reviewed recovery recommendation:",
+        error
+      );
+
+      const message =
+        error?.message ||
+        "The reviewed recovery recommendation could not be saved.";
+
+      if (webOrderReviewInteraction) {
+        setRecommendationFeedback({
+          title: "Recommendation Not Saved",
+          message
+        });
+      } else {
+        Alert.alert("Recommendation Not Saved", message);
+      }
+
+      return null;
+    }
+  }
+
+  function prepareReviewedRecoveryRecommendation() {
+    setRecommendationFeedback(null);
+    setRecommendationConfirmation(null);
+
+    if (savedRecommendation) {
+      const message =
+        "This reviewed recovery recommendation has already been saved.";
+
+      if (webOrderReviewInteraction) {
+        setRecommendationFeedback({
+          title: "Recommendation Already Saved",
+          message
+        });
+      } else {
+        Alert.alert("Recommendation Already Saved", message);
+      }
+
+      return;
+    }
+
+    if (!brokerPlanMode || !execution?.orders?.length) {
+      const message =
+        "No reviewed recovery instructions are available to save.";
+
+      if (webOrderReviewInteraction) {
+        setRecommendationFeedback({
+          title: "Reviewed Recommendation Unavailable",
+          message
+        });
+      } else {
+        Alert.alert("Reviewed Recommendation Unavailable", message);
+      }
+
+      return;
+    }
+
+    const reviewedActions = execution.orders
+      .map((order) => ({
+        symbol: String(order?.symbol || "").trim().toUpperCase(),
+        action: String(
+          order?.side ||
+          order?.action ||
+          "BUY"
+        ).trim().toUpperCase(),
+        sector: order?.sector || null,
+        reason:
+          order?.reason ||
+          order?.message ||
+          "Reviewed Goal Recovery allocation",
+        quantity: Number(order?.quantity || 0),
+        price: Number(
+          order?.price ??
+          order?.estimatedPrice ??
+          0
+        ),
+        grossAmount: Number(
+          order?.grossAmount ??
+          order?.estimatedGross ??
+          0
+        ),
+        estimatedCharges: Number(
+          order?.estimatedCharges ??
+          order?.charges ??
+          0
+        ),
+        estimatedTotalCost: Number(
+          order?.estimatedTotalCost ??
+          order?.totalCost ??
+          0
+        ),
+        feeEvidenceAvailable: order?.feeEvidenceAvailable === true,
+        guardPrice:
+          order?.guardPrice === null ||
+          order?.guardPrice === undefined
+            ? null
+            : Number(order.guardPrice),
+        costBasisMethod: order?.costBasisMethod || null
+      }))
+      .filter(
+        (action) =>
+          action.symbol &&
+          action.action &&
+          Number.isFinite(action.quantity) &&
+          action.quantity > 0
+      );
+
+    if (!reviewedActions.length) {
+      const message =
+        "The reviewed recovery plan does not contain any valid recommendation actions.";
+
+      if (webOrderReviewInteraction) {
+        setRecommendationFeedback({
+          title: "Recommendation Actions Unavailable",
+          message
+        });
+      } else {
+        Alert.alert("Recommendation Actions Unavailable", message);
+      }
+
+      return;
+    }
+
+    const message =
+      "Save this reviewed recovery allocation as recommendation evidence? This will not create orders, submit trades, or change REAL or Practice portfolio values.";
+
+    if (webOrderReviewInteraction) {
+      setRecommendationConfirmation({
+        title: "Save Reviewed Recommendation?",
+        message,
+        reviewedActions
+      });
+      return;
+    }
+
+    Alert.alert(
+      "Save Reviewed Recommendation?",
+      message,
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Save Recommendation",
+          onPress: () =>
+            saveReviewedRecoveryRecommendation(reviewedActions)
+        }
+      ]
+    );
+  }
+
   async function shareBrokerPlan() {
     const report = buildBrokerActionPlanText(execution);
     try {
@@ -145,8 +398,12 @@ export default function BasketExecution() {
 
   if (!execution || !execution.orders?.length) {
     return (
-      <ScrollView style={styles.screen} contentContainerStyle={[styles.content, av3cWidth >= 720 && { width: "100%", maxWidth: 960, alignSelf: "center" }, av3cWidth < 720 && { paddingHorizontal: 16, paddingBottom: 128 }, av3cWidth < 480 && { paddingHorizontal: 12 }]}>
-        <Text style={[styles.title, av3cWidth < 720 && { fontSize: 28, lineHeight: 34 }, av3cWidth < 480 && { fontSize: 25, lineHeight: 31 }]}>
+      <ResponsiveScreen
+        mode="flow"
+        testID="basket-execution-empty-screen"
+      >
+        <ResponsiveWorkingRegion>
+          <Text style={[styles.title, av3cWidth < 720 && { fontSize: 28, lineHeight: 34 }, av3cWidth < 480 && { fontSize: 25, lineHeight: 31 }]}>
           {brokerPlanMode
             ? "Broker Action Plan Review"
             : isRealExecution
@@ -168,20 +425,31 @@ export default function BasketExecution() {
         >
           <Text style={styles.secondaryText}>Dashboard</Text>
         </Pressable>
-      </ScrollView>
+        </ResponsiveWorkingRegion>
+      </ResponsiveScreen>
     );
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={[styles.content, av3cWidth >= 720 && { width: "100%", maxWidth: 960, alignSelf: "center" }, av3cWidth < 720 && { paddingHorizontal: 16, paddingBottom: 128 }, av3cWidth < 480 && { paddingHorizontal: 12 }]}>
-      <View style={[styles.headerRow, av3cWidth < 600 && { flexDirection: "column", alignItems: "stretch" }]}>
-        <Text style={[styles.title, av3cWidth < 720 && { fontSize: 28, lineHeight: 34 }, av3cWidth < 480 && { fontSize: 25, lineHeight: 31 }]}>
-          {brokerPlanMode
-            ? "Broker Action Plan Review"
-            : isRealExecution
-              ? "REAL Basket Execution Status"
-              : "Practice Basket Simulation"}
-        </Text>
+    <ResponsiveScreen
+      mode="flow"
+      testID="basket-execution-screen"
+    >
+      <ResponsiveWorkingRegion>
+        <View style={[styles.headerRow, av3cWidth < 600 && { flexDirection: "column", alignItems: "stretch" }]}>
+        <InvestorTopChromeHeader
+          compact={av3cWidth < 720}
+          style={styles.basketExecutionIdentity}
+          testID="basket-execution-top-chrome"
+        >
+          <Text style={[styles.title, av3cWidth < 720 && { fontSize: 28, lineHeight: 34 }, av3cWidth < 480 && { fontSize: 25, lineHeight: 31 }]}>
+            {brokerPlanMode
+              ? "Broker Action Plan Review"
+              : isRealExecution
+                ? "REAL Basket Execution Status"
+                : "Practice Basket Simulation"}
+          </Text>
+        </InvestorTopChromeHeader>
 
         <Pressable
           style={styles.dashboardButton}
@@ -200,6 +468,23 @@ export default function BasketExecution() {
       </Text>
 
       <ActiveUserBanner />
+
+      {!brokerPlanMode && !isRealExecution ? (
+        <View style={styles.practiceBrokerBanner}>
+          <Text style={styles.practiceBrokerTitle}>
+            Practice Execution Broker
+          </Text>
+
+          <Text style={styles.practiceBrokerText}>
+            GateCEP Broker — Simulation Only
+          </Text>
+
+          <Text style={styles.practiceBrokerNote}>
+            No connected REAL broker is required. These Practice orders
+            cannot submit to or change a REAL brokerage account.
+          </Text>
+        </View>
+      ) : null}
 
       {!brokerPlanMode && recoveryOrders.length > 0 ? (
         <View style={styles.recoveryCard}>
@@ -278,15 +563,34 @@ export default function BasketExecution() {
               style={styles.secondary}
               onPress={() => router.push("/portfolio-hub")}
             >
-              <Text style={styles.secondaryText}>Open Portfolio</Text>
+              <Text style={styles.secondaryText}>
+                {isRealExecution
+                  ? "Open Portfolio"
+                  : "View Practice Portfolio"}
+              </Text>
             </Pressable>
 
             <Pressable
               style={styles.secondary}
               onPress={() => router.push("/trade-history")}
             >
-              <Text style={styles.secondaryText}>Open Trade History</Text>
+              <Text style={styles.secondaryText}>
+                {isRealExecution
+                  ? "Open Trade History"
+                  : "View Practice Trade History"}
+              </Text>
             </Pressable>
+
+            {!isRealExecution ? (
+              <Pressable
+                style={styles.secondary}
+                onPress={() => router.push("/first-trade")}
+              >
+                <Text style={styles.secondaryText}>
+                  Make Another Practice Trade
+                </Text>
+              </Pressable>
+            ) : null}
           </>
         ) : (
           activeOrders.map((order) => (
@@ -363,15 +667,108 @@ export default function BasketExecution() {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>Next Step</Text>
           <Text style={styles.body}>
-            Use or share this plan with your broker. After the broker has actually executed the trades, import and verify the broker activity before GateCEP updates any REAL portfolio record.
+            Save this reviewed recovery allocation as recommendation evidence. You may also share the advisory plan with your broker. Saving it does not create an order, submit a trade, or change REAL or Practice portfolio values.
           </Text>
 
-          <Pressable
-            style={styles.primary}
-            onPress={() => router.push("/portfolio-sync-center")}
-          >
-            <Text style={styles.primaryText}>After broker execution — Import & Verify</Text>
-          </Pressable>
+          <View style={styles.investorActionCard}>
+            <Text style={styles.investorActionEyebrow}>
+              Reviewed Recovery Decision
+            </Text>
+
+            <Text style={styles.investorActionTitle}>
+              Save this reviewed recommendation?
+            </Text>
+
+            <Text style={styles.investorActionText}>
+              Save the reviewed recovery allocation as recommendation
+              evidence. This does not create an order, submit a trade,
+              or change REAL or Practice portfolio values.
+            </Text>
+
+            <Pressable
+              style={[
+                styles.primary,
+                savedRecommendation ? styles.disabledAction : null
+              ]}
+              onPress={prepareReviewedRecoveryRecommendation}
+              disabled={Boolean(savedRecommendation)}
+              accessibilityState={{
+                disabled: Boolean(savedRecommendation)
+              }}
+            >
+              <Text style={styles.primaryText}>
+                {savedRecommendation
+                  ? "Reviewed Recommendation Saved"
+                  : "Save Reviewed Recommendation"}
+              </Text>
+            </Pressable>
+          </View>
+
+          {webOrderReviewInteraction && recommendationFeedback ? (
+            <View style={styles.orderReviewFeedbackCard}>
+              <Text style={styles.orderReviewFeedbackTitle}>
+                {recommendationFeedback.title}
+              </Text>
+
+              <Text style={styles.orderReviewFeedbackText}>
+                {recommendationFeedback.message}
+              </Text>
+
+              <View style={styles.orderReviewActionRow}>
+                {recommendationFeedback.title === "Recommendation Saved" ? (
+                  <Pressable
+                    style={styles.primary}
+                    onPress={() => router.push("/orders-review")}
+                  >
+                    <Text style={styles.primaryText}>
+                      Continue to Orders Review
+                    </Text>
+                  </Pressable>
+                ) : null}
+
+                <Pressable
+                  style={styles.secondary}
+                  onPress={() => setRecommendationFeedback(null)}
+                >
+                  <Text style={styles.secondaryText}>Dismiss</Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
+
+          {webOrderReviewInteraction && recommendationConfirmation ? (
+            <View style={styles.orderReviewConfirmationCard}>
+              <Text style={styles.orderReviewConfirmationTitle}>
+                {recommendationConfirmation.title}
+              </Text>
+
+              <Text style={styles.orderReviewFeedbackText}>
+                {recommendationConfirmation.message}
+              </Text>
+
+              <View style={styles.orderReviewActionRow}>
+                <Pressable
+                  style={styles.secondary}
+                  onPress={() => setRecommendationConfirmation(null)}
+                >
+                  <Text style={styles.secondaryText}>Cancel</Text>
+                </Pressable>
+
+                <Pressable
+                  style={styles.primary}
+                  onPress={() =>
+                    saveReviewedRecoveryRecommendation(
+                      recommendationConfirmation.reviewedActions
+                    )
+                  }
+                >
+                  <Text style={styles.primaryText}>
+                    Save Recommendation
+                  </Text>
+                </Pressable>
+              </View>
+            </View>
+          ) : null}
 
           <Pressable
             style={styles.secondary}
@@ -385,39 +782,144 @@ export default function BasketExecution() {
         <Pressable style={styles.secondary} onPress={clearExecution}><Text style={styles.secondaryText}>Clear Broker Action Plan</Text></Pressable>
       </> : <>
 
-      <Pressable
-        style={styles.primary}
-        onPress={() => router.push("/(tabs)/trading")}
-      >
-        <Text style={styles.primaryText}>Open Broker Routing</Text>
-      </Pressable>
+      {!isComplete ? (
+        <View style={styles.investorActionCard}>
+          <Text style={styles.investorActionEyebrow}>
+            Next Step
+          </Text>
 
-      <Pressable
-        style={styles.secondary}
-        onPress={() => router.push("/(tabs)/trading")}
-      >
-        <Text style={styles.secondaryText}>Open Queue Manager</Text>
-      </Pressable>
+          <Text style={styles.investorActionTitle}>
+            {recoveryOrders.length > 0
+              ? "Broker reconciliation is required"
+              : hasReviewOrders
+                ? `${reviewOrders.length} order${reviewOrders.length === 1 ? "" : "s"} still require review`
+                : "Execution is in progress"}
+          </Text>
 
-      <Pressable
-        style={styles.secondary}
-        onPress={() => router.push("/orders")}
-      >
-        <Text style={styles.secondaryText}>Open OMS Orders</Text>
-      </Pressable>
+          <Text style={styles.investorActionText}>
+            {recoveryOrders.length > 0
+              ? "Resolve the REAL broker-evidence recovery state before taking another execution action."
+              : hasReviewOrders
+                ? "Review the remaining order details before continuing the basket through execution."
+                : "Track the persisted execution lifecycle while GateCEP processes the accepted orders."}
+          </Text>
 
-      <Pressable
-        style={styles.secondary}
-        onPress={() => router.push("/orders-review")}
-      >
-        <Text style={styles.secondaryText}>Open Orders Review</Text>
-      </Pressable>
+          {recoveryOrders.length > 0 ? (
+            <Pressable
+              style={styles.primary}
+              onPress={() =>
+                router.push("/real-order-recovery")
+              }
+            >
+              <Text style={styles.primaryText}>
+                Review REAL Submission Recovery
+              </Text>
+            </Pressable>
+          ) : hasReviewOrders ? (
+            <Pressable
+              style={styles.primary}
+              onPress={() => router.push("/orders-review")}
+            >
+              <Text style={styles.primaryText}>
+                Open Orders Review ({reviewOrders.length})
+              </Text>
+            </Pressable>
+          ) : (
+            <Pressable
+              style={styles.primary}
+              onPress={() => router.push("/(tabs)/trading")}
+            >
+              <Text style={styles.primaryText}>
+                View Execution Progress
+              </Text>
+            </Pressable>
+          )}
+        </View>
+      ) : null}
 
-      <Pressable style={styles.secondary} onPress={clearExecution}>
-        <Text style={styles.secondaryText}>Clear Execution</Text>
-      </Pressable>
+      <View style={styles.diagnosticsCard}>
+        <Pressable
+          style={styles.diagnosticsHeader}
+          onPress={() =>
+            setShowUatDiagnostics((current) => !current)
+          }
+          accessibilityRole="button"
+          accessibilityState={{
+            expanded: showUatDiagnostics
+          }}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={styles.diagnosticsTitle}>
+              UAT / Diagnostics
+            </Text>
+
+            <Text style={styles.diagnosticsSubtitle}>
+              Operational inspection and guarded test controls
+            </Text>
+          </View>
+
+          <Text style={styles.diagnosticsChevron}>
+            {showUatDiagnostics ? "▲" : "▼"}
+          </Text>
+        </Pressable>
+
+        {showUatDiagnostics ? (
+          <View style={styles.diagnosticsBody}>
+            <Text style={styles.diagnosticsNote}>
+              These controls are for execution inspection and UAT.
+              They do not replace the investor-facing lifecycle above.
+            </Text>
+
+            <Pressable
+              style={styles.secondary}
+              onPress={() => router.push("/(tabs)/trading")}
+            >
+              <Text style={styles.secondaryText}>
+                Open Broker Routing
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={styles.secondary}
+              onPress={() => router.push("/queue-manager")}
+            >
+              <Text style={styles.secondaryText}>
+                Open Queue Manager
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={styles.secondary}
+              onPress={() => router.push("/orders")}
+            >
+              <Text style={styles.secondaryText}>
+                Open OMS Orders
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={styles.secondary}
+              onPress={() => router.push("/orders-review")}
+            >
+              <Text style={styles.secondaryText}>
+                Open Orders Review
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={styles.diagnosticsDanger}
+              onPress={clearExecution}
+            >
+              <Text style={styles.diagnosticsDangerText}>
+                Clear Execution
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
+      </View>
       </>}
-    </ScrollView>
+      </ResponsiveWorkingRegion>
+    </ResponsiveScreen>
   );
 }
 
@@ -437,6 +939,148 @@ function money(value) {
 }
 
 const styles = StyleSheet.create({
+  investorActionCard: {
+    marginTop: 18,
+    padding: 18,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "rgba(168,85,247,.45)",
+    backgroundColor: "rgba(88,28,135,.18)"
+  },
+  investorActionEyebrow: {
+    color: "#c084fc",
+    fontSize: 12,
+    fontWeight: "900",
+    textTransform: "uppercase",
+    letterSpacing: 0.8
+  },
+  investorActionTitle: {
+    color: "white",
+    fontSize: 18,
+    fontWeight: "900",
+    marginTop: 7
+  },
+  investorActionText: {
+    color: "#cbd5e1",
+    lineHeight: 20,
+    marginTop: 7,
+    marginBottom: 4
+  },
+  orderReviewFeedbackCard: {
+    marginTop: 14,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#a16207",
+    backgroundColor: "#221a09"
+  },
+  orderReviewFeedbackTitle: {
+    color: "#facc15",
+    fontSize: 16,
+    fontWeight: "900"
+  },
+  orderReviewConfirmationCard: {
+    marginTop: 14,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(34,211,238,.45)",
+    backgroundColor: "rgba(8,145,178,.10)"
+  },
+  orderReviewConfirmationTitle: {
+    color: "#67e8f9",
+    fontSize: 16,
+    fontWeight: "900"
+  },
+  orderReviewFeedbackText: {
+    color: "#cbd5e1",
+    lineHeight: 20,
+    marginTop: 7
+  },
+  orderReviewActionRow: {
+    marginTop: 12,
+    gap: 10
+  },
+  diagnosticsCard: {
+    marginTop: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#334155",
+    backgroundColor: "#0f172a",
+    overflow: "hidden"
+  },
+  diagnosticsHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 14,
+    paddingHorizontal: 16
+  },
+  diagnosticsTitle: {
+    color: "#cbd5e1",
+    fontSize: 14,
+    fontWeight: "900"
+  },
+  diagnosticsSubtitle: {
+    color: "#64748b",
+    fontSize: 12,
+    marginTop: 3
+  },
+  diagnosticsChevron: {
+    color: "#94a3b8",
+    fontSize: 14,
+    fontWeight: "900",
+    marginLeft: 12
+  },
+  diagnosticsBody: {
+    borderTopWidth: 1,
+    borderTopColor: "#1e293b",
+    padding: 14
+  },
+  diagnosticsNote: {
+    color: "#94a3b8",
+    fontSize: 12,
+    lineHeight: 18,
+    marginBottom: 4
+  },
+  diagnosticsDanger: {
+    marginTop: 10,
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#7f1d1d",
+    backgroundColor: "rgba(127,29,29,.18)",
+    paddingVertical: 13,
+    paddingHorizontal: 16,
+    alignItems: "center"
+  },
+  diagnosticsDangerText: {
+    color: "#fca5a5",
+    fontWeight: "900"
+  },
+  practiceBrokerBanner: {
+    marginTop: 12,
+    padding: 14,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(34,211,238,.35)",
+    backgroundColor: "rgba(34,211,238,.08)"
+  },
+  practiceBrokerTitle: {
+    color: "#67e8f9",
+    fontSize: 12,
+    fontWeight: "900"
+  },
+  practiceBrokerText: {
+    color: "white",
+    fontSize: 14,
+    fontWeight: "900",
+    marginTop: 4
+  },
+  practiceBrokerNote: {
+    color: "#94a3b8",
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 5
+  },
   recoveryCard: {
     borderWidth: 1,
     borderColor: "#a16207",
@@ -467,8 +1111,6 @@ const styles = StyleSheet.create({
     color: "#fef3c7",
     fontWeight: "800"
   },
-  screen: { flex: 1, backgroundColor: "#020617" },
-  content: { padding: 22, paddingTop: 70, paddingBottom: 110 },
   headerRow: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -476,6 +1118,10 @@ const styles = StyleSheet.create({
     gap: 12
   },
   title: { color: "white", fontSize: 32, fontWeight: "900", flex: 1 },
+  basketExecutionIdentity: {
+    flex: 1,
+    minWidth: 0
+  },
   subtitle: { color: "#94a3b8", marginTop: 10, lineHeight: 22 },
   dashboardButton: {
     backgroundColor: "#1e293b",
@@ -556,6 +1202,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#9333ea",
     padding: 18,
     borderRadius: 18
+  },
+  disabledAction: {
+    opacity: 0.42
   },
   primaryText: { color: "white", textAlign: "center", fontWeight: "900" },
   secondary: {

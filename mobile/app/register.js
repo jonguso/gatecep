@@ -11,18 +11,25 @@ import { useAuth } from "../src/features/auth/hooks/useAuth";
 export default function RegisterScreen() {
   const { register } = useAuth();
   const [email, setEmail] = useState("");
-  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const canSubmit = email.trim() && username.trim() && password && !loading;
+  const canSubmit = email.trim() && password && !loading;
 
   async function handleRegister() {
     if (!canSubmit) return;
     try {
       setLoading(true);
-      await register({ email: email.trim(), username: username.trim(), password });
+      const normalizedEmail = email.trim().toLowerCase();
+      const compatibilityUsername =
+        normalizedEmail.split("@")[0]?.trim() || `investor-${Date.now()}`;
+
+      await register({
+        email: normalizedEmail,
+        username: compatibilityUsername,
+        password
+      });
       Alert.alert("Account Created", "Let’s set up your investor profile.");
       router.replace("/onboarding/name");
     } catch (error) {
@@ -54,21 +61,6 @@ export default function RegisterScreen() {
               keyboardType="email-address"
               value={email}
               onChangeText={setEmail}
-              style={styles.input}
-            />
-
-            <FieldLabel>Username</FieldLabel>
-            <TextInput
-              accessibilityLabel="Username"
-              placeholder="Choose a username"
-              placeholderTextColor="#64748b"
-              selectionColor="#c084fc"
-              autoCapitalize="none"
-              autoCorrect={false}
-              autoComplete="username-new"
-              textContentType="username"
-              value={username}
-              onChangeText={setUsername}
               style={styles.input}
             />
 

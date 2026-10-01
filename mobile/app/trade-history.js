@@ -7,9 +7,11 @@ import {
   View,
   useWindowDimensions
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import { router } from "expo-router";
 import { ContainedPanel } from "../src/components/mobile/MobileUI";
+import {
+  userGetItem
+} from "../src/services/auth/userStorage";
 
 // PC-030M20AV3D RESPONSIVE CALIBRATION
 export default function TradeHistory() {
@@ -21,8 +23,29 @@ export default function TradeHistory() {
   }, []);
 
   async function load() {
-    const raw = await AsyncStorage.getItem("gatecepSimulatedTrades");
-    setTrades(raw ? JSON.parse(raw) : []);
+    /*
+     * PC-031B4M7C5D7H2
+     *
+     * Practice Trade History is an observer of the canonical,
+     * user-scoped Practice settlement history.
+     *
+     * Economic writers remain owned by the Practice execution
+     * accounting paths. This screen must never manufacture,
+     * migrate, settle, or mutate Practice trades.
+     */
+    const raw =
+      await userGetItem(
+        "practiceSimulatedTrades"
+      );
+
+    const parsed =
+      raw ? JSON.parse(raw) : [];
+
+    setTrades(
+      Array.isArray(parsed)
+        ? parsed
+        : []
+    );
   }
 
   const summary = useMemo(() => {

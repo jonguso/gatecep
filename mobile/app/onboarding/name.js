@@ -1,4 +1,7 @@
-import { useState } from "react";
+import {
+  useEffect,
+  useState
+} from "react";
 
 import {
   View,
@@ -20,6 +23,59 @@ export default function Name() {
   const [first, setFirst] = useState("");
   const [last, setLast] = useState("");
   const [saving, setSaving] = useState(false);
+
+  /*
+   * Restore any identity already saved for the current
+   * authenticated investor. This makes the name screen
+   * resumable and also proves that identity is user-scoped.
+   */
+  useEffect(() => {
+    let active = true;
+
+    async function restoreName() {
+      try {
+        const profile =
+          await loadProfile();
+
+        if (!active || !profile) {
+          return;
+        }
+
+        const nestedProfile =
+          profile?.profile &&
+          typeof profile.profile === "object"
+            ? profile.profile
+            : {};
+
+        setFirst(
+          String(
+            profile?.firstName ||
+            nestedProfile?.firstName ||
+            ""
+          )
+        );
+
+        setLast(
+          String(
+            profile?.lastName ||
+            nestedProfile?.lastName ||
+            ""
+          )
+        );
+      } catch (error) {
+        console.log(
+          "Unable to restore onboarding name:",
+          error?.message || error
+        );
+      }
+    }
+
+    restoreName();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   async function next() {
     const firstName = first.trim();

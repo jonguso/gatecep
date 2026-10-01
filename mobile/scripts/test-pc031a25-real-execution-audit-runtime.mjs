@@ -175,6 +175,39 @@ const tradeBasket = moduleFrom(
   "mock:trade-basket"
 );
 
+const practiceAccounting = moduleFrom(
+  `
+  export async function settlePracticeExecutionOrder() {
+    throw new Error(
+      "A25_REAL_RUNTIME_MUST_NOT_ENTER_PRACTICE_SETTLEMENT"
+    );
+  }
+  `,
+  "mock:practice-execution-accounting"
+);
+
+const practiceHistory = moduleFrom(
+  `
+  export async function archiveClosedPracticeExecution() {
+    throw new Error(
+      "A25_REAL_RUNTIME_MUST_NOT_ENTER_PRACTICE_HISTORY"
+    );
+  }
+  `,
+  "mock:practice-execution-history"
+);
+
+const nseSecurityMaster = moduleFrom(
+  `
+  export function isCurrentNseSecurity() {
+    throw new Error(
+      "A25_REAL_RUNTIME_MUST_NOT_ENTER_PRACTICE_SECURITY_VALIDATION"
+    );
+  }
+  `,
+  "mock:nse-security-master"
+);
+
 const brokerAdapters = moduleFrom(
   `
   export async function placeBrokerOrder(order) {
@@ -483,6 +516,27 @@ await basketStore.link(
       "./orderLifecycle"
     ) {
       return orderLifecycle;
+    }
+
+    if (
+      specifier ===
+      "./practiceExecutionAccountingService"
+    ) {
+      return practiceAccounting;
+    }
+
+    if (
+      specifier ===
+      "./practiceExecutionHistoryService"
+    ) {
+      return practiceHistory;
+    }
+
+    if (
+      specifier ===
+      "../../utils/nseSecurityMaster"
+    ) {
+      return nseSecurityMaster;
     }
 
     throw new Error(
@@ -1119,6 +1173,21 @@ let uncertainAttemptId = null;
 // =========================================================
 
 {
+  const uncertainOrder =
+    await currentOrder();
+
+  assert.ok(
+    uncertainOrder?.lastSubmissionAttemptAt
+  );
+
+  const evidenceExecutionDate =
+    new Date(
+      new Date(
+        uncertainOrder.lastSubmissionAttemptAt
+      ).getTime() +
+        5 * 60 * 1000
+    ).toISOString();
+
   const evidence = {
     id: "EVIDENCE-A25-1",
 
@@ -1148,7 +1217,7 @@ let uncertainAttemptId = null;
     price: 25,
 
     executionDate:
-      "2026-09-14T10:05:00.000Z",
+      evidenceExecutionDate,
 
     settlementStatus: "SETTLED",
     settlementDate:
@@ -1193,7 +1262,7 @@ let uncertainAttemptId = null;
 
   assert.equal(
     order.filledAt,
-    "2026-09-14T10:05:00.000Z"
+    evidenceExecutionDate
   );
 
   const ordered =
@@ -1256,7 +1325,7 @@ let uncertainAttemptId = null;
 
   assert.equal(
     filled.payload.executionDate,
-    "2026-09-14T10:05:00.000Z"
+    evidenceExecutionDate
   );
 
   assert.equal(

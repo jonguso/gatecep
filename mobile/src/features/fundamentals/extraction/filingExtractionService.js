@@ -66,6 +66,23 @@ export const DEFAULT_EXTRACTION_POLICY = {
   ]
 };
 
+/*
+ * BANKING validation is intentionally narrower than the generic
+ * industrial-company validation contract.
+ *
+ * Banking extraction explicitly preserves revenue and several other
+ * generic industrial fields as null unless a reviewed mapping policy
+ * exists. Do not manufacture those values merely to satisfy PC-025.
+ */
+export const BANKING_EXTRACTION_POLICY = {
+  minimumRequiredFields: [
+    "netIncome",
+    "totalAssets",
+    "totalLiabilities",
+    "totalEquity"
+  ]
+};
+
 function safeArray(value) {
   return Array.isArray(value)
     ? value
@@ -170,6 +187,57 @@ function buildCheck({
 function normalizeSourceReference(
   reference = {}
 ) {
+  const derivation =
+    reference?.derivation &&
+    typeof reference.derivation === "object"
+      ? {
+          numeratorField:
+            normalizeText(
+              reference.derivation
+                ?.numeratorField
+            ) ||
+            null,
+
+          numerator:
+            nullableNumber(
+              reference.derivation
+                ?.numerator
+            ),
+
+          denominatorField:
+            normalizeText(
+              reference.derivation
+                ?.denominatorField
+            ) ||
+            null,
+
+          denominator:
+            nullableNumber(
+              reference.derivation
+                ?.denominator
+            ),
+
+          beginningValue:
+            nullableNumber(
+              reference.derivation
+                ?.beginningValue
+            ),
+
+          endingValue:
+            nullableNumber(
+              reference.derivation
+                ?.endingValue
+            ),
+
+          denominatorConvention:
+            normalizeText(
+              reference.derivation
+                ?.denominatorConvention
+            ) ||
+            null
+        }
+      : null;
+
   return {
     id:
       reference?.id ||
@@ -196,14 +264,306 @@ function normalizeSourceReference(
       normalizeText(
         reference?.note
       ) ||
-      null
+      null,
+
+    extractionMethod:
+      normalizeText(
+        reference?.extractionMethod
+      ) ||
+      null,
+
+    accountingScope:
+      normalizeText(
+        reference?.accountingScope
+      ) ||
+      null,
+
+    matchedText:
+      normalizeText(
+        reference?.matchedText
+      ) ||
+      null,
+
+    sourceUnit:
+      normalizeText(
+        reference?.sourceUnit
+      ) ||
+      null,
+
+    sourceMultiplier:
+      nullableNumber(
+        reference?.sourceMultiplier
+      ),
+
+    confidence:
+      normalizeText(
+        reference?.confidence
+      ) ||
+      null,
+
+    fiscalYear:
+      nullableNumber(
+        reference?.fiscalYear
+      ),
+
+    derivation
   };
+}
+
+/*
+ * PC-032 — Financial evidence -> PC-025 provenance adapter.
+ *
+ * Pure transformation only.
+ *
+ * This adapter does not:
+ * - persist evidence,
+ * - create or submit a filing,
+ * - verify or approve a filing,
+ * - promote fundamentals,
+ * - change REAL or Practice portfolio state.
+ *
+ * Raw PDF page text is intentionally not accepted here.
+ */
+export function buildSourceReferencesFromFinancialEvidence({
+  evidence = [],
+  fiscalYear = null
+} = {}) {
+  return (Array.isArray(evidence) ? evidence : [])
+    .filter(
+      (item) =>
+        item &&
+        typeof item === "object" &&
+        normalizeText(item?.field)
+    )
+    .map((item) => {
+      const hasDerivation =
+        item?.numeratorField != null ||
+        item?.numerator != null ||
+        item?.denominatorField != null ||
+        item?.denominator != null ||
+        item?.beginningOwnerEquity != null ||
+        item?.endingOwnerEquity != null ||
+        item?.denominatorConvention != null;
+
+      return normalizeSourceReference({
+        field:
+          item?.field,
+
+        section:
+          item?.statement,
+
+        page:
+          item?.pageNumber,
+
+        note:
+          null,
+
+        extractionMethod:
+          item?.extractionMethod,
+
+        accountingScope:
+          item?.accountingScope,
+
+        matchedText:
+          item?.matchedText,
+
+        sourceUnit:
+          item?.sourceUnit,
+
+        sourceMultiplier:
+          item?.sourceMultiplier,
+
+        confidence:
+          item?.confidence,
+
+        derivation:
+          hasDerivation
+            ? {
+                numeratorField:
+                  item?.numeratorField,
+
+                numerator:
+                  item?.numerator,
+
+                denominatorField:
+                  item?.denominatorField,
+
+                denominator:
+                  item?.denominator,
+
+                beginningValue:
+                  item?.beginningOwnerEquity,
+
+                endingValue:
+                  item?.endingOwnerEquity,
+
+                denominatorConvention:
+                  item?.denominatorConvention
+              }
+            : null,
+
+        fiscalYear
+      });
+    });
+}
+
+
+/*
+ * PC-032 — Financial extraction preview -> PC-025 workspace.
+ *
+ * Pure preview transformation only.
+ *
+ * Safety contract:
+ * - requires an extraction-only / non-persistent preview,
+ * - rejects verified or authoritative input,
+ * - creates no filing,
+ * - performs no submission, approval, promotion, or persistence,
+ * - performs no REAL or Practice portfolio mutation.
+ */
+export function buildFilingExtractionWorkspaceFromFinancialEvidencePreview(
+  preview = {}
+) {
+  if (
+    preview?.extractionOnly !== true ||
+    preview?.persistence !== "NONE"
+  ) {
+    throw new Error(
+      "Financial evidence must remain extraction-only and non-persistent."
+    );
+  }
+
+  if (
+    preview?.verifiedFiling !== false ||
+    preview?.verified === true ||
+    preview?.authoritative === true
+  ) {
+    throw new Error(
+      "Financial evidence preview cannot enter PC-025 as verified or authoritative."
+    );
+  }
+
+  const fiscalYear =
+    nullableNumber(
+      preview?.fiscalYear
+    );
+
+  const previewEvidence =
+    Array.isArray(preview?.evidence)
+      ? preview.evidence
+      : [];
+
+  const sourceReferences =
+    buildSourceReferencesFromFinancialEvidence({
+      evidence:
+        previewEvidence,
+
+      fiscalYear
+    });
+
+  const extractionPolicy =
+    normalizeCode(
+      preview?.extractionPolicy
+    );
+
+  const isBanking =
+    extractionPolicy === "BANKING";
+
+  const ownerProfitEvidence =
+    isBanking
+      ? previewEvidence.find(
+          (item) =>
+            normalizeText(
+              item?.field
+            ) ===
+              "profitAttributableToOwners" &&
+            normalizeCode(
+              item?.accountingScope
+            ) ===
+              "ATTRIBUTABLE_TO_OWNERS"
+        )
+      : null;
+
+  const ownerProfit =
+    nullableNumber(
+      ownerProfitEvidence?.value
+    );
+
+  if (
+    isBanking &&
+    ownerProfit === null
+  ) {
+    throw new Error(
+      "BANKING preview requires profit attributable to owners evidence for EPS reconciliation."
+    );
+  }
+
+  return buildFilingExtractionWorkspace({
+    filing: {
+      symbol:
+        preview?.symbol,
+
+      companyName:
+        preview?.companyName,
+
+      filingType:
+        preview?.filingType ||
+        "ANNUAL_REPORT",
+
+      fiscalYear,
+
+      periodEnd:
+        preview?.periodEnd ||
+        null,
+
+      sourceDocument:
+        preview?.sourceDocument ||
+        null,
+
+      company: {
+        symbol:
+          preview?.symbol,
+
+        name:
+          preview?.companyName,
+
+        exchange:
+          "NSE",
+
+        currency:
+          "KES"
+      }
+    },
+
+    periods:
+      Array.isArray(preview?.periods)
+        ? preview.periods
+        : [],
+
+    sourceReferences,
+
+    policy:
+      isBanking
+        ? BANKING_EXTRACTION_POLICY
+        : {},
+
+    epsReconciliationNumerator:
+      isBanking
+        ? ownerProfit
+        : null,
+
+    epsReconciliationNumeratorField:
+      isBanking
+        ? "profitAttributableToOwners"
+        : "netIncome"
+  });
 }
 
 export function validateExtractionPeriod({
   period,
   sourceReferences = [],
-  policy = {}
+  policy = {},
+  epsReconciliationNumerator = null,
+  epsReconciliationNumeratorField = "netIncome"
 } = {}) {
   const normalized =
     normalizeFundamentalPeriod(
@@ -345,11 +705,22 @@ export function validateExtractionPeriod({
     );
   }
 
+  const resolvedEpsNumerator =
+    nullableNumber(
+      epsReconciliationNumerator
+    ) ??
+    (
+      epsReconciliationNumeratorField ===
+        "netIncome"
+        ? normalized.netIncome
+        : null
+    );
+
   const calculatedEps =
-    normalized.netIncome !== null &&
+    resolvedEpsNumerator !== null &&
     normalized.sharesOutstanding !== null &&
     normalized.sharesOutstanding !== 0
-      ? normalized.netIncome /
+      ? resolvedEpsNumerator /
         normalized.sharesOutstanding
       : null;
 
@@ -389,8 +760,8 @@ export function validateExtractionPeriod({
           epsDifference <=
           config
             .perShareTolerancePercentage
-            ? "EPS reconciles to net income divided by shares outstanding."
-            : "EPS does not reconcile within tolerance.",
+            ? `EPS reconciles to ${epsReconciliationNumeratorField} divided by shares outstanding.`
+            : `EPS does not reconcile to ${epsReconciliationNumeratorField} divided by shares outstanding within tolerance.`,
 
         actual:
           normalized.earningsPerShare,
@@ -581,7 +952,9 @@ export function buildFilingExtractionWorkspace({
   filing,
   periods = [],
   sourceReferences = [],
-  policy = {}
+  policy = {},
+  epsReconciliationNumerator = null,
+  epsReconciliationNumeratorField = "netIncome"
 } = {}) {
   const normalizedPeriods =
     safeArray(periods)
@@ -600,7 +973,11 @@ export function buildFilingExtractionWorkspace({
                   !reference?.fiscalYear
               ),
 
-            policy
+            policy,
+
+            epsReconciliationNumerator,
+
+            epsReconciliationNumeratorField
           })
       );
 

@@ -12,7 +12,9 @@ assert.match(screen, /activePanel === "watchlist" &&/);
 assert.match(screen, /setActivePanel\(activePanel === "indices" \? "market" : "indices"\)/);
 assert.match(screen, /setActivePanel\(activePanel === "watchlist" \? "market" : "watchlist"\)/);
 assert.match(screen, /setActivePanel\("market"\)/);
+assert.match(screen, /tab !== "Equities" && \(/);
 
-console.log("PASS — Market Results, Indices, and Watchlist are mutually exclusive panels.");
-console.log("PASS — opening one expanded panel hides the current securities panel and the other expansion.");
+console.log("PASS — Market Results, Indices, and Watchlist retain mutually exclusive panel state.");
+console.log("PASS — opening one auxiliary panel hides the current securities panel and the other expansion.");
 console.log("PASS — choosing any market tab restores the Market Results panel.");
+console.log("PASS — Equities intentionally suppresses auxiliary Indices/Watchlist presentation.");

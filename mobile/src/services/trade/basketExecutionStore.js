@@ -6,8 +6,18 @@ import { loadTradeBasket } from "./tradeBasketStore";
 import { addExecutionAuditEvent } from "./executionAuditStore";
 import {
   ORDER_STATUS,
-  isActiveOrder
+  isActiveOrder,
+  isClosedOrder
 } from "./orderLifecycle";
+import {
+  settlePracticeExecutionOrder
+} from "./practiceExecutionAccountingService";
+import {
+  archiveClosedPracticeExecution
+} from "./practiceExecutionHistoryService";
+import {
+  isCurrentNseSecurity
+} from "../../utils/nseSecurityMaster";
 
 const ACTIVE_BASKET_EXECUTION_KEY = "activeBasketExecution";
 
@@ -34,11 +44,164 @@ async function safeAddExecutionAuditEvent(event = {}) {
   }
 }
 
+/*
+ * PC-031B4M7C5D7F5J2A
+ *
+ * activeBasketExecution remains the operational OMS/recovery
+ * authority until every order is canonically closed.
+ *
+ * A CLOSED Practice execution must be accepted by durable
+ * Practice execution history before the active OMS slot may
+ * be released or replaced.
+ *
+ * REAL execution never depends on Practice history.
+ */
+function assertExecutionClosedForRelease(execution) {
+  if (!execution?.id) {
+    const error = new Error(
+      "EXECUTION_RELEASE_ID_REQUIRED"
+    );
+    error.code =
+      "EXECUTION_RELEASE_ID_REQUIRED";
+    throw error;
+  }
+
+  const orders =
+    Array.isArray(execution?.orders)
+      ? execution.orders
+      : [];
+
+  if (!orders.length) {
+    const error = new Error(
+      "EXECUTION_RELEASE_ORDERS_REQUIRED"
+    );
+    error.code =
+      "EXECUTION_RELEASE_ORDERS_REQUIRED";
+    error.executionId =
+      execution?.id || null;
+    throw error;
+  }
+
+  const activeOrders =
+    orders.filter((order) =>
+      isActiveOrder(order?.status)
+    );
+
+  if (activeOrders.length) {
+    const error = new Error(
+      "ACTIVE_EXECUTION_RELEASE_FORBIDDEN"
+    );
+    error.code =
+      "ACTIVE_EXECUTION_RELEASE_FORBIDDEN";
+    error.executionId =
+      execution?.id || null;
+    error.executionMode =
+      execution?.executionMode || null;
+    error.activeOrderIds =
+      activeOrders.map(
+        (order) => order?.id
+      );
+    throw error;
+  }
+
+  const nonClosedOrders =
+    orders.filter(
+      (order) =>
+        !isClosedOrder(order?.status)
+    );
+
+  if (nonClosedOrders.length) {
+    const error = new Error(
+      "NON_CLOSED_EXECUTION_RELEASE_FORBIDDEN"
+    );
+    error.code =
+      "NON_CLOSED_EXECUTION_RELEASE_FORBIDDEN";
+    error.executionId =
+      execution?.id || null;
+    error.executionMode =
+      execution?.executionMode || null;
+    error.nonClosedOrderIds =
+      nonClosedOrders.map(
+        (order) => order?.id
+      );
+    throw error;
+  }
+
+  return execution;
+}
+
+async function prepareExecutionForRelease(
+  execution
+) {
+  assertExecutionClosedForRelease(
+    execution
+  );
+
+  const executionMode =
+    canonicalExecutionMode(
+      execution?.executionMode ||
+        execution?.orders?.[0]
+          ?.executionMode
+    );
+
+  if (executionMode === "PRACTICE") {
+    /*
+     * Archive is idempotent by execution ID.
+     *
+     * If this throws, callers MUST fail closed:
+     * activeBasketExecution remains untouched.
+     */
+    await archiveClosedPracticeExecution(
+      execution
+    );
+  }
+
+  return execution;
+}
+
 export async function createBasketExecution({ forceNew = false } = {}) {
   const existing = await loadBasketExecution();
+  const hasActiveExecution =
+    existing?.orders?.some((order) => isActiveOrder(order.status)) === true;
 
-  if (!forceNew && existing?.orders?.some((order) => isActiveOrder(order.status))) {
+  // PC-031B4M7C5D7F5G:
+  // activeBasketExecution is the persisted OMS recovery authority.
+  // Never allow forceNew to silently replace active order state.
+  //
+  // forceNew means "create a fresh execution instead of reusing a CLOSED
+  // execution"; it does not authorize destruction of REVIEW / PENDING /
+  // QUEUED / ROUTED / BROKER_SELECTED / BROKER_RECEIVED / PARTIAL_FILL state.
+  if (hasActiveExecution) {
+    if (forceNew) {
+      const error = new Error(
+        "ACTIVE_EXECUTION_REPLACEMENT_FORBIDDEN"
+      );
+      error.code = "ACTIVE_EXECUTION_REPLACEMENT_FORBIDDEN";
+      error.executionId = existing?.id || null;
+      error.executionMode = existing?.executionMode || null;
+      throw error;
+    }
+
     return existing;
+  }
+
+  /*
+   * PC-031B4M7C5D7F5J2A:
+   *
+   * forceNew may replace a CLOSED execution only after the
+   * central release boundary has validated it.
+   *
+   * CLOSED Practice:
+   *   durable archive first, replacement second.
+   *
+   * CLOSED REAL:
+   *   lifecycle validation only; no Practice-history
+   *   dependency is introduced.
+   */
+  if (existing && forceNew) {
+    await prepareExecutionForRelease(
+      existing
+    );
   }
 
   const basket = await loadTradeBasket();
@@ -72,7 +235,12 @@ export async function createBasketExecution({ forceNew = false } = {}) {
         ((basket.executionMode || "PRACTICE") === "PRACTICE"
           ? "GATECEP_PRACTICE"
           : null),
-      brokerAccountId: item.brokerAccountId || basket.brokerAccountId || null,
+      brokerName:
+          item.brokerName ||
+          ((basket.executionMode || "PRACTICE") === "PRACTICE"
+            ? "GateCEP Broker"
+            : null),
+        brokerAccountId: item.brokerAccountId || basket.brokerAccountId || null,
       status: ORDER_STATUS.REVIEW,
       message: "Pending review before queue",
       createdAt: now,
@@ -90,7 +258,12 @@ export async function createBasketExecution({ forceNew = false } = {}) {
       ((basket.executionMode || "PRACTICE") === "PRACTICE"
         ? "GATECEP_PRACTICE"
         : null),
-    brokerAccountId: basket.brokerAccountId || null,
+    brokerName:
+        basket.brokerName ||
+        ((basket.executionMode || "PRACTICE") === "PRACTICE"
+          ? "GateCEP Broker"
+          : null),
+      brokerAccountId: basket.brokerAccountId || null,
     status: ORDER_STATUS.REVIEW,
     createdAt: now,
     updatedAt: now,
@@ -129,7 +302,35 @@ export async function saveBasketExecution(execution) {
 }
 
 export async function clearBasketExecution() {
-  await userSetItem(ACTIVE_BASKET_EXECUTION_KEY, "");
+  const execution =
+    await loadBasketExecution();
+
+  if (!execution) {
+    return null;
+  }
+
+  /*
+   * PC-031B4M7C5D7F5J2A:
+   *
+   * Never release active/nonclosed OMS state.
+   *
+   * CLOSED Practice must be durably archived before the
+   * active slot is emptied. Archive failure therefore leaves
+   * activeBasketExecution untouched.
+   *
+   * CLOSED REAL is lifecycle-validated but never routed
+   * through Practice history.
+   */
+  await prepareExecutionForRelease(
+    execution
+  );
+
+  await userSetItem(
+    ACTIVE_BASKET_EXECUTION_KEY,
+    ""
+  );
+
+  return execution;
 }
 
 export async function updateExecutionOrder(orderId, patch = {}) {
@@ -159,6 +360,165 @@ export async function cancelExecutionOrder(orderId) {
     message: "Cancelled before routing"
   });
 }
+
+/*
+ * PC-031B4M7C5D7I5C
+ *
+ * Investor-directed security replacement is permitted only
+ * for editable PRACTICE review orders.
+ *
+ * This is deliberately separate from updateExecutionOrder():
+ * that generic OMS mutation authority is also used by REAL
+ * broker/reconciliation lifecycle transitions.
+ *
+ * Once an order is queued or later in its lifecycle, its
+ * security identity is immutable through this operation.
+ */
+export async function replacePracticeReviewOrderSecurity(
+  orderId,
+  security = {}
+) {
+  const execution = await loadBasketExecution();
+
+  if (!execution) {
+    const error = new Error(
+      "PRACTICE_SECURITY_REPLACEMENT_EXECUTION_REQUIRED"
+    );
+    error.code =
+      "PRACTICE_SECURITY_REPLACEMENT_EXECUTION_REQUIRED";
+    throw error;
+  }
+
+  const order =
+    execution.orders?.find(
+      (item) => item.id === orderId
+    ) || null;
+
+  if (!order) {
+    const error = new Error(
+      "EXECUTION_ORDER_NOT_FOUND"
+    );
+    error.code = "EXECUTION_ORDER_NOT_FOUND";
+    throw error;
+  }
+
+  const executionMode =
+    canonicalExecutionMode(
+      order?.executionMode ||
+        execution?.executionMode
+    );
+
+  if (executionMode !== "PRACTICE") {
+    const error = new Error(
+      "REAL_SECURITY_REPLACEMENT_FORBIDDEN"
+    );
+    error.code =
+      "REAL_SECURITY_REPLACEMENT_FORBIDDEN";
+    throw error;
+  }
+
+  const editableStatuses = [
+    ORDER_STATUS.DRAFT,
+    ORDER_STATUS.REVIEW,
+    ORDER_STATUS.PENDING
+  ];
+
+  if (
+    !editableStatuses.includes(
+      String(order?.status || "").toUpperCase()
+    )
+  ) {
+    const error = new Error(
+      "PRACTICE_SECURITY_REPLACEMENT_STATUS_FORBIDDEN"
+    );
+    error.code =
+      "PRACTICE_SECURITY_REPLACEMENT_STATUS_FORBIDDEN";
+    error.orderId = orderId;
+    error.status = order?.status || null;
+    throw error;
+  }
+
+  const symbol =
+    String(security?.symbol || "")
+      .trim()
+      .toUpperCase();
+
+  /*
+   * Current-universe eligibility is enforced here, not only
+   * in the UI. A stale/retired/unknown symbol must not become
+   * a new editable Practice order merely because a caller
+   * supplied a positive price.
+   *
+   * Historical holdings are unaffected by this guard.
+   */
+  if (!isCurrentNseSecurity(symbol)) {
+    const error = new Error(
+      "PRACTICE_SECURITY_NOT_CURRENTLY_AVAILABLE"
+    );
+
+    error.code =
+      "PRACTICE_SECURITY_NOT_CURRENTLY_AVAILABLE";
+
+    error.symbol = symbol;
+
+    throw error;
+  }
+
+  const name =
+    String(
+      security?.name ||
+        security?.companyName ||
+        symbol
+    ).trim();
+
+  const sector =
+    String(
+      security?.sector ||
+        security?.industry ||
+        "NSE"
+    ).trim();
+
+  const price = Number(
+    security?.price ??
+      security?.lastPrice ??
+      security?.currentPrice
+  );
+
+  if (
+    !symbol ||
+    !Number.isFinite(price) ||
+    price <= 0
+  ) {
+    const error = new Error(
+      "PRACTICE_SECURITY_REPLACEMENT_INVALID_MARKET_SECURITY"
+    );
+    error.code =
+      "PRACTICE_SECURITY_REPLACEMENT_INVALID_MARKET_SECURITY";
+    throw error;
+  }
+
+  const quantity =
+    Number(order?.quantity || 0);
+
+  const gross =
+    quantity * price;
+
+  return await updateExecutionOrder(
+    orderId,
+    {
+      symbol,
+      name: name || symbol,
+      sector: sector || "NSE",
+      price,
+      gross,
+      amount: gross,
+      message:
+        `Practice security changed to ${symbol} during investor review`,
+      updatedAt: new Date().toISOString()
+    }
+  );
+}
+
 
 
 async function assertRealOrderBrokerAssignment(order = {}, execution = {}) {
@@ -978,15 +1338,81 @@ export async function markExecutionOrderFilled(orderId, trade = {}) {
     throw error;
   }
 
+  const practiceFillStatus =
+    String(order?.status || "").toUpperCase();
+
+  const practiceFillEligible = [
+    ORDER_STATUS.ROUTED,
+    ORDER_STATUS.BROKER_RECEIVED,
+    ORDER_STATUS.PARTIAL_FILL
+  ].includes(practiceFillStatus);
+
+  if (!practiceFillEligible) {
+    const error = new Error(
+      "PRACTICE_ORDER_NOT_READY_FOR_FILL"
+    );
+
+    error.code =
+      "PRACTICE_ORDER_NOT_READY_FOR_FILL";
+
+    error.orderId =
+      order?.id || orderId;
+
+    error.status =
+      practiceFillStatus || null;
+
+    throw error;
+  }
+
+  /*
+   * PC-031B4M7C2
+   *
+   * Canonical Practice accounting owns the economic
+   * settlement boundary.
+   *
+   * The Practice Portfolio must be settled successfully
+   * before OMS is allowed to transition this order to
+   * FILLED.
+   *
+   * settlePracticeExecutionOrder() is durably idempotent:
+   * if portfolio settlement already succeeded during an
+   * interrupted attempt, retry returns alreadyApplied
+   * without debiting/crediting holdings or cash twice.
+   */
+  const settlement =
+    await settlePracticeExecutionOrder({
+      order,
+      trade
+    });
+
+  const practiceAccounting =
+    settlement?.accounting || null;
+
+  const filledAt =
+    trade?.filledAt ||
+    new Date().toISOString();
+
   return await updateExecutionOrder(orderId, {
+    executionMode: "PRACTICE",
     status: ORDER_STATUS.FILLED,
-    message: "Filled by GateCEP Broker in Practice",
+    message:
+      settlement?.alreadyApplied
+        ? "Practice settlement recovered and OMS fill completed"
+        : "Filled by GateCEP Broker in Practice",
     trade: {
       ...trade,
       executionMode: "PRACTICE",
-      isPractice: true
+      isPractice: true,
+      source:
+        trade?.source ||
+        "GATECEP_BROKER_PRACTICE"
     },
-    filledAt: new Date().toISOString()
+    practiceAccounting: {
+      ...(practiceAccounting || {}),
+      applied: true
+    },
+    filledAt,
+    isPractice: true
   });
 }
 

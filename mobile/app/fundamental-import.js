@@ -43,6 +43,14 @@ import {
   registerBuiltInFundamentalAdapters
 } from "../src/features/fundamentals/providers/registerBuiltInFundamentalAdapters";
 
+import {
+  useAuth
+} from "../src/features/auth/hooks/useAuth";
+
+import {
+  retrieveApifyFundamentalPreview
+} from "../src/features/fundamentals/api/fundamentalEvidenceApi";
+
 /*
  * ============================================================
  * PC-024D
@@ -95,12 +103,24 @@ const IMPORT_MODES = [
 ];
 
 const PROVIDERS = [
-  "GENERIC_PROVIDER"
+  "GENERIC_PROVIDER",
+  "APIFY_FUNDAMENTALS"
 ];
 
 // PC-030M20AV3G RESPONSIVE CALIBRATION
 export default function FundamentalImportScreen() {
   const { width: windowWidth } = useWindowDimensions();
+  const { accessToken } = useAuth();
+
+  const [
+    externalSymbol,
+    setExternalSymbol
+  ] = useState("");
+
+  const [
+    externalEvidence,
+    setExternalEvidence
+  ] = useState(null);
   const [
     loading,
     setLoading
@@ -364,6 +384,95 @@ export default function FundamentalImportScreen() {
       ]
     );
 
+  const handleExternalEvidence =
+    useCallback(
+      async () => {
+        try {
+          setWorking(true);
+          setError("");
+          setImportResult(null);
+          setPreview(null);
+
+          const evidence =
+            await retrieveApifyFundamentalPreview({
+              accessToken,
+              symbol:
+                externalSymbol
+            });
+
+          /*
+           * Keep the exact backend observation as provider input.
+           * The registered APIFY_FUNDAMENTALS adapter owns normalization.
+           */
+          const providerPayload =
+            evidence?.payload ??
+            evidence?.data ??
+            evidence;
+
+          const serialized =
+            JSON.stringify(
+              providerPayload,
+              null,
+              2
+            );
+
+          setFormat(
+            FUNDAMENTAL_IMPORT_FORMATS
+              .PROVIDER_JSON
+          );
+
+          setProviderId(
+            "APIFY_FUNDAMENTALS"
+          );
+
+          setPayloadText(
+            serialized
+          );
+
+          setExternalEvidence(
+            evidence
+          );
+
+          /*
+           * Retrieval is not persistence.
+           * Feed the observation through the existing PC-024 preview
+           * validator. importFundamentalData() is intentionally absent.
+           */
+          const result =
+            previewFundamentalImport({
+              format:
+                FUNDAMENTAL_IMPORT_FORMATS
+                  .PROVIDER_JSON,
+
+              payload:
+                providerPayload,
+
+              providerId:
+                "APIFY_FUNDAMENTALS"
+            });
+
+          setPreview(
+            result
+          );
+        } catch (
+          retrievalError
+        ) {
+          setExternalEvidence(null);
+
+          setError(
+            retrievalError?.message ||
+            "Unable to retrieve external fundamental evidence."
+          );
+        } finally {
+          setWorking(false);
+        }
+      },
+      [
+        accessToken,
+        externalSymbol
+      ]
+    );
+
   const handlePreview =
     useCallback(
       async () => {
@@ -566,6 +675,8 @@ export default function FundamentalImportScreen() {
         setPayloadText("");
         setPreview(null);
         setImportResult(null);
+        setExternalEvidence(null);
+        setExternalSymbol("");
         setError("");
       },
       []
@@ -630,10 +741,10 @@ export default function FundamentalImportScreen() {
           styles.subtitle
         }
       >
-        Import verified company fundamentals from CSV,
+        Import company fundamental evidence from CSV,
         normalized JSON, or registered provider payloads.
-        Preview and validate all records before repository
-        updates.
+        Preview validation and evidence status before any
+        repository update.
       </Text>
 
       {error ? (
@@ -789,6 +900,102 @@ export default function FundamentalImportScreen() {
           }
         />
       </View>
+
+      <Section
+        title="External Fundamental Evidence"
+        description="Retrieve provider evidence for an NSE security. Retrieval runs the existing preview validator only and does not update the repository."
+      >
+        <Text
+          style={
+            styles.fieldLabel
+          }
+        >
+          NSE Security Symbol
+        </Text>
+
+        <TextInput
+          style={
+            styles.externalSymbolInput
+          }
+          autoCapitalize="characters"
+          autoCorrect={
+            false
+          }
+          placeholder="Example: EQTY"
+          placeholderTextColor="#64748b"
+          value={
+            externalSymbol
+          }
+          onChangeText={
+            setExternalSymbol
+          }
+        />
+
+        <Pressable
+          disabled={
+            working ||
+            !externalSymbol.trim()
+          }
+          style={[
+            styles.previewButton,
+
+            (
+              working ||
+              !externalSymbol.trim()
+            ) &&
+              styles.disabled
+          ]}
+          onPress={
+            handleExternalEvidence
+          }
+        >
+          {working ? (
+            <ActivityIndicator
+              color="white"
+            />
+          ) : (
+            <Text
+              style={
+                styles.previewButtonText
+              }
+            >
+              Retrieve External Evidence
+            </Text>
+          )}
+        </Pressable>
+
+        {externalEvidence ? (
+          <View
+            style={
+              styles.externalEvidenceCard
+            }
+          >
+            <Text
+              style={
+                styles.externalEvidenceTitle
+              }
+            >
+              APIFY_FUNDAMENTALS
+            </Text>
+
+            <Text
+              style={
+                styles.externalEvidenceText
+              }
+            >
+              Preview only · Unverified · Non-authoritative
+            </Text>
+
+            <Text
+              style={
+                styles.externalEvidenceText
+              }
+            >
+              No repository update has occurred.
+            </Text>
+          </View>
+        ) : null}
+      </Section>
 
       <Section
         title="Import Configuration"
@@ -2612,7 +2819,40 @@ const styles =
         "white"
     },
 
-    editor: {
+    externalSymbolInput: {
+    borderWidth: 1,
+    borderColor: "#334155",
+    borderRadius: 12,
+    backgroundColor: "#0f172a",
+    color: "#f8fafc",
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginBottom: 12
+  },
+
+  externalEvidenceCard: {
+    marginTop: 14,
+    borderWidth: 1,
+    borderColor: "#334155",
+    borderRadius: 12,
+    backgroundColor: "#0f172a",
+    padding: 14
+  },
+
+  externalEvidenceTitle: {
+    color: "#e2e8f0",
+    fontSize: 13,
+    fontWeight: "800",
+    marginBottom: 5
+  },
+
+  externalEvidenceText: {
+    color: "#94a3b8",
+    fontSize: 12,
+    lineHeight: 18
+  },
+
+  editor: {
       minHeight:
         290,
 

@@ -6,6 +6,7 @@ import { StatusBar } from "expo-status-bar";
 import { AuthProvider } from "../src/features/auth/context/AuthContext";
 import AppMenuButton from "../src/components/navigation/AppMenuButton";
 import FloatingCoachG from "../src/components/coach/FloatingCoachG";
+import WebTopNavigation from "../src/components/web/WebTopNavigation";
 
 export default function Layout() {
   return (
@@ -13,6 +14,7 @@ export default function Layout() {
       <SafeAreaProvider>
         <StatusBar style="light" backgroundColor="#020617" />
         <AuthProvider>
+          <WebTopNavigation />
           <Stack
             screenOptions={{
               headerShown: false,

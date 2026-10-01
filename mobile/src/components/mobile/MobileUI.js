@@ -9,6 +9,30 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
+// PC-031M4R1 — shared investor responsive architecture.
+//
+// Width/height classifications describe viewport capability only.
+// They must not be used to manufacture fixed primary-content heights.
+export function useResponsiveViewport() {
+  const { width, height } = useWindowDimensions();
+
+  const isCompactWidth = width < 480;
+  const isPhoneWidth = width < 720;
+  const isCompactHeight = height < 700;
+  const isLandscape = width > height;
+  const isWide = width >= 960;
+
+  return {
+    width,
+    height,
+    isCompactWidth,
+    isPhoneWidth,
+    isCompactHeight,
+    isLandscape,
+    isWide
+  };
+}
+
 export function calculateResponsivePanelHeight(
   viewportHeight,
   { minHeight = 380, maxHeight = 720, heightRatio = 0.62 } = {}
@@ -37,6 +61,113 @@ export function MobileScreen({ children, footer = null, testID }) {
         {footer ? <View style={styles.footer}>{footer}</View> : null}
       </View>
     </SafeAreaView>
+  );
+}
+
+export function ResponsiveScreen({
+  children,
+  mode = "flow",
+  footer = null,
+  testID
+}) {
+  const viewport = useResponsiveViewport();
+  const flow = mode === "flow";
+
+  const contentStyle = [
+    styles.responsiveContent,
+    viewport.isPhoneWidth && styles.responsiveContentPhone,
+    viewport.isCompactWidth && styles.responsiveContentCompact,
+    !viewport.isPhoneWidth && styles.responsiveContentWide
+  ];
+
+  return (
+    <SafeAreaView style={styles.safe} testID={testID}>
+      <View style={styles.responsiveShell}>
+        {flow ? (
+          <ScrollView
+            style={styles.responsiveFlowScroll}
+            contentContainerStyle={[
+              ...contentStyle,
+              footer && styles.responsiveContentWithFooter
+            ]}
+            keyboardShouldPersistTaps="handled"
+          >
+            {children}
+          </ScrollView>
+        ) : (
+          <View
+            style={[
+              ...contentStyle,
+              styles.responsiveContainedContent,
+              footer && styles.responsiveContentWithFooter
+            ]}
+          >
+            {children}
+          </View>
+        )}
+
+        {footer ? <View style={styles.footer}>{footer}</View> : null}
+      </View>
+    </SafeAreaView>
+  );
+}
+
+export function ResponsiveContent({ children, style = null }) {
+  return (
+    <View style={[styles.responsiveSection, style]}>
+      {children}
+    </View>
+  );
+}
+
+/*
+ * PC-031M4R5C2A
+ *
+ * Shared investor header lane for routes that use the global
+ * application Menu (top-left) and Coach G (top-right) chrome.
+ *
+ * This reserves horizontal chrome space only. It deliberately
+ * does not manufacture screen height or change scroll ownership.
+ *
+ * Portfolio/Home does not need this primitive because it owns
+ * its local hamburger. Routes may also opt out when global chrome
+ * is hidden.
+ */
+export function InvestorTopChromeHeader({
+  children,
+  style = null,
+  compact = true,
+  reserveLeft = true,
+  reserveRight = true,
+  testID
+}) {
+  return (
+    <View
+      testID={testID}
+      style={[
+        styles.investorTopChromeHeader,
+        compact && reserveLeft && styles.investorTopChromeHeaderLeft,
+        compact && reserveRight && styles.investorTopChromeHeaderRight,
+        style
+      ]}
+    >
+      {children}
+    </View>
+  );
+}
+
+export function ResponsiveWorkingRegion({
+  children,
+  style = null,
+  testID
+}) {
+  return (
+    <View
+      style={[styles.responsiveWorkingRegion, style]}
+      testID={testID}
+    >
+      {children}
+    </View>
   );
 }
 
@@ -220,6 +351,61 @@ export function DeveloperIdentifier({ children }) {
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#020617" },
+  // PC-031M4R1 — new responsive architecture.
+  responsiveShell: {
+    flex: 1
+  },
+  responsiveFlowScroll: {
+    flex: 1
+  },
+  responsiveContent: {
+    width: "100%",
+    flexGrow: 1,
+    paddingHorizontal: 22,
+    paddingTop: 70,
+    paddingBottom: 128
+  },
+  responsiveContentPhone: {
+    paddingHorizontal: 16,
+    paddingTop: 32
+  },
+  responsiveContentCompact: {
+    paddingHorizontal: 12,
+    paddingTop: 24
+  },
+  responsiveContentWide: {
+    maxWidth: 960,
+    alignSelf: "center"
+  },
+  responsiveContainedContent: {
+    flex: 1,
+    minHeight: 0
+  },
+  responsiveContentWithFooter: {
+    paddingBottom: 28
+  },
+  responsiveSection: {
+    width: "100%"
+  },
+
+  // PC-031M4R5C2A — horizontal reservation for global top chrome.
+  // Menu: left 14 / width 48. Coach G: right 14 / width 40.
+  investorTopChromeHeader: {
+    width: "100%",
+    minWidth: 0
+  },
+  investorTopChromeHeaderLeft: {
+    paddingLeft: 68
+  },
+  investorTopChromeHeaderRight: {
+    paddingRight: 54
+  },
+
+  responsiveWorkingRegion: {
+    flex: 1,
+    minHeight: 0
+  },
+
   shell: { flex: 1 },
   scroll: { flex: 1 },
   content: { padding: 16, paddingTop: 20, paddingBottom: 32 },

@@ -11,7 +11,7 @@ import { router } from "expo-router";
 
 import { savePortfolio } from "../../src/portfolio/portfolioStore";
 import { saveInvestorProfile } from "../../src/features/profile/api/investorProfileApi";
-import { useMarketData } from "../../src/services/markets/useMarketData";
+import useMarketData from "../../src/services/markets/useMarketData";
 
 import {
   userGetItem,

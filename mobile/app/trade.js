@@ -7,7 +7,9 @@ import {
   StyleSheet,
   Text,
   TextInput,
-  View
+  View,
+  Platform,
+  useWindowDimensions
 } from "react-native";
 import { router, useLocalSearchParams } from "expo-router";
 import useMarketData from "../src/services/markets/useMarketData";
@@ -17,9 +19,12 @@ import { savePracticePortfolio } from "../src/features/investor/investorContextS
 import {
   createBasketExecution,
   loadBasketExecution,
-  markExecutionOrderFilled,
-  saveBasketExecution
+  markExecutionOrderFilled
 } from "../src/trade/basketExecutionStore";
+import { isActiveOrder } from "../src/trade/orderLifecycle";
+import {
+  preflightCanonicalPracticeExecutionOrders
+} from "../src/services/trade/practiceExecutionAccountingService";
 import {
   analyzeAverageCostSale,
   analyzeWeightedAverageBuy
@@ -35,6 +40,8 @@ import { buildGoalRiskStressImpact, extractVerifiedGoalEvidence } from "../src/f
 import { canonicalSecuritySymbol } from "../src/features/trading/securityIdentityService";
 
 import { deriveApproximateScenarioQuantity } from "../src/features/trading/decisionAmountQuantityService";
+import { InvestorTopChromeHeader } from "../src/components/mobile/MobileUI";
+import { buildVerifiedDepthView } from "../src/components/markets/MarketDepthModal";
 const PRACTICE_FEE_POLICY = {
   commissionRatePct: 1.2,
   otherChargesRatePct: 0.2,
@@ -50,6 +57,12 @@ const BROKER_EVIDENCED_FEE_POLICY = {
 };
 
 export default function Trade() {
+  const { width: tradeViewportWidth } = useWindowDimensions();
+
+  const wideWeb =
+    Platform.OS === "web" &&
+    tradeViewportWidth >= 1100;
+
   const { symbol: requestedSymbol, mode, side: requestedSide /* PC-030M20AQ2 requestedSide */, decisionAmount: requestedDecisionAmount, decisionLab: decisionLabParam, proposedAmount: requestedProposedAmount, amount: requestedAmount } = useLocalSearchParams();
 
   // PC-030M20AT2A route-contract correction
@@ -103,6 +116,7 @@ export default function Trade() {
   const [limitPrice, setLimitPrice] = useState("");
   const [confirmedTrade, setConfirmedTrade] = useState(null);
   const [activeExecution, setActiveExecution] = useState(null);
+  const [reviewBlockedFeedback, setReviewBlockedFeedback] = useState(null);
   const [securityPickerOpen, setSecurityPickerOpen] = useState(false);
   const [realTransactions, setRealTransactions] = useState([]);
   const [saleCostMethod, setSaleCostMethod] = useState("FIFO");
@@ -123,25 +137,80 @@ export default function Trade() {
       requestedSymbol || selectedStock?.symbol || ""
     );
 
-    const verified =
+    const currentMarketSecurity =
       stocks.find(
-        (item) => canonicalSecuritySymbol(item.symbol) === target
-      ) || (!target ? stocks[0] : null);
+        (item) =>
+          canonicalSecuritySymbol(item.symbol) === target
+      ) || null;
+
+    const historicalPracticeHolding =
+      String(requestedSide || "").toUpperCase() === "SELL"
+        ? portfolio.find(
+            (item) =>
+              canonicalSecuritySymbol(item.symbol) === target
+          ) || null
+        : null;
+
+    const verified =
+      currentMarketSecurity ||
+      historicalPracticeHolding;
+
+    /*
+     * PC-032G4B1B — Intentional Security Selection
+     *
+     * A generic /trade entry does not imply an investor security decision.
+     * Explicit route symbols, historical SELL evidence, basket-order
+     * loading and manual picker selection remain authoritative.
+     */
 
     if (!verified) return;
+
+    const historicalReferencePrice =
+      Number(
+        verified.marketPrice ||
+          verified.price ||
+          verified.averagePrice ||
+          verified.averageCost ||
+          0
+      );
+
+    const selectedPrice =
+      currentMarketSecurity
+        ? Number(currentMarketSecurity.price || 0)
+        : historicalReferencePrice;
 
     setSelectedStock({
       ...verified,
       providerSymbol:
         verified.providerSymbol ||
-        (canonicalSecuritySymbol(verified.symbol) !== String(verified.symbol || "").toUpperCase()
-          ? verified.symbol
-          : undefined),
-      symbol: canonicalSecuritySymbol(verified.symbol)
+        (
+          canonicalSecuritySymbol(verified.symbol) !==
+          String(verified.symbol || "").toUpperCase()
+            ? verified.symbol
+            : undefined
+        ),
+      symbol: canonicalSecuritySymbol(verified.symbol),
+      price: selectedPrice,
+      historicalPracticeHolding:
+        Boolean(
+          historicalPracticeHolding &&
+          !currentMarketSecurity
+        ),
+      currentMarketQuoteAvailable:
+        Boolean(currentMarketSecurity)
     });
-    setLimitPrice(String(verified.price));
+
+    if (selectedPrice > 0) {
+      setLimitPrice(String(selectedPrice));
+    }
+
     setConfirmedTrade(null);
-  }, [stocks, requestedSymbol]);
+  }, [
+    stocks,
+    requestedSymbol,
+    requestedSide,
+    portfolio
+  ]);
 
 
 
@@ -188,8 +257,17 @@ export default function Trade() {
       setActiveExecution(execution);
 
       const nextOrder =
-        execution.orders.find((order) => order.status !== "FILLED") ||
-        execution.orders[0];
+        execution.orders.find(
+          (order) =>
+            [
+              "ROUTED",
+              "BROKER_RECEIVED",
+              "PARTIAL_FILL"
+            ].includes(
+              String(order?.status || "").toUpperCase()
+            )
+        ) ||
+        null;
 
       loadOrderIntoTicket(nextOrder);
     } else if (
@@ -275,6 +353,11 @@ export default function Trade() {
     [averageCostMode, scenarioExtraCharges]
   );
 
+  const verifiedMarketDepth = useMemo(
+    () => buildVerifiedDepthView(selectedStock),
+    [selectedStock]
+  );
+
   const estimate = useMemo(() => {
     return buildEstimate({
       side,
@@ -313,13 +396,73 @@ export default function Trade() {
   );
 
   const existingHolding =
-    practiceHolding || (averageCostMode ? realHolding : null);
+    averageCostMode ? realHolding : practiceHolding;
 
-  const holdingSource = practiceHolding
-    ? "PRACTICE"
+  /*
+   * PC-031B4M7C5D7I6E4D6F2
+   *
+   * Presentation-only Practice SELL validation.
+   *
+   * The canonical Practice accounting service remains the
+   * final authority for settlement and independently rejects
+   * overselling with PRACTICE_SELL_QUANTITY_EXCEEDED.
+   */
+  const practiceHeldQuantity =
+    Number(
+      practiceHolding?.quantity ||
+      practiceHolding?.shares ||
+      0
+    );
+
+  const practiceSellQuantityExceeded =
+    !averageCostMode &&
+    side === "SELL" &&
+    Number(estimate.qty || 0) >
+      practiceHeldQuantity;
+
+  const practiceSellHoldingMissing =
+    !averageCostMode &&
+    side === "SELL" &&
+    practiceHeldQuantity <= 0;
+
+  const practiceSellBlocked =
+    practiceSellHoldingMissing ||
+    practiceSellQuantityExceeded;
+
+  const hasSelectedSecurity = Boolean(
+    canonicalSecuritySymbol(selectedStock.symbol || "")
+  );
+
+  const holdingSource = !hasSelectedSecurity
+    ? "—"
     : existingHolding
-    ? "REAL READ-ONLY"
-    : "NOT HELD";
+      ? averageCostMode
+        ? "REAL READ-ONLY"
+        : "PRACTICE"
+      : "NOT HELD";
+
+  const currentPositionQuantity = existingHolding
+    ? Number(
+        existingHolding.quantity ??
+        existingHolding.shares ??
+        0
+      )
+    : null;
+
+  const currentPositionAverage = existingHolding
+    ? Number(
+        existingHolding.averagePrice ??
+        existingHolding.averageCost ??
+        0
+      )
+    : null;
+
+  const currentPositionValue =
+    currentPositionQuantity !== null &&
+    Number(selectedStock?.price || 0) > 0
+      ? currentPositionQuantity *
+        Number(selectedStock.price)
+      : null;
 
   // PC-030M20AT2B initialization-order hotfix
   // Must stay after existingHolding is initialized.
@@ -497,6 +640,14 @@ export default function Trade() {
   [averageCostMode, realHoldings, portfolio, projectedImpact, goalEvidence, stressLossPercent]);
 
   async function addToBrokerActionPlan() {
+    if (!hasSelectedSecurity) {
+      Alert.alert(
+        "Select Security",
+        "Choose a verified NSE security before continuing."
+      );
+      return;
+    }
+
     if (!averageGuard?.available) {
       Alert.alert(
         "Scenario Incomplete",
@@ -538,6 +689,16 @@ export default function Trade() {
   }
 
   async function proceedRealOrderToReview() {
+    if (!hasSelectedSecurity) {
+      Alert.alert(
+        "Select Security",
+        "Choose a verified NSE security before continuing."
+      );
+      return;
+    }
+
+    setReviewBlockedFeedback(null);
+
     if (!averageCostMode) {
       Alert.alert(
         "REAL Decision Review Required",
@@ -565,13 +726,55 @@ export default function Trade() {
       return;
     }
 
+    /*
+     * PC-031B4M7C5D7F5H2
+     *
+     * Caller UX guard only.
+     *
+     * Use the canonical active-order status contract rather than relying
+     * on an aggregate activeOrders field.
+     *
+     * This check runs before saveTradeBasket(); D7F5G remains the final
+     * store-level authority against active execution replacement.
+     */
     const existingExecution = await loadBasketExecution();
+    const activeExistingOrders =
+      existingExecution?.orders?.filter((order) =>
+        isActiveOrder(order.status)
+      ) || [];
 
-    if (Number(existingExecution?.activeOrders || 0) > 0) {
-      Alert.alert(
-        "Active Orders Already Exist",
-        "Review or complete the current order queue before creating another REAL order."
-      );
+    const hasActiveExecution =
+      activeExistingOrders.length > 0;
+
+    if (hasActiveExecution) {
+      if (wideWeb) {
+        setReviewBlockedFeedback({
+          title: "Existing Order Review In Progress",
+          message:
+            `${activeExistingOrders.length} active order${
+              activeExistingOrders.length === 1 ? "" : "s"
+            } already ${
+              activeExistingOrders.length === 1 ? "requires" : "require"
+            } review or completion. Your ${side} ${selectedStock.symbol} order was not created.`,
+          orderCount: activeExistingOrders.length
+        });
+      } else {
+        Alert.alert(
+          "Active Orders Already Exist",
+          "Review or complete the current order execution before creating another REAL order.",
+          [
+            {
+              text: "Cancel",
+              style: "cancel"
+            },
+            {
+              text: "Open Current Execution",
+              onPress: () =>
+                router.push("/basket-execution")
+            }
+          ]
+        );
+      }
       return;
     }
 
@@ -799,6 +1002,14 @@ export default function Trade() {
 
   async function confirmTrade() {
     try {
+      if (!hasSelectedSecurity) {
+        Alert.alert(
+          "Select Security",
+          "Choose a verified NSE security before continuing."
+        );
+        return;
+      }
+
       if (isRealExecution(activeExecution)) {
         Alert.alert(
           "Verified Broker Evidence Required",
@@ -867,16 +1078,128 @@ export default function Trade() {
         source: "TRADE_SIMULATION"
       });
 
-      await persistTrade({
-        trade,
-        nextPortfolio,
-        nextCash: estimate.remainingCash
-      });
+      const executionOrder =
+        findCurrentPracticeExecutionOrder();
 
-      await markBasketOrderFilled(trade);
+      if (executionOrder) {
+        /*
+         * PC-031B4M7C4
+         *
+         * OMS-backed Practice orders have exactly one
+         * accounting authority:
+         *
+         * markExecutionOrderFilled()
+         *   -> settlePracticeExecutionOrder()
+         *   -> canonical Practice Portfolio
+         *
+         * Do NOT call persistTrade() first or the same
+         * economic fill would be applied twice.
+         */
+        await markBasketOrderFilled(
+          trade,
+          executionOrder
+        );
 
-      setPortfolio(nextPortfolio);
-      setCash(estimate.remainingCash);
+        await reloadPracticeState();
+      } else {
+        /*
+         * PC-031B4M7C5D7I6E4D6C
+         *
+         * A new Practice order must enter the persisted OMS
+         * lifecycle before any economic mutation occurs.
+         *
+         * Historical holdings may be disposed through SELL,
+         * but this does not make an unavailable security
+         * eligible for a new BUY.
+         *
+         * saveTradeBasket()
+         *   -> createBasketExecution()
+         *   -> REVIEW
+         *   -> Orders Review
+         *   -> canonical Practice orchestrator
+         *   -> markExecutionOrderFilled()
+         *   -> canonical Practice settlement
+         *
+         * Do NOT call persistTrade() here.
+         */
+        if (
+          side === "BUY" &&
+          selectedStock?.historicalPracticeHolding === true &&
+          selectedStock?.currentMarketQuoteAvailable !== true
+        ) {
+          const error = new Error(
+            "PRACTICE_SECURITY_NOT_CURRENTLY_AVAILABLE"
+          );
+          error.code =
+            "PRACTICE_SECURITY_NOT_CURRENTLY_AVAILABLE";
+          throw error;
+        }
+
+        const existingExecution =
+          await loadBasketExecution();
+
+        const hasActiveExecution =
+          existingExecution?.orders?.some(
+            (order) => isActiveOrder(order?.status)
+          ) === true;
+
+        if (hasActiveExecution) {
+          const error = new Error(
+            "ACTIVE_EXECUTION_REPLACEMENT_FORBIDDEN"
+          );
+          error.code =
+            "ACTIVE_EXECUTION_REPLACEMENT_FORBIDDEN";
+          throw error;
+        }
+
+        await saveTradeBasket(
+          [
+            {
+              symbol: selectedStock.symbol,
+              name:
+                selectedStock.name ||
+                selectedStock.symbol,
+              sector:
+                selectedStock.sector ||
+                "Unknown",
+              side,
+              quantity: estimate.qty,
+              price: estimate.price,
+              amount: estimate.totalCost,
+              reason:
+                side === "SELL" &&
+                selectedStock
+                  ?.historicalPracticeHolding
+                  ? "Practice disposal of an existing historical holding"
+                  : "Practice investor order"
+            }
+          ],
+          "PRACTICE_TRADE",
+          {
+            executionMode: "PRACTICE",
+            brokerId:
+              "GATECEP_PRACTICE"
+          }
+        );
+
+        const nextExecution =
+          await createBasketExecution({
+            forceNew: true
+          });
+
+        if (!nextExecution?.orders?.length) {
+          throw new Error(
+            "PRACTICE_EXECUTION_CREATION_FAILED"
+          );
+        }
+
+        setActiveExecution(nextExecution);
+        setConfirmedTrade(null);
+
+        router.push("/orders-review");
+        return;
+      }
+
       setConfirmedTrade(trade);
 
       Alert.alert(
@@ -891,17 +1214,60 @@ export default function Trade() {
     }
   }
 
-  async function markBasketOrderFilled(trade) {
-    if (!activeExecution?.orders?.length) return;
+  function findCurrentPracticeExecutionOrder() {
+    if (!activeExecution?.orders?.length) {
+      return null;
+    }
 
-    const currentOrder = activeExecution.orders.find(
-      (order) =>
-        String(order.symbol).toUpperCase() ===
-          selectedStock.symbol &&
-        order.status !== "FILLED"
+    if (isRealExecution(activeExecution)) {
+      return null;
+    }
+
+    return (
+      activeExecution.orders.find(
+        (order) =>
+          String(order.symbol || "").toUpperCase() ===
+            String(selectedStock.symbol || "").toUpperCase() &&
+          [
+            "ROUTED",
+            "BROKER_RECEIVED",
+            "PARTIAL_FILL"
+          ].includes(
+            String(order?.status || "").toUpperCase()
+          )
+      ) || null
+    );
+  }
+
+  async function reloadPracticeState() {
+    const practiceRaw =
+      await userGetItem("practicePortfolio");
+
+    const practice =
+      practiceRaw ? JSON.parse(practiceRaw) : {};
+
+    setPortfolio(
+      Array.isArray(practice?.holdings)
+        ? practice.holdings
+        : []
     );
 
-    if (!currentOrder) return;
+    setCash(
+      Number(practice?.availableCash || 0)
+    );
+  }
+
+  async function markBasketOrderFilled(
+    trade,
+    explicitOrder = null
+  ) {
+    if (!activeExecution?.orders?.length) return null;
+
+    const currentOrder =
+      explicitOrder ||
+      findCurrentPracticeExecutionOrder();
+
+    if (!currentOrder) return null;
 
     const updated = await markExecutionOrderFilled(
       currentOrder.id,
@@ -915,7 +1281,14 @@ export default function Trade() {
     setActiveExecution(updated);
 
     const nextOrder = updated?.orders?.find(
-      (order) => order.status !== "FILLED"
+      (order) =>
+        [
+          "ROUTED",
+          "BROKER_RECEIVED",
+          "PARTIAL_FILL"
+        ].includes(
+          String(order?.status || "").toUpperCase()
+        )
     );
 
     if (nextOrder) {
@@ -943,7 +1316,16 @@ export default function Trade() {
     }
 
     const pendingOrders = activeExecution.orders
-      .filter((order) => order.status !== "FILLED")
+      .filter(
+        (order) =>
+          [
+            "ROUTED",
+            "BROKER_RECEIVED",
+            "PARTIAL_FILL"
+          ].includes(
+            String(order?.status || "").toUpperCase()
+          )
+      )
       .map(normalizeBasketOrder)
       .filter(
         (order) => order.quantity > 0 && order.price > 0
@@ -983,145 +1365,46 @@ export default function Trade() {
         throw error;
       }
 
-      const brokerProfile = await getBrokerProfile();
-
-      let workingPortfolio = [...portfolio];
-      let workingCash = Number(cash || 0);
-
-      const tradeRaw = await userGetItem(
-        "practiceSimulatedTrades"
+      /*
+       * PC-031B4M7C4
+       *
+       * Validate the complete Practice basket against one
+       * canonical cash/holdings view before the first order
+       * can settle.
+       */
+      await preflightCanonicalPracticeExecutionOrders(
+        pendingOrders
       );
-      const trades = tradeRaw ? JSON.parse(tradeRaw) : [];
 
-      const updatedOrders =
-        activeExecution.orders.map(normalizeBasketOrder);
+      let latestExecution = activeExecution;
 
       for (const order of pendingOrders) {
-        const stock =
-          stocks.find(
-            (item) => item.symbol === order.symbol
-          ) || {
-            symbol: order.symbol,
-            name: order.name || order.symbol,
-            sector: order.sector || "NSE",
-            price: order.price,
-            reason:
-              order.reason || "Coach G basket order"
-          };
-
-        const itemEstimate = buildEstimate({
-          side: order.side || "BUY",
-          quantity: order.quantity,
-          price: order.price,
-          cash: workingCash
-        });
-
-        const validation = validateOrder({
-          side: order.side || "BUY",
-          symbol: stock.symbol,
-          quantity: itemEstimate.qty,
-          price: itemEstimate.price,
-          cash: workingCash,
-          totalCost: itemEstimate.totalCost,
-          portfolio: workingPortfolio,
-          brokerProfile
-        });
-
-        if (!validation.ok) {
-          throw new Error(
-            `${stock.symbol}: ${validation.errors.join(", ")}`
+        latestExecution =
+          await markExecutionOrderFilled(
+            order.id,
+            {
+              symbol: order.symbol,
+              side: order.side || "BUY",
+              quantity: order.quantity,
+              price: order.price,
+              brokerId:
+                order.brokerId ||
+                "GATECEP_PRACTICE",
+              brokerName:
+                order.brokerName ||
+                "GateCEP Broker",
+              brokerOrderId:
+                order.brokerOrderId || null,
+              filledAt:
+                new Date().toISOString(),
+              source:
+                "GATECEP_BROKER_PRACTICE"
+            }
           );
-        }
-
-        if (
-          (order.side || "BUY") === "BUY" &&
-          itemEstimate.remainingCash < 0
-        ) {
-          throw new Error(
-            `${stock.symbol}: insufficient cash. Required KES ${money(
-              itemEstimate.totalCost
-            )}.`
-          );
-        }
-
-        workingPortfolio = applyTradeToPortfolio({
-          currentPortfolio: workingPortfolio,
-          stock,
-          tradeSide: order.side || "BUY",
-          qty: itemEstimate.qty,
-          price: itemEstimate.price,
-          totalCost: itemEstimate.totalCost,
-          gross: itemEstimate.gross
-        });
-
-        const trade = buildTrade({
-          stock,
-          tradeSide: order.side || "BUY",
-          estimate: itemEstimate,
-          cashBefore: workingCash,
-          cashAfter: itemEstimate.remainingCash,
-          source: "BASKET_EXECUTION"
-        });
-
-        trades.unshift(trade);
-        workingCash = itemEstimate.remainingCash;
-
-        const index = updatedOrders.findIndex(
-          (item) => item.id === order.id
-        );
-
-        if (index >= 0) {
-          updatedOrders[index] = {
-            ...updatedOrders[index],
-            status: "FILLED",
-            message: "Executed through Buy All",
-            trade,
-            filledAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString()
-          };
-        }
       }
 
-      const completedOrders = updatedOrders.filter(
-        (order) => order.status === "FILLED"
-      ).length;
-
-      const updatedExecution = {
-        ...activeExecution,
-        status:
-          completedOrders === updatedOrders.length
-            ? "COMPLETED"
-            : "IN_PROGRESS",
-        completedOrders,
-        failedOrders: updatedOrders.filter(
-          (order) => order.status === "FAILED"
-        ).length,
-        totalOrders: updatedOrders.length,
-        orders: updatedOrders,
-        updatedAt: new Date().toISOString(),
-        completedAt:
-          completedOrders === updatedOrders.length
-            ? new Date().toISOString()
-            : activeExecution.completedAt
-      };
-
-      await savePracticePortfolio({
-        holdings: workingPortfolio,
-        availableCash: workingCash,
-        status: "ACTIVE",
-        lastActivityType: "BASKET_TRADE_SIMULATION"
-      });
-
-      await userSetItem(
-        "practiceSimulatedTrades",
-        JSON.stringify(trades)
-      );
-
-      await saveBasketExecution(updatedExecution);
-
-      setPortfolio(workingPortfolio);
-      setCash(workingCash);
-      setActiveExecution(updatedExecution);
+      setActiveExecution(latestExecution);
+      await reloadPracticeState();
       setConfirmedTrade(null);
 
       Alert.alert(
@@ -1129,16 +1412,56 @@ export default function Trade() {
         `${pendingOrders.length} basket orders executed successfully.`
       );
     } catch (error) {
+      if (
+        error?.code ===
+        "INSUFFICIENT_PRACTICE_CASH"
+      ) {
+        Alert.alert(
+          "Practice Funds Required",
+          `This Practice basket needs KES ${
+            Number(
+              error?.requiredCash || 0
+            ).toFixed(2)
+          } for the next required settlement, but only KES ${
+            Number(
+              error?.availableCash || 0
+            ).toFixed(2)
+          } is available. Deposit Practice funds before executing this basket.`,
+          [
+            {
+              text: "Cancel",
+              style: "cancel"
+            },
+            {
+              text: "Open Practice Funds",
+              onPress: () =>
+                router.push(
+                  "/(tabs)/funds?source=PRACTICE"
+                )
+            }
+          ]
+        );
+        return;
+      }
+
       Alert.alert(
         "Basket Execution Failed",
-        error.message
+        error.message ||
+          "Practice basket could not be executed."
       );
     }
   }
 
   const basketRemaining =
     activeExecution?.orders?.filter(
-      (order) => order.status !== "FILLED"
+      (order) =>
+        [
+          "ROUTED",
+          "BROKER_RECEIVED",
+          "PARTIAL_FILL"
+        ].includes(
+          String(order?.status || "").toUpperCase()
+        )
     ).length || 0;
 
   const normalizedExecutionOrders =
@@ -1151,14 +1474,25 @@ export default function Trade() {
   return (
     <ScrollView
       style={styles.screen}
-      contentContainerStyle={styles.content}
+      contentContainerStyle={[
+        styles.content,
+        wideWeb && styles.contentWideWeb
+      ]}
     >
       <View style={styles.headerRow}>
-        <Text style={styles.title}>
-          {averageCostMode
-            ? "Trade Lab — Average Cost Scenario"
-            : "Practice Trade"}
-        </Text>
+        <InvestorTopChromeHeader
+          reserveRight={false}
+          style={{ flex: 1, minWidth: 0 }}
+          testID="trade-lab-top-chrome"
+        >
+          <Text style={styles.title}>
+            {wideWeb
+              ? "Trading"
+              : averageCostMode
+              ? "Trade Lab — Average Cost Scenario"
+              : "Practice Trade"}
+          </Text>
+        </InvestorTopChromeHeader>
 
         <Pressable
           style={styles.dashboardButton}
@@ -1177,6 +1511,44 @@ export default function Trade() {
           ? "Test price, quantity and temporary cash without creating a trade or changing any saved portfolio record."
           : "Simulate decisions using Practice cash and holdings. Nothing here changes your REAL broker portfolio."}
       </Text>
+
+      {wideWeb ? (
+        <View style={styles.terminalContextBar}>
+          <View style={styles.terminalContextPrimary}>
+            <Text style={styles.terminalSectionEyebrow}>
+              {averageCostMode ? "REAL DECISION PREVIEW" : "PRACTICE EXECUTION"}
+            </Text>
+            <Text style={styles.terminalContextSymbol}>
+              {selectedStock.symbol || "Select a security"}
+            </Text>
+            <Text style={styles.small}>
+              {selectedStock.name || "Choose a verified NSE security to begin"}
+              {selectedStock.sector ? ` • ${selectedStock.sector}` : ""}
+            </Text>
+          </View>
+
+          <View style={styles.terminalContextMetric}>
+            <Text style={styles.metricLabel}>Market Price</Text>
+            <Text style={styles.metricValue}>
+              {selectedStock.price
+                ? `KES ${money(selectedStock.price)}`
+                : "Unavailable"}
+            </Text>
+          </View>
+
+          <View style={styles.terminalContextMetric}>
+            <Text style={styles.metricLabel}>Position Source</Text>
+            <Text style={styles.metricValue}>{holdingSource}</Text>
+          </View>
+
+          <View style={styles.terminalContextMetric}>
+            <Text style={styles.metricLabel}>
+              {averageCostMode ? "Scenario Cash" : "Practice Cash"}
+            </Text>
+            <Text style={styles.metricValue}>KES {money(cash)}</Text>
+          </View>
+        </View>
+      ) : null}
 
       {activeExecution ? (
         <View style={styles.card}>
@@ -1246,6 +1618,7 @@ export default function Trade() {
         </View>
       ) : null}
 
+      {!wideWeb ? (
       <View style={styles.summaryCard}>
         {averageCostMode ? (
           <View style={styles.metric}>
@@ -1285,11 +1658,14 @@ export default function Trade() {
           value={holdingSource}
         />
       </View>
+      ) : null}
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>
-          Choose Security
-        </Text>
+      <View style={wideWeb ? styles.terminalGrid : null}>
+        <View style={wideWeb ? styles.terminalMarketColumn : null}>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>
+              {wideWeb ? "Security & Position" : "Choose Security"}
+            </Text>
 
         {market.loading ? (
           <Text style={styles.small}>
@@ -1332,7 +1708,112 @@ export default function Trade() {
               : "▾"}
           </Text>
         </Pressable>
-      </View>
+
+            {wideWeb ? (
+              <View style={styles.terminalPositionEvidence}>
+                <Text style={styles.terminalSectionEyebrow}>
+                  CURRENT POSITION
+                </Text>
+
+                <View style={styles.terminalPositionRow}>
+                  <Text style={styles.metricLabel}>Shares Owned</Text>
+                  <Text style={styles.terminalPositionValue}>
+                    {!hasSelectedSecurity
+                      ? "—"
+                      : currentPositionQuantity === null
+                        ? "Not held"
+                        : currentPositionQuantity.toLocaleString()}
+                  </Text>
+                </View>
+
+                <View style={styles.terminalPositionRow}>
+                  <Text style={styles.metricLabel}>Weighted Average</Text>
+                  <Text style={styles.terminalPositionValue}>
+                    {!hasSelectedSecurity
+                      ? "—"
+                      : currentPositionAverage === null ||
+                        !(currentPositionAverage > 0)
+                        ? "N/A"
+                        : `KES ${money(currentPositionAverage)}`}
+                  </Text>
+                </View>
+
+                <View style={styles.terminalPositionRow}>
+                  <Text style={styles.metricLabel}>Position Value</Text>
+                  <Text style={styles.terminalPositionValue}>
+                    {!hasSelectedSecurity
+                      ? "—"
+                      : currentPositionValue === null
+                        ? "N/A"
+                        : `KES ${money(currentPositionValue)}`}
+                  </Text>
+                </View>
+
+                <View style={styles.terminalPositionRow}>
+                  <Text style={styles.metricLabel}>Portfolio Weight</Text>
+                  <Text style={styles.terminalPositionValue}>
+                    {!hasSelectedSecurity
+                      ? "—"
+                      : projectedImpact?.available
+                        ? `${projectedImpact.current.portfolioWeightPct.toFixed(2)}%`
+                        : "N/A"}
+                  </Text>
+                </View>
+
+                <View style={styles.terminalPositionRow}>
+                  <Text style={styles.metricLabel}>
+                    {hasSelectedSecurity && selectedStock?.sector
+                      ? `${selectedStock.sector} Exposure`
+                      : "Sector Exposure"}
+                  </Text>
+                  <Text style={styles.terminalPositionValue}>
+                    {!hasSelectedSecurity
+                      ? "—"
+                      : projectedImpact?.available
+                        ? `${projectedImpact.current.sectorExposurePct.toFixed(2)}%`
+                        : "N/A"}
+                  </Text>
+                </View>
+
+                <View style={styles.terminalPositionRow}>
+                  <Text style={styles.metricLabel}>Evidence Source</Text>
+                  <Text style={styles.terminalPositionValue}>
+                    {holdingSource}
+                  </Text>
+                </View>
+
+                {averageCostMode ? (
+                  <View style={styles.terminalScenarioCash}>
+                    <Text style={styles.metricLabel}>
+                      Scenario Cash (editable)
+                    </Text>
+                    <TextInput
+                      value={String(cash)}
+                      onChangeText={(value) =>
+                        setCash(value.replace(/[^0-9.]/g, ""))
+                      }
+                      keyboardType="numeric"
+                      style={styles.cashInput}
+                      accessibilityLabel="Editable scenario cash"
+                    />
+                    <Text style={styles.metricHint}>
+                      Temporary scenario input — not verified broker buying power.
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.terminalScenarioCash}>
+                    <Text style={styles.metricLabel}>
+                      Available Practice Cash
+                    </Text>
+                    <Text style={styles.terminalPositionValue}>
+                      KES {money(cash)}
+                    </Text>
+                  </View>
+                )}
+              </View>
+            ) : null}
+          </View>
+        </View>
 
       <Modal
         visible={securityPickerOpen}
@@ -1400,10 +1881,15 @@ export default function Trade() {
         </Pressable>
       </Modal>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>
-          {averageCostMode ? "Scenario Inputs" : "Order Ticket"}
-        </Text>
+        <View style={wideWeb ? styles.terminalTicketColumn : null}>
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>
+              {wideWeb
+                ? `${side} Order`
+                : averageCostMode
+                ? "Scenario Inputs"
+                : "Order Ticket"}
+            </Text>
 
         <View style={styles.sideRow}>
           {["BUY", "SELL"].map((item) => (
@@ -1597,8 +2083,90 @@ export default function Trade() {
             </Text>
           </>
         ) : null}
+          </View>
+        </View>
       </View>
 
+      {wideWeb && averageCostMode ? (
+        <View style={styles.terminalMarketEvidence}>
+          <Text style={styles.terminalSectionEyebrow}>
+            MARKET EVIDENCE
+          </Text>
+
+          <View style={styles.terminalMarketEvidenceGrid}>
+            <View style={styles.terminalMarketEvidenceMetric}>
+              <Text style={styles.metricLabel}>Last Price</Text>
+              <Text style={styles.terminalMarketEvidenceValue}>
+                {Number(selectedStock?.price || 0) > 0
+                  ? `KES ${money(selectedStock.price)}`
+                  : "N/A"}
+              </Text>
+            </View>
+
+            <View style={styles.terminalMarketEvidenceMetric}>
+              <Text style={styles.metricLabel}>Best Bid</Text>
+              <Text style={styles.terminalMarketEvidenceValue}>
+                {Number(verifiedMarketDepth?.bestBid || 0) > 0
+                  ? `KES ${money(verifiedMarketDepth.bestBid)}`
+                  : "N/A"}
+              </Text>
+            </View>
+
+            <View style={styles.terminalMarketEvidenceMetric}>
+              <Text style={styles.metricLabel}>Best Ask</Text>
+              <Text style={styles.terminalMarketEvidenceValue}>
+                {Number(verifiedMarketDepth?.bestAsk || 0) > 0
+                  ? `KES ${money(verifiedMarketDepth.bestAsk)}`
+                  : "N/A"}
+              </Text>
+            </View>
+
+            <View style={styles.terminalMarketEvidenceMetric}>
+              <Text style={styles.metricLabel}>Volume</Text>
+              <Text style={styles.terminalMarketEvidenceValue}>
+                {Number(selectedStock?.volume || 0) > 0
+                  ? Number(selectedStock.volume).toLocaleString()
+                  : "N/A"}
+              </Text>
+            </View>
+
+            <View style={styles.terminalMarketEvidenceMetric}>
+              <Text style={styles.metricLabel}>Turnover</Text>
+              <Text style={styles.terminalMarketEvidenceValue}>
+                {Number(selectedStock?.turnover || 0) > 0
+                  ? `KES ${Number(selectedStock.turnover).toLocaleString()}`
+                  : "N/A"}
+              </Text>
+            </View>
+          </View>
+
+          {!verifiedMarketDepth?.available ? (
+            <View style={styles.terminalDepthUnavailable}>
+              <Text style={styles.terminalDepthUnavailableTitle}>
+                Verified Level 2 depth unavailable
+              </Text>
+              <Text style={styles.small}>
+                The current verified market evidence does not include genuine
+                bid/ask order levels. GateCEP will not fabricate market depth.
+              </Text>
+            </View>
+          ) : (
+            <Text style={styles.terminalMarketEvidenceHint}>
+              Genuine bid/ask evidence is available for this security.
+            </Text>
+          )}
+        </View>
+      ) : null}
+
+      <View
+        style={wideWeb && averageCostMode ? styles.terminalDecisionGrid : null}
+      >
+        <View
+          style={wideWeb && averageCostMode ? styles.terminalDecisionColumn : null}
+        >
+          {wideWeb && averageCostMode ? (
+            <Text style={styles.terminalSectionEyebrow}>PROJECTED TRADE</Text>
+          ) : null}
       <View style={styles.card}>
         <Text style={styles.cardTitle}>
           {averageCostMode ? "Scenario Estimate" : "Trade Estimate"}
@@ -1658,10 +2226,22 @@ export default function Trade() {
           style={styles.impactReviewButton}
           onPress={() => setProjectedImpactOpen(true)}
         >
-          <Text style={styles.primaryText}>View Projected Impact</Text>
+          <Text style={styles.primaryText}>
+            {wideWeb && averageCostMode
+              ? "View Full Projected Impact"
+              : "View Projected Impact"}
+          </Text>
         </Pressable>
       ) : null}
 
+        </View>
+
+        <View
+          style={wideWeb && averageCostMode ? styles.terminalDecisionColumn : null}
+        >
+          {wideWeb && averageCostMode ? (
+            <Text style={styles.terminalSectionEyebrow}>COACH G</Text>
+          ) : null}
       {averageGuard ? (
         <View
           style={[
@@ -1873,6 +2453,207 @@ export default function Trade() {
         </View>
       ) : null}
 
+        </View>
+      </View>
+
+      {wideWeb && averageCostMode ? (
+        <View style={styles.terminalSection}>
+          <Text style={styles.terminalSectionEyebrow}>
+            PORTFOLIO IMPACT
+          </Text>
+
+          <Text style={styles.cardTitle}>
+            Current → After → Change
+          </Text>
+
+          <Text style={styles.small}>
+            Advisory scenario only. REAL portfolio evidence has not changed.
+          </Text>
+
+          {!projectedImpact?.available ? (
+            <View style={styles.impactNotice}>
+              <Text style={styles.body}>
+                {projectedImpact?.evidenceMessage ||
+                  "Projected impact is unavailable until the scenario has valid security, quantity and price evidence."}
+              </Text>
+            </View>
+          ) : (
+            <>
+              <View style={styles.terminalImpactHeaderRow}>
+                <Text style={styles.terminalImpactMetricLabel}>
+                  Metric
+                </Text>
+                <Text style={styles.terminalImpactMetricValue}>
+                  Current
+                </Text>
+                <Text style={styles.terminalImpactMetricValue}>
+                  After
+                </Text>
+                <Text style={styles.terminalImpactMetricValue}>
+                  Change
+                </Text>
+              </View>
+
+              {[
+                {
+                  label: "Quantity",
+                  current: String(projectedImpact.current.quantity),
+                  projected: String(projectedImpact.projected.quantity),
+                  change: `${
+                    projectedImpact.projected.quantity -
+                      projectedImpact.current.quantity >=
+                    0
+                      ? "+"
+                      : ""
+                  }${
+                    projectedImpact.projected.quantity -
+                    projectedImpact.current.quantity
+                  }`
+                },
+                {
+                  label: "Weighted Average Price",
+                  current:
+                    projectedImpact.current.weightedAveragePrice == null
+                      ? "N/A"
+                      : `KES ${money(
+                          projectedImpact.current.weightedAveragePrice
+                        )}`,
+                  projected:
+                    projectedImpact.projected.weightedAveragePrice == null
+                      ? "N/A"
+                      : `KES ${money(
+                          projectedImpact.projected.weightedAveragePrice
+                        )}`,
+                  change:
+                    projectedImpact.current.weightedAveragePrice == null ||
+                    projectedImpact.projected.weightedAveragePrice == null
+                      ? "N/A"
+                      : `${
+                          projectedImpact.projected.weightedAveragePrice -
+                            projectedImpact.current.weightedAveragePrice >=
+                          0
+                            ? "+"
+                            : ""
+                        }KES ${money(
+                          projectedImpact.projected.weightedAveragePrice -
+                            projectedImpact.current.weightedAveragePrice
+                        )}`
+                },
+                {
+                  label: "Portfolio Weight",
+                  current: `${projectedImpact.current.portfolioWeightPct.toFixed(
+                    2
+                  )}%`,
+                  projected: `${projectedImpact.projected.portfolioWeightPct.toFixed(
+                    2
+                  )}%`,
+                  change: `${
+                    projectedImpact.projected.portfolioWeightPct -
+                      projectedImpact.current.portfolioWeightPct >=
+                    0
+                      ? "+"
+                      : ""
+                  }${(
+                    projectedImpact.projected.portfolioWeightPct -
+                    projectedImpact.current.portfolioWeightPct
+                  ).toFixed(2)} pp`
+                },
+                {
+                  label: `${projectedImpact.sector} Exposure`,
+                  current: `${projectedImpact.current.sectorExposurePct.toFixed(
+                    2
+                  )}%`,
+                  projected: `${projectedImpact.projected.sectorExposurePct.toFixed(
+                    2
+                  )}%`,
+                  change: `${
+                    projectedImpact.projected.sectorExposurePct -
+                      projectedImpact.current.sectorExposurePct >=
+                    0
+                      ? "+"
+                      : ""
+                  }${(
+                    projectedImpact.projected.sectorExposurePct -
+                    projectedImpact.current.sectorExposurePct
+                  ).toFixed(2)} pp`
+                },
+                {
+                  label: "Available Cash",
+                  current: `KES ${money(
+                    projectedImpact.current.availableCash
+                  )}`,
+                  projected: `KES ${money(
+                    projectedImpact.projected.availableCash
+                  )}`,
+                  change: `${
+                    projectedImpact.projected.availableCash -
+                      projectedImpact.current.availableCash >=
+                    0
+                      ? "+"
+                      : ""
+                  }KES ${money(
+                    projectedImpact.projected.availableCash -
+                      projectedImpact.current.availableCash
+                  )}`
+                }
+              ].map((row) => (
+                <View
+                  key={`terminal-impact-${row.label}`}
+                  style={styles.terminalImpactRow}
+                >
+                  <Text style={styles.terminalImpactMetricLabel}>
+                    {row.label}
+                  </Text>
+
+                  <Text style={styles.terminalImpactMetricValue}>
+                    {row.current}
+                  </Text>
+
+                  <Text style={styles.terminalImpactMetricValue}>
+                    {row.projected}
+                  </Text>
+
+                  <Text style={styles.terminalImpactChangeValue}>
+                    {row.change}
+                  </Text>
+                </View>
+              ))}
+
+              {side === "SELL" ? (
+                <View style={styles.terminalImpactEvidence}>
+                  <Text style={styles.terminalImpactEvidenceLabel}>
+                    FIFO IMPACT
+                  </Text>
+
+                  <View style={styles.terminalImpactEvidenceRow}>
+                    <Text style={styles.terminalImpactEvidenceMetric}>
+                      Cost Basis Released
+                    </Text>
+                    <Text style={styles.terminalImpactEvidenceValue}>
+                      KES{" "}
+                      {money(projectedImpact.projected.costBasisReleased)}
+                    </Text>
+                  </View>
+
+                  <View style={styles.terminalImpactEvidenceRow}>
+                    <Text style={styles.terminalImpactEvidenceMetric}>
+                      Projected Realized Gain / Loss
+                    </Text>
+                    <Text style={styles.terminalImpactEvidenceValue}>
+                      {Number(projectedImpact.projected.realizedGainLoss) > 0
+                        ? "+"
+                        : ""}
+                      KES{" "}
+                      {money(projectedImpact.projected.realizedGainLoss)}
+                    </Text>
+                  </View>
+                </View>
+              ) : null}
+            </>
+          )}
+        </View>
+      ) : null}
+
       <Modal
         visible={projectedImpactOpen}
         transparent
@@ -1881,7 +2662,12 @@ export default function Trade() {
       >
         <View style={styles.impactModalBackdrop}>
           <View style={styles.impactModalCard}>
-            <ScrollView contentContainerStyle={{ paddingBottom: 18 }}>
+            <ScrollView
+              contentContainerStyle={[
+                styles.impactModalScrollContent,
+                wideWeb && styles.impactModalScrollContentWide
+              ]}
+            >
               <Text style={styles.impactEyebrow}>COACH G — PROJECTED IMPACT</Text>
               <Text style={styles.cardTitle}>Current vs Projected</Text>
               <Text style={styles.small}>Advisory scenario only. REAL portfolio evidence has not changed.</Text>
@@ -1985,13 +2771,23 @@ export default function Trade() {
         <Pressable
           style={[
             styles.primary,
-            side === "BUY" &&
-              estimate.remainingCash < 0 &&
+            !hasSelectedSecurity && styles.disabledButton,
+            (
+              (
+                side === "BUY" &&
+                estimate.remainingCash < 0
+              ) ||
+              practiceSellBlocked
+            ) &&
               styles.disabledButton
           ]}
           disabled={
-            side === "BUY" &&
-            estimate.remainingCash < 0
+            !hasSelectedSecurity ||
+            (
+              side === "BUY" &&
+              estimate.remainingCash < 0
+            ) ||
+            practiceSellBlocked
           }
           onPress={confirmTrade}
         >
@@ -1999,33 +2795,207 @@ export default function Trade() {
             {side === "BUY" &&
             estimate.remainingCash < 0
               ? "Insufficient Cash"
+              : practiceSellHoldingMissing
+              ? "No Shares Available to Sell"
+              : practiceSellQuantityExceeded
+              ? `Maximum ${practiceHeldQuantity} Shares`
               : `Confirm Simulated ${side}`}
           </Text>
         </Pressable>
       ) : (
-        <View style={styles.previewOnly}>
-          <Text style={styles.previewOnlyTitle}>
-            Decision Preview — No REAL Trade Executed
-          </Text>
-          <Text style={styles.body}>
-            Coach G is showing the projected Average Cost, FIFO,
-            charges and portfolio impact before you decide.
-            Proceeding creates a REAL order for review only. It
-            does not change REAL holdings, cash, P&amp;L or FIFO until
-            genuine broker execution evidence is verified.
-          </Text>
+        <View
+          style={[
+            styles.previewOnly,
+            wideWeb && styles.terminalReviewCheckpoint
+          ]}
+        >
+          {wideWeb ? (
+            <Text style={styles.terminalSectionEyebrow}>DECISION CHECKPOINT</Text>
+          ) : null}
+          {wideWeb ? (
+            <>
+              <Text style={styles.previewOnlyTitle}>
+                Review Before Creating REAL Order
+              </Text>
+
+              <View style={styles.terminalDecisionSummary}>
+                <View style={styles.terminalDecisionSummaryHeader}>
+                  <View style={styles.terminalDecisionIdentity}>
+                    <Text style={styles.terminalDecisionSecurity}>
+                      {selectedStock?.symbol || "Security"} · {side}
+                    </Text>
+                    <Text style={styles.small}>
+                      {estimate.qty} shares @ KES {money(estimate.price)}
+                    </Text>
+                  </View>
+
+                  <Text style={styles.terminalDecisionMode}>
+                    REAL REVIEW
+                  </Text>
+                </View>
+
+                <View style={styles.terminalDecisionSummaryGrid}>
+                  <View style={styles.terminalDecisionSummaryColumn}>
+                    <Text style={styles.terminalImpactEvidenceLabel}>
+                      ORDER
+                    </Text>
+
+                    <View style={styles.terminalDecisionSummaryRow}>
+                      <Text style={styles.small}>
+                        {side === "SELL"
+                          ? "Estimated Proceeds"
+                          : "Cash Required"}
+                      </Text>
+                      <Text style={styles.terminalDecisionSummaryValue}>
+                        KES{" "}
+                        {money(estimate.totalCost)}
+                      </Text>
+                    </View>
+
+                    <View style={styles.terminalDecisionSummaryRow}>
+                      <Text style={styles.small}>
+                        Estimated Charges
+                      </Text>
+                      <Text style={styles.terminalDecisionSummaryValue}>
+                        KES {money(estimate.totalFees)}
+                      </Text>
+                    </View>
+
+                    <View style={styles.terminalDecisionSummaryRow}>
+                      <Text style={styles.small}>
+                        Cost Basis Method
+                      </Text>
+                      <Text style={styles.terminalDecisionSummaryValue}>
+                        {averageGuard?.costBasisMethod || "N/A"}
+                      </Text>
+                    </View>
+                  </View>
+
+                  <View style={styles.terminalDecisionSummaryColumn}>
+                    <Text style={styles.terminalImpactEvidenceLabel}>
+                      COACH G DECISION CONTEXT
+                    </Text>
+
+                    <View style={styles.terminalDecisionSummaryRow}>
+                      <Text style={styles.small}>
+                        Portfolio Weight
+                      </Text>
+                      <Text style={styles.terminalDecisionSummaryValue}>
+                        {projectedImpact?.available
+                          ? `${projectedImpact.current.portfolioWeightPct.toFixed(
+                              2
+                            )}% → ${projectedImpact.projected.portfolioWeightPct.toFixed(
+                              2
+                            )}%`
+                          : "N/A"}
+                      </Text>
+                    </View>
+
+                    <View style={styles.terminalDecisionSummaryRow}>
+                      <Text style={styles.small}>
+                        {projectedImpact?.available
+                          ? `${projectedImpact.sector} Exposure`
+                          : "Sector Exposure"}
+                      </Text>
+                      <Text style={styles.terminalDecisionSummaryValue}>
+                        {projectedImpact?.available
+                          ? `${projectedImpact.current.sectorExposurePct.toFixed(
+                              2
+                            )}% → ${projectedImpact.projected.sectorExposurePct.toFixed(
+                              2
+                            )}%`
+                          : "N/A"}
+                      </Text>
+                    </View>
+
+                    <View style={styles.terminalDecisionSummaryRow}>
+                      <Text style={styles.small}>
+                        {side === "SELL"
+                          ? "Projected Realized G/L"
+                          : "Projected Weighted Average"}
+                      </Text>
+                      <Text style={styles.terminalDecisionSummaryValue}>
+                        {side === "SELL"
+                          ? averageGuard?.estimatedRealizedProfitLoss == null
+                            ? "N/A"
+                            : `${Number(
+                                averageGuard.estimatedRealizedProfitLoss
+                              ) >= 0
+                                ? "+"
+                                : "-"}KES ${money(
+                                Math.abs(
+                                  Number(
+                                    averageGuard.estimatedRealizedProfitLoss
+                                  )
+                                )
+                              )}`
+                          : averageGuard?.projectedAveragePrice == null
+                          ? "N/A"
+                          : `KES ${money(
+                              averageGuard.projectedAveragePrice
+                            )}`}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              </View>
+
+              <Text style={styles.terminalDecisionBoundary}>
+                No REAL trade has been executed. Continuing creates a REAL
+                order for review only. REAL holdings, cash, P&amp;L and FIFO
+                remain unchanged until genuine broker execution evidence is
+                verified.
+              </Text>
+            </>
+          ) : (
+            <>
+              <Text style={styles.previewOnlyTitle}>
+                Decision Preview — No REAL Trade Executed
+              </Text>
+              <Text style={styles.body}>
+                Coach G is showing the projected Average Cost, FIFO,
+                charges and portfolio impact before you decide.
+                Proceeding creates a REAL order for review only. It
+                does not change REAL holdings, cash, P&amp;L or FIFO until
+                genuine broker execution evidence is verified.
+              </Text>
+            </>
+          )}
+
+          {wideWeb && reviewBlockedFeedback ? (
+            <View style={styles.reviewBlockedBox}>
+              <Text style={styles.reviewBlockedTitle}>
+                {reviewBlockedFeedback.title}
+              </Text>
+
+              <Text style={styles.warningText}>
+                {reviewBlockedFeedback.message}
+              </Text>
+
+              <Pressable
+                style={styles.reviewBlockedAction}
+                onPress={() => router.push("/orders-review")}
+              >
+                <Text style={styles.reviewBlockedActionText}>
+                  Open Current Review
+                </Text>
+              </Pressable>
+            </View>
+          ) : null}
 
           <Pressable
-            style={styles.primary}
+            style={[styles.primary, !hasSelectedSecurity && styles.disabledButton]}
+            disabled={!hasSelectedSecurity}
             onPress={proceedRealOrderToReview}
           >
             <Text style={styles.primaryText}>
-              Proceed to Trade
+              {wideWeb ? `Review ${side} Order` : "Proceed to Trade"}
             </Text>
           </Pressable>
 
           <Pressable
-            style={styles.secondary}
+            style={[styles.secondary, !hasSelectedSecurity && styles.disabledButton]}
+            disabled={!hasSelectedSecurity}
             onPress={addToBrokerActionPlan}
           >
             <Text style={styles.secondaryText}>
@@ -2224,6 +3194,345 @@ const styles = StyleSheet.create({
     paddingTop: 70,
     paddingBottom: 128
   },
+
+  /* PC-032G4A — wide-web investor trading terminal foundation.
+     Presentation only. Existing Trade calculations, accounting,
+     evidence boundaries and order-review contracts remain authoritative. */
+  contentWideWeb: {
+    maxWidth: 1240,
+    paddingHorizontal: 24,
+    paddingTop: 54,
+    paddingBottom: 64
+  },
+
+  terminalContextBar: {
+    marginTop: 18,
+    flexDirection: "row",
+    alignItems: "stretch",
+    gap: 12,
+    backgroundColor: "#0f172a",
+    borderColor: "#1e293b",
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 14
+  },
+
+  terminalContextPrimary: {
+    flex: 1.7,
+    minWidth: 0,
+    justifyContent: "center"
+  },
+
+  terminalContextSymbol: {
+    color: "#ffffff",
+    fontSize: 22,
+    fontWeight: "900",
+    marginBottom: 3
+  },
+
+  terminalContextMetric: {
+    flex: 1,
+    minWidth: 150,
+    justifyContent: "center",
+    backgroundColor: "#020617",
+    borderColor: "#334155",
+    borderWidth: 1,
+    borderRadius: 13,
+    paddingHorizontal: 13,
+    paddingVertical: 10
+  },
+
+  terminalGrid: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 18
+  },
+
+  terminalMarketColumn: {
+    flex: 1.15,
+    minWidth: 0
+  },
+
+  terminalTicketColumn: {
+    flex: 0.85,
+    minWidth: 360,
+    maxWidth: 460
+  },
+
+  terminalPositionEvidence: {
+    marginTop: 18,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#334155"
+  },
+
+  terminalPositionRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 18,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#1e293b"
+  },
+
+  terminalPositionValue: {
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: "800",
+    textAlign: "right"
+  },
+
+  terminalScenarioCash: {
+    marginTop: 16,
+    backgroundColor: "#020617",
+    borderColor: "#334155",
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 14
+  },
+
+  terminalSection: {
+    marginTop: 22,
+    backgroundColor: "#0f172a",
+    borderColor: "#1e293b",
+    borderWidth: 1,
+    borderRadius: 22,
+    padding: 18
+  },
+
+  terminalSectionEyebrow: {
+    color: "#59dcff",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 0.7,
+    marginBottom: 7
+  },
+
+  terminalImpactGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12
+  },
+
+  terminalImpactCell: {
+    flexGrow: 1,
+    flexBasis: "22%",
+    minWidth: 190,
+    backgroundColor: "#020617",
+    borderColor: "#334155",
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 14
+  },
+
+  terminalImpactHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: "#334155",
+    paddingVertical: 10,
+    marginTop: 14
+  },
+
+  terminalImpactRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    borderBottomWidth: 1,
+    borderBottomColor: "#243247",
+    paddingVertical: 12
+  },
+
+  terminalImpactMetricLabel: {
+    flex: 1.5,
+    color: "#dbeafe",
+    fontSize: 13
+  },
+
+  terminalImpactMetricValue: {
+    flex: 1,
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: "700",
+    textAlign: "right"
+  },
+
+  terminalImpactChangeValue: {
+    flex: 1,
+    color: "#67e8f9",
+    fontSize: 13,
+    fontWeight: "900",
+    textAlign: "right"
+  },
+
+  terminalImpactEvidence: {
+    marginTop: 14,
+    padding: 14,
+    borderRadius: 12,
+    backgroundColor: "#132641",
+    gap: 8
+  },
+
+  terminalImpactEvidenceLabel: {
+    color: "#67e8f9",
+    fontSize: 11,
+    fontWeight: "900",
+    letterSpacing: 0.6
+  },
+
+  terminalImpactEvidenceRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 16,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: "#334155"
+  },
+
+  terminalImpactEvidenceMetric: {
+    flex: 1,
+    color: "#bfdbfe",
+    fontSize: 13
+  },
+
+  terminalImpactEvidenceValue: {
+    color: "#ffffff",
+    fontSize: 13,
+    fontWeight: "800",
+    textAlign: "right"
+  },
+
+  terminalMarketEvidence: {
+    marginTop: 22,
+    borderWidth: 1,
+    borderColor: "#334155",
+    borderRadius: 18,
+    backgroundColor: "#0f172a",
+    padding: 18
+  },
+
+  terminalMarketEvidenceGrid: {
+    flexDirection: "row",
+    gap: 12
+  },
+
+  terminalMarketEvidenceMetric: {
+    flex: 1,
+    minWidth: 0,
+    backgroundColor: "#020617",
+    borderWidth: 1,
+    borderColor: "#1e293b",
+    borderRadius: 12,
+    padding: 12
+  },
+
+  terminalMarketEvidenceValue: {
+    color: "#f8fafc",
+    fontWeight: "900",
+    marginTop: 5
+  },
+
+  terminalDepthUnavailable: {
+    marginTop: 12,
+    padding: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#92400e",
+    backgroundColor: "#1c1417"
+  },
+
+  terminalDepthUnavailableTitle: {
+    color: "#fbbf24",
+    fontWeight: "900",
+    marginBottom: 5
+  },
+
+  terminalMarketEvidenceHint: {
+    color: "#67e8f9",
+    marginTop: 12,
+    fontSize: 12
+  },
+
+  terminalDecisionGrid: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    gap: 18
+  },
+
+  terminalDecisionColumn: {
+    flex: 1,
+    minWidth: 0
+  },
+
+  terminalReviewCheckpoint: {
+    marginTop: 22,
+    borderWidth: 1,
+    borderColor: "#334155",
+    borderRadius: 18,
+    backgroundColor: "#0f172a",
+    padding: 18
+  },
+  terminalDecisionSummary: {
+    marginTop: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: "#334155",
+    borderRadius: 14,
+    backgroundColor: "#020617",
+    padding: 16
+  },
+  terminalDecisionSummaryHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+    paddingBottom: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#334155"
+  },
+  terminalDecisionIdentity: {
+    flex: 1,
+    minWidth: 0
+  },
+  terminalDecisionSecurity: {
+    color: "#f8fafc",
+    fontSize: 17,
+    fontWeight: "900"
+  },
+  terminalDecisionMode: {
+    color: "#67e8f9",
+    fontSize: 11,
+    fontWeight: "900"
+  },
+  terminalDecisionSummaryGrid: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    gap: 24,
+    paddingTop: 14
+  },
+  terminalDecisionSummaryColumn: {
+    flex: 1,
+    minWidth: 0
+  },
+  terminalDecisionSummaryRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    gap: 16,
+    paddingVertical: 9,
+    borderBottomWidth: 1,
+    borderBottomColor: "#1e293b"
+  },
+  terminalDecisionSummaryValue: {
+    color: "#f8fafc",
+    fontWeight: "900",
+    textAlign: "right"
+  },
+  terminalDecisionBoundary: {
+    color: "#cbd5e1",
+    lineHeight: 20,
+    marginBottom: 16
+  },
   title: {
     color: "white",
     fontSize: 34,
@@ -2306,6 +3615,14 @@ const styles = StyleSheet.create({
     borderColor: "#2fb7dc",
     backgroundColor: "#0b1728",
     padding: 18
+  },
+
+  impactModalScrollContent: {
+    paddingBottom: 18
+  },
+
+  impactModalScrollContentWide: {
+    paddingRight: 18
   },
   impactEyebrow: {
     color: "#59dcff",
@@ -2665,6 +3982,37 @@ const styles = StyleSheet.create({
     color: "#cbd5e1",
     marginTop: 6,
     lineHeight: 20
+  },
+
+  reviewBlockedBox: {
+    marginTop: 18,
+    backgroundColor: "rgba(245,158,11,.10)",
+    borderColor: "rgba(245,158,11,.45)",
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 14
+  },
+
+  reviewBlockedTitle: {
+    color: "#fbbf24",
+    fontWeight: "900",
+    fontSize: 14
+  },
+
+  reviewBlockedAction: {
+    alignSelf: "flex-start",
+    marginTop: 12,
+    backgroundColor: "#1e293b",
+    borderColor: "#475569",
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14
+  },
+
+  reviewBlockedActionText: {
+    color: "#67e8f9",
+    fontWeight: "900"
   },
   headerRow: {
     flexDirection: "row",

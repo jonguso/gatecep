@@ -15,7 +15,6 @@ export const MENU_SECTIONS = [
   {
     title: "Primary",
     summary: "Home, markets, trading, and Coach G",
-    initiallyOpen: true,
     items: [
       { title: "Home", detail: "Portfolio value, allocation, and holdings", route: "/(tabs)/dashboard" },
       { title: "Holdings", detail: "Review REAL holdings and security-level details", route: "/holding-details" },

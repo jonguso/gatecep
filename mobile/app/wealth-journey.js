@@ -25,7 +25,10 @@ import {
 } from "../src/features/wealth-journey/realWealthJourneyRuntime";
 
 import CoachGReconciliationCard from "../src/features/wealth-journey/components/CoachGReconciliationCard";
-import { ContainedPanel } from "../src/components/mobile/MobileUI";
+import {
+  ContainedPanel,
+  InvestorTopChromeHeader
+} from "../src/components/mobile/MobileUI";
 import InvestorJourneyNavigation from "../src/components/mobile/InvestorJourneyNavigation";
 
 /*
@@ -211,28 +214,33 @@ export default function WealthJourneyScreen() {
       }
       contentContainerStyle={[styles.content, av3cWidth >= 720 && { width: "100%", maxWidth: 960, alignSelf: "center" }, av3cWidth < 720 && { paddingHorizontal: 16, paddingBottom: 128 }, av3cWidth < 480 && { paddingHorizontal: 12 }]}
     >
-      <Text
-        style={
-          styles.eyebrow
-        }
+      <InvestorTopChromeHeader
+        compact={av3cWidth < 720}
+        testID="wealth-journey-top-chrome-header"
       >
-        COACH G
-      </Text>
+        <Text
+          style={
+            styles.eyebrow
+          }
+        >
+          COACH G
+        </Text>
 
-      <Text
-        style={[styles.title, av3cWidth < 720 && { fontSize: 28, lineHeight: 34 }, av3cWidth < 480 && { fontSize: 25, lineHeight: 31 }]}
-      >
-        Your Wealth Journey
-      </Text>
+        <Text
+          style={[styles.title, av3cWidth < 720 && { fontSize: 28, lineHeight: 34 }, av3cWidth < 480 && { fontSize: 25, lineHeight: 31 }]}
+        >
+          Your Wealth Journey
+        </Text>
 
-      <Text
-        style={
-          styles.subtitle
-        }
-      >
-        Where you are, where you're going, whether you're on track,
-        and what matters next.
-      </Text>
+        <Text
+          style={
+            styles.subtitle
+          }
+        >
+          Where you are, where you're going, whether you're on track,
+          and what matters next.
+        </Text>
+      </InvestorTopChromeHeader>
 
       {error ? (
         <ErrorState

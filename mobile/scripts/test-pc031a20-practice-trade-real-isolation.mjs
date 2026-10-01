@@ -67,22 +67,63 @@ console.log(
     "async function confirmTrade()"
   );
 
-  const persist = trade.indexOf(
-    "await persistTrade",
-    start
-  );
-
-  const guard = trade.indexOf(
-    "isRealExecution(activeExecution)",
+  const end = trade.indexOf(
+    "async function markBasketOrderFilled",
     start
   );
 
   assert.ok(start >= 0);
-  assert.ok(guard > start);
-  assert.ok(persist > guard);
+  assert.ok(end > start);
+
+  const body = trade.slice(start, end);
+
+  const guard = body.indexOf(
+    "isRealExecution(activeExecution)"
+  );
+
+  const omsLookup = body.indexOf(
+    "findCurrentPracticeExecutionOrder()"
+  );
+
+  const basketSave = body.indexOf(
+    "await saveTradeBasket"
+  );
+
+  assert.ok(guard >= 0);
+  assert.ok(omsLookup > guard);
+  assert.ok(basketSave > guard);
+
+  assert.doesNotMatch(
+    body,
+    /await\s+persistTrade\s*\(/
+  );
+
+  assert.match(
+    body,
+    /Verified Broker Evidence Required/
+  );
+
+  assert.match(
+    body,
+    /await markBasketOrderFilled\s*\(/
+  );
+
+  assert.match(
+    body,
+    /await createBasketExecution\s*\(/
+  );
+
+  assert.match(
+    body,
+    /router\.push\("\/orders-review"\)/
+  );
 
   console.log(
-    "PASS: single Practice confirmation rejects REAL execution before portfolio persistence."
+    "PASS: single Practice confirmation rejects REAL before canonical Practice OMS settlement or order creation."
+  );
+
+  console.log(
+    "PASS: confirmTrade no longer bypasses canonical Practice accounting through persistTrade()."
   );
 }
 
@@ -154,41 +195,103 @@ console.log(
 
 // --------------------------------------------------
 // 6. Basket runner itself also fails closed for REAL
-// before Practice cash/portfolio mutation.
+// before canonical Practice settlement.
+//
+// PC-031B4M7C4 centralized whole-basket accounting:
+//   REAL guard
+//     -> aggregate Practice preflight
+//     -> guarded central full-fill service.
+//
+// The runner must no longer mutate Practice holdings/cash/
+// history or manufacture FILLED locally.
 // --------------------------------------------------
 {
   const start = trade.indexOf(
     "async function runBasketExecution"
   );
 
-  const guard = trade.indexOf(
-    "REAL_ORDER_REQUIRES_VERIFIED_BROKER_EXECUTION",
-    start
-  );
-
-  const workingPortfolio = trade.indexOf(
-    "let workingPortfolio",
-    start
-  );
-
-  const practiceSave = trade.indexOf(
-    "savePracticePortfolio",
+  const end = trade.indexOf(
+    "const basketRemaining",
     start
   );
 
   assert.ok(start >= 0);
-  assert.ok(guard > start);
-  assert.ok(workingPortfolio > guard);
-  assert.ok(practiceSave > guard);
+  assert.ok(end > start);
+
+  const basketRunner = trade.slice(
+    start,
+    end
+  );
+
+  const guard = basketRunner.indexOf(
+    "REAL_ORDER_REQUIRES_VERIFIED_BROKER_EXECUTION"
+  );
+
+  const aggregatePreflight =
+    basketRunner.indexOf(
+      "await preflightCanonicalPracticeExecutionOrders"
+    );
+
+  const guardedFullFill =
+    basketRunner.indexOf(
+      "await markExecutionOrderFilled"
+    );
+
+  assert.ok(guard >= 0);
+  assert.ok(aggregatePreflight > guard);
+  assert.ok(guardedFullFill > aggregatePreflight);
+
+  assert.doesNotMatch(
+    basketRunner,
+    /workingPortfolio/
+  );
+
+  assert.doesNotMatch(
+    basketRunner,
+    /workingCash/
+  );
+
+  assert.doesNotMatch(
+    basketRunner,
+    /savePracticePortfolio\s*\(/
+  );
+
+  assert.doesNotMatch(
+    basketRunner,
+    /userSetItem\s*\(\s*"practiceSimulatedTrades"/
+  );
+
+  assert.doesNotMatch(
+    basketRunner,
+    /saveBasketExecution\s*\(/
+  );
+
+  assert.doesNotMatch(
+    basketRunner,
+    /status:\s*"FILLED"/
+  );
 
   console.log(
-    "PASS: basket runner rejects REAL before Practice portfolio or cash mutation."
+    "PASS: basket runner rejects REAL before canonical Practice settlement."
+  );
+
+  console.log(
+    "PASS: basket runner preflights the complete Practice batch before first central fill."
+  );
+
+  console.log(
+    "PASS: basket runner no longer owns Practice portfolio/history/FILLED mutation."
   );
 }
 
-// --------------------------------------------------
-// 7. Remaining direct FILLED assignment in trade.js
-// belongs only to guarded Practice basket simulation.
+// 7. trade.js must not manufacture OMS FILLED state.
+//
+// PC-031B4M7C4 removed the final direct Practice FILLED
+// assignment from the whole-basket runner.
+//
+// All OMS-backed Practice full fills now delegate through
+// markExecutionOrderFilled(), whose canonical service owns
+// accounting-before-FILLED.
 // --------------------------------------------------
 {
   const directFilled =
@@ -196,23 +299,35 @@ console.log(
 
   assert.equal(
     directFilled.length,
-    1
+    0
   );
 
-  const runnerStart = trade.indexOf(
-    "async function runBasketExecution"
-  );
+  const guardedFillCalls =
+    [...trade.matchAll(/markExecutionOrderFilled\s*\(/g)];
 
   assert.ok(
-    directFilled[0].index > runnerStart
+    guardedFillCalls.length >= 2
+  );
+
+  assert.match(
+    trade,
+    /async function markBasketOrderFilled/
+  );
+
+  assert.match(
+    trade,
+    /async function runBasketExecution/
   );
 
   console.log(
-    "PASS: the only remaining direct trade.js FILLED assignment is inside the guarded Practice basket runner."
+    "PASS: trade.js no longer manufactures OMS FILLED state directly."
+  );
+
+  console.log(
+    "PASS: OMS-backed Practice full fills delegate to the guarded central fill service."
   );
 }
 
-// --------------------------------------------------
 // 8. Practice mutations remain Practice-specific.
 // --------------------------------------------------
 assert.match(
@@ -262,7 +377,12 @@ assert.match(
 
 assert.match(
   recovery,
-  /status:\s*ORDER_STATUS\.FILLED/
+  /const transitionStatus\s*=[\s\S]*?completelyFilled[\s\S]*?\?\s*ORDER_STATUS\.FILLED[\s\S]*?:\s*ORDER_STATUS\.PARTIAL_FILL/
+);
+
+assert.match(
+  recovery,
+  /status:\s*transitionStatus/
 );
 
 console.log(

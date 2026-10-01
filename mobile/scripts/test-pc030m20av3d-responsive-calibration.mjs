@@ -9,7 +9,9 @@ for(const [k,s] of Object.entries(src)){assert.ok(s.includes("PC-030M20AV3D RESP
 for(const k of ["trading","order","history","transactions","upload"]){assert.ok(src[k].includes("maxWidth: 960"),`${k}: desktop containment missing`);assert.ok(src[k].includes("paddingBottom: 128"),`${k}: mobile clearance missing`);}
 assert.ok(src.trading.includes("buildDecisionLabBaseline")&&src.trading.includes("buildAccommodationAnalysis"));
 assert.ok(src.order.includes('userGetItem("practiceSimulatedTrades")'));
-assert.ok(src.history.includes('AsyncStorage.getItem("gatecepSimulatedTrades")'));
+assert.ok(src.history.includes('userGetItem'));
+assert.ok(src.history.includes('"practiceSimulatedTrades"'));
+assert.ok(!src.history.includes('AsyncStorage.getItem("gatecepSimulatedTrades")'));
 assert.ok(src.transactions.includes("loadTransactionLedgerReconciliation"));
 assert.ok(src.transactions.includes("horizontal showsHorizontalScrollIndicator={false}"));
 assert.ok(src.transactions.includes("cannot create trades, invent adjustment shares, or mutate REAL or Practice portfolios"));

@@ -2590,6 +2590,18 @@ function shortDate(value) {
     return "Not available";
   }
 
+  const calendarDateMatch =
+    String(value).match(
+      /^(\d{4})-(\d{2})-(\d{2})/
+    );
+
+  if (calendarDateMatch) {
+    const [, year, month, day] =
+      calendarDateMatch;
+
+    return `${Number(month)}/${Number(day)}/${year}`;
+  }
+
   const date =
     new Date(value);
 

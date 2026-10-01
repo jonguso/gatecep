@@ -1,6 +1,8 @@
 import React, { useCallback, useMemo, useState } from "react";
 import {
   Alert,
+  Modal,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -11,24 +13,38 @@ import {
 import { router, useFocusEffect } from "expo-router";
 
 import ActiveUserBanner from "../src/components/ActiveUserBanner";
-import { ContainedPanel } from "../src/components/mobile/MobileUI";
 import {
-  createBasketExecution,
+  ContainedPanel,
+  InvestorTopChromeHeader,
+  ResponsiveScreen,
+  ResponsiveWorkingRegion
+} from "../src/components/mobile/MobileUI";
+import {
   deleteExecutionOrder,
   loadBasketExecution,
   queueExecutionOrders,
   queueSingleOrder,
+  replacePracticeReviewOrderSecurity,
   updateExecutionOrder
 } from "../src/trade/basketExecutionStore";
 import { ORDER_STATUS } from "../src/trade/orderLifecycle";
 import { buildRealOrderBrokerEligibility } from "../src/services/trade/brokerExecutionEligibilityService";
 import { buildExecutionStatusReadModel } from "../src/services/trade/realExecutionStatusReadModel";
+import {
+  analyzeCanonicalPracticeExecutionFunding,
+  preflightCanonicalPracticeExecutionOrders
+} from "../src/services/trade/practiceExecutionAccountingService";
+import { runPracticeExecutionOrchestrator } from "../src/services/trade/practiceExecutionOrchestrator";
+import useMarketData from "../src/services/markets/useMarketData";
+import { isCurrentNseSecurity } from "../src/utils/nseSecurityMaster";
 
 export default function OrdersReview() {
+  const market = useMarketData();
   const [execution, setExecution] = useState(null);
   const [query, setQuery] = useState("");
   const [brokerEligibility, setBrokerEligibility] = useState({});
   const [brokerEligibilityLoading, setBrokerEligibilityLoading] = useState(false);
+  const [practiceFundingFeedback, setPracticeFundingFeedback] = useState(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -37,12 +53,22 @@ export default function OrdersReview() {
   );
 
   async function load() {
-    let saved = await loadBasketExecution();
+    const saved = await loadBasketExecution();
 
-    if (!saved) {
-      saved = await createBasketExecution();
-    }
-
+    /*
+     * PC-031B4M7C5D7F5J2C1:
+     *
+     * This screen is an OMS observer, not an execution
+     * creation authority.
+     *
+     * An empty activeBasketExecution slot must remain empty.
+     * In particular, do not recreate OMS REVIEW orders from
+     * a previously persisted activeTradeBasket merely because
+     * this screen is opened, focused, refreshed, or revisited.
+     *
+     * Fresh execution creation belongs to an explicit investor
+     * workflow such as Coach G / Trade basket confirmation.
+     */
     setExecution(saved);
     await refreshBrokerEligibility(saved);
   }
@@ -59,6 +85,10 @@ export default function OrdersReview() {
 
   const recoveryOrders = orders.filter(
     (order) => statusViewFor(order).recoveryRequired
+  );
+
+  const queuedOrders = orders.filter(
+    (order) => order.status === ORDER_STATUS.QUEUED
   );
 
   const reviewOrders = useMemo(() => {
@@ -128,27 +158,154 @@ export default function OrdersReview() {
     0
   );
 
+  /*
+   * PC-032G8D4A
+   *
+   * Investor-facing REAL handoff readiness.
+   *
+   * This is intentionally a UI/read-model gate only.
+   * queueExecutionOrders() remains the canonical mutation authority
+   * and assertRealOrderBrokerAssignment() remains the final
+   * service-level safety boundary.
+   */
+  const realHandoffEligibility = useMemo(() => {
+    if (!isRealExecution) {
+      return {
+        ready: true,
+        blockedOrders: []
+      };
+    }
+
+    if (brokerEligibilityLoading) {
+      return {
+        ready: false,
+        blockedOrders: reviewOrders
+      };
+    }
+
+    const blockedOrders = reviewOrders.filter((order) => {
+      const result = brokerEligibility[order.id];
+
+      const selected = (result?.candidates || []).find(
+        (candidate) =>
+          candidate.brokerAccountId === order.brokerAccountId
+      );
+
+      return (
+        !order.brokerAccountId ||
+        !selected ||
+        selected.eligible !== true
+      );
+    });
+
+    return {
+      ready: blockedOrders.length === 0,
+      blockedOrders
+    };
+  }, [
+    isRealExecution,
+    brokerEligibilityLoading,
+    brokerEligibility,
+    reviewOrders
+  ]);
+
+  const handoffDisabled =
+    reviewOrders.length === 0 ||
+    (isRealExecution && !realHandoffEligibility.ready);
+
   async function updateOrder(order, patch) {
     const updated = await updateExecutionOrder(order.id, patch);
     setExecution(updated);
     await refreshBrokerEligibility(updated);
   }
 
+  async function replacePracticeSecurity(
+    order,
+    security
+  ) {
+    if (isRealExecution) {
+      return;
+    }
+
+    try {
+      const updated =
+        await replacePracticeReviewOrderSecurity(
+          order.id,
+          security
+        );
+
+      setExecution(updated);
+      setPracticeFundingFeedback(null);
+    } catch (error) {
+      const message =
+        error?.code ===
+        "PRACTICE_SECURITY_REPLACEMENT_STATUS_FORBIDDEN"
+          ? "This Practice order has already left review. Its security can no longer be changed."
+          : error?.code ===
+            "PRACTICE_SECURITY_NOT_CURRENTLY_AVAILABLE"
+          ? `${error?.symbol || "This security"} is not currently available for a new Practice order. Historical holdings and trade evidence are preserved.`
+          : error?.message ||
+            "The Practice security could not be changed.";
+
+      if (
+        Platform.OS === "web" &&
+        typeof window !== "undefined"
+      ) {
+        window.alert(message);
+      } else {
+        Alert.alert(
+          "Unable to Change Security",
+          message
+        );
+      }
+    }
+  }
+
   async function deleteOrder(order) {
-    Alert.alert("Delete Order", `Remove ${order.symbol} from this basket?`, [
+    const title = "Delete Order";
+    const message = `Remove ${order.symbol} from this basket?`;
+
+    const executeDelete = async () => {
+      const updated = await deleteExecutionOrder(order.id);
+      setExecution(updated);
+      await refreshBrokerEligibility(updated);
+    };
+
+    /*
+     * PC-032G8D4A
+     *
+     * React Native Web Alert button callbacks are not a reliable
+     * mutation trigger. Use the same explicit web-confirm pattern
+     * already established by the handoff workflow.
+     *
+     * deleteExecutionOrder() remains the canonical OMS authority.
+     */
+    if (
+      Platform.OS === "web" &&
+      typeof window !== "undefined" &&
+      typeof window.confirm === "function"
+    ) {
+      if (!window.confirm(`${title}\n\n${message}`)) {
+        return;
+      }
+
+      await executeDelete();
+      return;
+    }
+
+    Alert.alert(title, message, [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete",
         style: "destructive",
-        onPress: async () => {
-          const updated = await deleteExecutionOrder(order.id);
-          setExecution(updated);
-        }
+        onPress: executeDelete
       }
     ]);
   }
 
   async function queueOrder(order) {
+    setPracticeFundingFeedback(null);
+
     if (isRealExecution) {
       const result = brokerEligibility[order.id];
       const selected = (result?.candidates || []).find(
@@ -166,50 +323,504 @@ export default function OrdersReview() {
       }
     }
 
-    const updated = await queueSingleOrder(order.id);
-    setExecution(updated);
-    await refreshBrokerEligibility(updated);
-  }
+    /*
+     * PC-031B4M7C5D7F5J2D6
+     *
+     * "Prepare This Order" is an OMS acceptance transition.
+     *
+     * For Practice, validate the prospective accepted batch before
+     * moving this order to QUEUED:
+     *
+     *   already QUEUED Practice orders
+     *   + this order
+     *
+     * This prevents individually prepared BUY orders from each
+     * passing against the same unreserved Practice cash.
+     *
+     * queueSingleOrder() remains the sole owner of the actual
+     * REVIEW -> QUEUED mutation.
+     *
+     * REAL retains its existing broker-eligibility path.
+     */
+    if (!isRealExecution) {
+      const prospectiveOrders = [
+        ...queuedOrders,
+        order
+      ];
 
-  async function prepareHandoff() {
-    if (!reviewOrders.length) {
-      Alert.alert("No Orders", "There are no review orders to submit.");
-      return;
-    }
+      try {
+        const funding =
+          await preflightCanonicalPracticeExecutionOrders(
+            prospectiveOrders
+          );
 
-    if (isRealExecution) {
-      const invalidRealOrders = reviewOrders.filter((order) => {
-        const result = brokerEligibility[order.id];
-        const selected = (result?.candidates || []).find(
-          (candidate) => candidate.brokerAccountId === order.brokerAccountId
+        const required = Number(
+          funding?.additionalCashRequired || 0
         );
 
-        return !order.brokerAccountId || !selected || !selected.eligible;
-      });
+        if (
+          funding?.ok === false ||
+          required > 0
+        ) {
+          setPracticeFundingFeedback({
+            title: "Practice Funds Required",
+            message:
+              required > 0
+                ? `Add KES ${money(required)} to Practice Funds before preparing ${order.symbol || "this order"}. The order remains in Review.`
+                : "Current Practice cash cannot fund the prepared Practice orders. The order remains in Review.",
+            required
+          });
 
-      if (invalidRealOrders.length) {
-        Alert.alert(
-          "Broker Assignment Required",
-          `${invalidRealOrders.length} REAL order${invalidRealOrders.length === 1 ? "" : "s"} still need an eligible broker assignment. Review broker cash/trading space or broker-specific holdings before queueing.`
+          return;
+        }
+      } catch (error) {
+        const required = Number(
+          error?.preflight
+            ?.additionalCashRequired ||
+            error?.additionalCashRequired ||
+            0
         );
+
+        if (
+          error?.code ===
+            "INSUFFICIENT_PRACTICE_CASH" ||
+          required > 0
+        ) {
+          let explanatoryRequired = required;
+
+          if (
+            explanatoryRequired <= 0 &&
+            error?.code ===
+              "INSUFFICIENT_PRACTICE_CASH"
+          ) {
+            try {
+              const analysis =
+                await analyzeCanonicalPracticeExecutionFunding(
+                  prospectiveOrders
+                );
+
+              explanatoryRequired = Number(
+                analysis?.additionalCashRequired || 0
+              );
+            } catch {
+              /*
+               * Explanation enrichment is best-effort only.
+               *
+               * The canonical preflight has already rejected
+               * the acceptance transition, so failure to obtain
+               * explanatory analysis must never permit queueing.
+               */
+            }
+          }
+
+          setPracticeFundingFeedback({
+            title: "Practice Funds Required",
+            message:
+              explanatoryRequired > 0
+                ? `Add KES ${money(explanatoryRequired)} to Practice Funds before preparing ${order.symbol || "this order"}. The order remains in Review.`
+                : "Current Practice cash cannot fund this prepared Practice batch. The order remains in Review.",
+            required: explanatoryRequired
+          });
+
+          return;
+        }
+
+        setPracticeFundingFeedback({
+          title: "Practice Funding Check Unavailable",
+          message:
+            error?.message ||
+            "GateCEP could not verify Practice funding. The order remains in Review.",
+          required: 0
+        });
+
         return;
       }
     }
 
+    const updated =
+      await queueSingleOrder(order.id);
+
+    setExecution(updated);
+    await refreshBrokerEligibility(updated);
+  }
+
+  /*
+   * PC-031B4M7C5D7F5C
+   *
+   * The confirmed handoff body is platform-independent.
+   *
+   * Web confirmation must not depend on a React Native Alert button
+   * callback. Native retains Alert.alert().
+   *
+   * Execution ownership is unchanged:
+   * - Practice funding gate before QUEUED
+   * - queueExecutionOrders() owns QUEUED
+   * - D7F2 orchestrator owns automatic Practice progression
+   * - REAL retains its existing post-queue route
+   */
+  async function executeConfirmedHandoff() {
+    /*
+     * PC-031B4M7C5D7F3
+     *
+     * Practice acceptance is funding-gated before QUEUED.
+     * This is the investor-facing acceptance check.
+     *
+     * The D7F2 orchestrator performs a second canonical
+     * aggregate preflight after broker receipt and before
+     * the first economic settlement.
+     *
+     * REAL remains on its existing queue/routing path.
+     */
+    if (!isRealExecution) {
+      try {
+        const funding =
+          await preflightCanonicalPracticeExecutionOrders(
+            reviewOrders
+          );
+
+        if (
+          funding?.ok === false ||
+          Number(
+            funding?.additionalCashRequired || 0
+          ) > 0
+        ) {
+          const required =
+            Number(
+              funding?.additionalCashRequired || 0
+            );
+
+          Alert.alert(
+            "Practice Funds Required",
+            required > 0
+              ? `Add KES ${money(required)} to Practice Funds before submitting this basket. No Practice order has been queued, routed, or filled.`
+              : "This Practice basket cannot be funded from the current Practice cash balance. No Practice order has been queued, routed, or filled.",
+            [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Open Practice Funds",
+                onPress: () =>
+                  router.push(
+                    "/(tabs)/funds?source=PRACTICE&returnTo=ORDERS_REVIEW"
+                  )
+              }
+            ]
+          );
+
+          return;
+        }
+      } catch (error) {
+        const required =
+          Number(
+            error?.preflight?.additionalCashRequired ||
+              error?.additionalCashRequired ||
+              0
+          );
+
+        if (
+          error?.code === "INSUFFICIENT_PRACTICE_CASH" ||
+          required > 0
+        ) {
+          Alert.alert(
+            "Practice Funds Required",
+            required > 0
+              ? `Add KES ${money(required)} to Practice Funds before submitting this basket. No Practice order has been queued, routed, or filled.`
+              : "This Practice basket cannot be funded from the current Practice cash balance. No Practice order has been queued, routed, or filled.",
+            [
+              { text: "Cancel", style: "cancel" },
+              {
+                text: "Open Practice Funds",
+                onPress: () =>
+                  router.push(
+                    "/(tabs)/funds?source=PRACTICE&returnTo=ORDERS_REVIEW"
+                  )
+              }
+            ]
+          );
+
+          return;
+        }
+
+        Alert.alert(
+          "Practice Funding Check Unavailable",
+          error?.message ||
+            "GateCEP could not verify Practice funding. No Practice order has been queued, routed, or filled."
+        );
+
+        return;
+      }
+    }
+
+    const updated =
+      await queueExecutionOrders();
+
+    setExecution(updated);
+
+    if (isRealExecution) {
+      router.push("/(tabs)/trading");
+      return;
+    }
+
+    /*
+     * Persisted QUEUED state now exists.
+     *
+     * D7F2 owns automatic Practice progression:
+     * QUEUED -> BROKER_RECEIVED -> canonical settlement -> FILLED.
+     *
+     * If this pass is interrupted, persisted OMS state remains
+     * recoverable by the same orchestrator.
+     */
+    try {
+      const result =
+        await runPracticeExecutionOrchestrator();
+
+      if (result?.execution) {
+        setExecution(result.execution);
+      }
+
+      router.push("/basket-execution");
+    } catch (error) {
+      /*
+       * PC-031B4M7C5D7F4B
+       *
+       * Observational runtime evidence only.
+       * Never changes OMS, accounting, routing or recovery state.
+       */
+      console.error(
+        "PRACTICE_EXECUTION_ORCHESTRATOR_PAUSED",
+        {
+          name: error?.name || null,
+          code: error?.code || null,
+          message: error?.message || String(error),
+          orderId: error?.orderId || null,
+          status: error?.status || null,
+          preflight: error?.preflight || null,
+          stack: error?.stack || null
+        }
+      );
+
+      /*
+       * Do not manufacture a success state.
+       *
+       * The execution remains at its last persisted OMS state.
+       * Queue Manager stays the explicit UAT/recovery surface.
+       */
+      const required =
+        Number(
+          error?.preflight?.additionalCashRequired ||
+            error?.additionalCashRequired ||
+            0
+        );
+
+      if (
+        error?.code === "INSUFFICIENT_PRACTICE_CASH" ||
+        required > 0
+      ) {
+        Alert.alert(
+          "Practice Funds Required",
+          required > 0
+            ? `Practice cash changed before settlement. Add KES ${money(required)} and resume the persisted Practice execution.`
+            : "Practice cash changed before settlement. Add Practice Funds and resume the persisted Practice execution.",
+          [
+            {
+              text: "Queue Manager",
+              onPress: () => router.push("/queue-manager")
+            },
+            {
+              text: "Open Practice Funds",
+              onPress: () =>
+                router.push(
+                  "/(tabs)/funds?source=PRACTICE&returnTo=ORDERS_REVIEW"
+                )
+            }
+          ]
+        );
+
+        return;
+      }
+
+      Alert.alert(
+        "Practice Execution Paused",
+        error?.message ||
+          "The Practice execution stopped at its last persisted state. It has not been marked complete. Open Queue Manager to inspect or resume it.",
+        [
+          {
+            text: "Queue Manager",
+            onPress: () => router.push("/queue-manager")
+          }
+        ]
+      );
+    }
+  }
+
+  /*
+   * PC-031B4M7C5D7F5J2D1
+   *
+   * Individual "Prepare This Order" actions may leave the
+   * persisted Practice execution with zero REVIEW orders and
+   * one or more QUEUED orders.
+   *
+   * Continue from that persisted OMS state through the same
+   * D7F2 orchestrator used by the batch handoff path.
+   *
+   * This handler does NOT queue orders again, route directly,
+   * settle directly, write storage directly, or manufacture
+   * FILLED state.
+   *
+   * D7F2 remains the authority for:
+   *   QUEUED -> broker receipt -> canonical pre-settlement
+   *   funding check -> canonical settlement -> FILLED.
+   */
+  async function continueQueuedPracticeExecution() {
+    if (isRealExecution || queuedOrders.length === 0) {
+      return;
+    }
+
+    try {
+      const result =
+        await runPracticeExecutionOrchestrator();
+
+      if (result?.execution) {
+        setExecution(result.execution);
+      }
+
+      router.push("/basket-execution");
+    } catch (error) {
+      console.error(
+        "PRACTICE_QUEUED_CONTINUATION_PAUSED",
+        {
+          name: error?.name || null,
+          code: error?.code || null,
+          message:
+            error?.message ||
+            String(error),
+          orderId:
+            error?.orderId || null,
+          status:
+            error?.status || null,
+          preflight:
+            error?.preflight || null,
+          stack:
+            error?.stack || null
+        }
+      );
+
+      const required =
+        Number(
+          error?.preflight
+            ?.additionalCashRequired ||
+            error?.additionalCashRequired ||
+            0
+        );
+
+      if (
+        error?.code ===
+          "INSUFFICIENT_PRACTICE_CASH" ||
+        required > 0
+      ) {
+        Alert.alert(
+          "Practice Funds Required",
+          required > 0
+            ? `Practice cash changed before settlement. Add KES ${money(required)} and continue the persisted Practice execution.`
+            : "Practice cash is insufficient to continue this persisted execution. Add Practice Funds before continuing.",
+          [
+            {
+              text: "Queue Manager",
+              onPress: () =>
+                router.push(
+                  "/queue-manager"
+                )
+            },
+            {
+              text: "Open Practice Funds",
+              onPress: () =>
+                router.push(
+                  "/(tabs)/funds?source=PRACTICE&returnTo=ORDERS_REVIEW"
+                )
+            }
+          ]
+        );
+
+        return;
+      }
+
+      Alert.alert(
+        "Practice Execution Paused",
+        error?.message ||
+          "The Practice execution remains at its last persisted OMS state. It has not been marked complete.",
+        [
+          {
+            text: "Queue Manager",
+            onPress: () =>
+              router.push(
+                "/queue-manager"
+              )
+          }
+        ]
+      );
+    }
+  }
+
+  async function prepareHandoff() {
+    if (!reviewOrders.length) {
+      Alert.alert(
+        "No Orders",
+        "There are no review orders to submit."
+      );
+      return;
+    }
+
+    if (
+      isRealExecution &&
+      !realHandoffEligibility.ready
+    ) {
+      const blockedCount =
+        realHandoffEligibility.blockedOrders.length;
+
+      const message = brokerEligibilityLoading
+        ? "GateCEP is still checking REAL broker eligibility. Wait for the broker check to finish before continuing."
+        : `${blockedCount} REAL order${blockedCount === 1 ? "" : "s"} ${blockedCount === 1 ? "does" : "do"} not have an eligible broker assignment. Select an eligible broker with sufficient broker-specific cash/trading space or holdings before continuing.`;
+
+      if (
+        Platform.OS === "web" &&
+        typeof window !== "undefined"
+      ) {
+        window.alert(message);
+      } else {
+        Alert.alert(
+          "Eligible Broker Required",
+          message
+        );
+      }
+
+      return;
+    }
+
+    const title = "Prepare Order Handoff";
+    const message = isRealExecution
+      ? `${reviewOrders.length} REAL order${reviewOrders.length === 1 ? "" : "s"} will be queued for broker routing. Queueing does not mean the broker has received or executed the order.`
+      : `${reviewOrders.length} Practice order${reviewOrders.length === 1 ? "" : "s"} will be queued for GateCEP Broker.`;
+
+    if (
+      Platform.OS === "web" &&
+      typeof window !== "undefined" &&
+      typeof window.confirm === "function"
+    ) {
+      if (!window.confirm(`${title}\n\n${message}`)) {
+        return;
+      }
+
+      await executeConfirmedHandoff();
+      return;
+    }
+
     Alert.alert(
-      "Prepare Order Handoff",
-      isRealExecution
-        ? `${reviewOrders.length} REAL order${reviewOrders.length === 1 ? "" : "s"} will be queued for broker routing. Queueing does not mean the broker has received or executed the order.`
-        : `${reviewOrders.length} Practice order${reviewOrders.length === 1 ? "" : "s"} will be queued for GateCEP Broker.`,
+      title,
+      message,
       [
         { text: "Cancel", style: "cancel" },
         {
           text: "Continue",
-          onPress: async () => {
-            const updated = await queueExecutionOrders();
-            setExecution(updated);
-            router.push("/(tabs)/trading")
-          }
+          onPress: executeConfirmedHandoff
         }
       ]
     );
@@ -217,8 +828,9 @@ export default function OrdersReview() {
 
   if (!execution || !orders.length) {
     return (
-      <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-        <Text style={styles.title}>{isRealExecution ? "REAL Orders Review" : "Practice Orders Review"}</Text>
+      <ResponsiveScreen mode="flow" testID="orders-review-empty-screen">
+        <ResponsiveWorkingRegion style={styles.workingRegion}>
+          <Text style={styles.title}>{isRealExecution ? "REAL Orders Review" : "Practice Orders Review"}</Text>
 
         <Text style={styles.subtitle}>
           No basket orders found. Create a Coach G trade basket first.
@@ -237,14 +849,23 @@ export default function OrdersReview() {
         >
           <Text style={styles.secondaryText}>Dashboard</Text>
         </Pressable>
-      </ScrollView>
+        </ResponsiveWorkingRegion>
+      </ResponsiveScreen>
     );
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
+    <ResponsiveScreen mode="flow" testID="orders-review-screen">
+      <ResponsiveWorkingRegion style={styles.workingRegion}>
       <View style={styles.headerRow}>
-        <Text style={styles.title}>{isRealExecution ? "REAL Orders Review" : "Practice Orders Review"}</Text>
+        <InvestorTopChromeHeader
+          style={styles.ordersReviewIdentity}
+          testID="orders-review-top-chrome"
+        >
+          <Text style={[styles.title, styles.ordersReviewTitle]}>
+            {isRealExecution ? "REAL Orders Review" : "Practice Orders Review"}
+          </Text>
+        </InvestorTopChromeHeader>
 
         <Pressable
           style={styles.dashboardButton}
@@ -295,6 +916,57 @@ export default function OrdersReview() {
         <Metric label="Status" value={execution.status} />
       </View>
 
+      {!isRealExecution && practiceFundingFeedback ? (
+        <View style={styles.practiceFundingFeedback}>
+          <Text style={styles.practiceFundingFeedbackTitle}>
+            {practiceFundingFeedback.title}
+          </Text>
+
+          <Text style={styles.practiceFundingFeedbackText}>
+            {practiceFundingFeedback.message}
+          </Text>
+
+          {Number(practiceFundingFeedback.required || 0) > 0 ? (
+            <Text style={styles.practiceFundingFeedbackAmount}>
+              Additional Practice cash required: KES{" "}
+              {money(practiceFundingFeedback.required)}
+            </Text>
+          ) : null}
+
+          <View style={styles.practiceFundingFeedbackActions}>
+            <Pressable
+              style={styles.practiceFundingFeedbackButton}
+              onPress={() => {
+                const required = Number(
+                  practiceFundingFeedback?.required || 0
+                );
+
+                router.push(
+                  required > 0
+                    ? `/(tabs)/funds?source=PRACTICE&returnTo=ORDERS_REVIEW&amount=${encodeURIComponent(
+                        required.toFixed(2)
+                      )}`
+                    : "/(tabs)/funds?source=PRACTICE&returnTo=ORDERS_REVIEW"
+                );
+              }}
+            >
+              <Text style={styles.practiceFundingFeedbackButtonText}>
+                Open Practice Funds
+              </Text>
+            </Pressable>
+
+            <Pressable
+              style={styles.practiceFundingDismissButton}
+              onPress={() => setPracticeFundingFeedback(null)}
+            >
+              <Text style={styles.practiceFundingDismissText}>
+                Dismiss
+              </Text>
+            </Pressable>
+          </View>
+        </View>
+      ) : null}
+
       <TextInput
         value={query}
         onChangeText={setQuery}
@@ -321,7 +993,13 @@ export default function OrdersReview() {
             statusView={statusViewFor(order)}
             brokerEligibility={brokerEligibility[order.id]}
             brokerEligibilityLoading={brokerEligibilityLoading}
+            marketRows={market.rows || []}
+            marketLoading={market.loading}
+            marketError={market.error}
             onChange={(patch) => updateOrder(order, patch)}
+            onReplaceSecurity={(security) =>
+              replacePracticeSecurity(order, security)
+            }
             onDelete={() => deleteOrder(order)}
             onQueue={() => queueOrder(order)}
           />
@@ -329,18 +1007,52 @@ export default function OrdersReview() {
       )}
       </ContainedPanel>
 
-      <Pressable
-        style={[styles.primary, reviewOrders.length === 0 && styles.disabledButton]}
-        disabled={reviewOrders.length === 0}
-        onPress={prepareHandoff}
-      >
-        <Text style={styles.primaryText}>
-          {reviewOrders.length > 0
-            ? `Continue to Order Handoff (${reviewOrders.length})`
-            : "No Orders to Submit"}
-        </Text>
-      </Pressable>
-    </ScrollView>
+      {isRealExecution ? (
+        reviewOrders.length > 0 ? (
+          <Pressable
+            style={[
+              styles.primary,
+              handoffDisabled && styles.disabledButton
+            ]}
+            disabled={handoffDisabled}
+            onPress={prepareHandoff}
+          >
+            <Text style={styles.primaryText}>
+              {brokerEligibilityLoading
+                ? "Checking Broker Eligibility…"
+                : !realHandoffEligibility.ready
+                  ? `Eligible Broker Required (${reviewOrders.length})`
+                  : `Continue to Order Handoff (${reviewOrders.length})`}
+            </Text>
+          </Pressable>
+        ) : (
+          <Pressable
+            style={[styles.primary, styles.disabledButton]}
+            disabled
+          >
+            <Text style={styles.primaryText}>
+              No Orders to Submit
+            </Text>
+          </Pressable>
+        )
+      ) : (
+        <Pressable
+          style={[
+            styles.primary,
+            queuedOrders.length === 0 && styles.disabledButton
+          ]}
+          disabled={queuedOrders.length === 0}
+          onPress={continueQueuedPracticeExecution}
+        >
+          <Text style={styles.primaryText}>
+            {queuedOrders.length > 0
+              ? `Continue to Order Handoff (${queuedOrders.length})`
+              : "Continue to Order Handoff"}
+          </Text>
+        </Pressable>
+      )}
+      </ResponsiveWorkingRegion>
+    </ResponsiveScreen>
   );
 }
 
@@ -350,10 +1062,19 @@ function ReviewOrderCard({
   statusView,
   brokerEligibility,
   brokerEligibilityLoading,
+  marketRows,
+  marketLoading,
+  marketError,
   onChange,
+  onReplaceSecurity,
   onDelete,
   onQueue
 }) {
+  const [securityPickerOpen, setSecurityPickerOpen] =
+    useState(false);
+  const [securityQuery, setSecurityQuery] =
+    useState("");
+
   const qty = String(order.quantity || "");
   const price = String(order.price || "");
   const amount = Number(order.quantity || 0) * Number(order.price || 0);
@@ -362,6 +1083,75 @@ function ReviewOrderCard({
   const selectedCandidate = candidates.find(
     (candidate) => candidate.brokerAccountId === order.brokerAccountId
   );
+
+  /*
+   * PC-032G8D4C2B
+   *
+   * Investor-facing presentation gate only.
+   *
+   * A REAL order must not present "Prepare This Order" as an
+   * actionable primary CTA while broker eligibility is loading,
+   * absent, or ineligible.
+   *
+   * queueOrder() retains the defensive REAL eligibility guard.
+   * queueSingleOrder() remains the canonical OMS transition owner.
+   *
+   * Practice behavior is intentionally unchanged.
+   */
+  const prepareDisabled =
+    isRealOrder &&
+    (
+      brokerEligibilityLoading ||
+      !selectedCandidate ||
+      selectedCandidate.eligible !== true
+    );
+
+  const practiceSecurityRows =
+    useMemo(() => {
+      const search =
+        securityQuery.trim().toLowerCase();
+
+      const rows =
+        (Array.isArray(marketRows)
+          ? marketRows
+          : [])
+          .filter((row) => {
+            const symbol =
+              String(row?.symbol || "").trim();
+            const price =
+              Number(
+                row?.price ??
+                  row?.lastPrice ??
+                  row?.currentPrice
+              );
+
+            return (
+              symbol &&
+              isCurrentNseSecurity(symbol) &&
+              Number.isFinite(price) &&
+              price > 0
+            );
+          });
+
+      if (!search) {
+        return rows;
+      }
+
+      return rows.filter((row) =>
+        String(row?.symbol || "")
+          .toLowerCase()
+          .includes(search) ||
+        String(row?.name || "")
+          .toLowerCase()
+          .includes(search)
+      );
+    }, [marketRows, securityQuery]);
+
+  function choosePracticeSecurity(security) {
+    setSecurityPickerOpen(false);
+    setSecurityQuery("");
+    onReplaceSecurity(security);
+  }
 
   return (
     <View style={styles.orderCard}>
@@ -379,6 +1169,22 @@ function ReviewOrderCard({
         <Text style={styles.status}>{statusView.label}</Text>
       </View>
 
+      {!isRealOrder ? (
+        <Pressable
+          style={styles.changeSecurityButton}
+          onPress={() =>
+            setSecurityPickerOpen(true)
+          }
+        >
+          <Text style={styles.changeSecurityButtonText}>
+            Change Security
+          </Text>
+          <Text style={styles.changeSecurityButtonMeta}>
+            Select from verified market data
+          </Text>
+        </Pressable>
+      ) : null}
+
       <Text style={styles.reason}>
         {order.reason || statusView.explanation}
       </Text>
@@ -387,6 +1193,137 @@ function ReviewOrderCard({
         <Text style={styles.brokerState}>
           Broker Status: {statusView.brokerStatus}
         </Text>
+      ) : null}
+
+      {!isRealOrder ? (
+        <Modal
+          visible={securityPickerOpen}
+          transparent
+          animationType="fade"
+          onRequestClose={() =>
+            setSecurityPickerOpen(false)
+          }
+        >
+          <Pressable
+            style={styles.securityPickerOverlay}
+            onPress={() =>
+              setSecurityPickerOpen(false)
+            }
+          >
+            <Pressable
+              style={styles.securityPickerModal}
+              onPress={(event) =>
+                event.stopPropagation()
+              }
+            >
+              <View style={styles.securityPickerHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.securityPickerTitle}>
+                    Change Practice Security
+                  </Text>
+                  <Text style={styles.securityPickerHelp}>
+                    Choose a verified market security. This is
+                    available only while the order is in review.
+                  </Text>
+                </View>
+
+                <Pressable
+                  style={styles.securityPickerClose}
+                  onPress={() =>
+                    setSecurityPickerOpen(false)
+                  }
+                >
+                  <Text style={styles.securityPickerCloseText}>
+                    ×
+                  </Text>
+                </Pressable>
+              </View>
+
+              <TextInput
+                value={securityQuery}
+                onChangeText={setSecurityQuery}
+                autoCapitalize="characters"
+                placeholder="Search symbol or company name"
+                placeholderTextColor="#64748b"
+                style={styles.securityPickerSearch}
+              />
+
+              {marketLoading ? (
+                <Text style={styles.securityPickerMessage}>
+                  Loading verified NSE securities…
+                </Text>
+              ) : null}
+
+              {!marketLoading &&
+              !practiceSecurityRows.length ? (
+                <Text style={styles.securityPickerMessage}>
+                  {securityQuery.trim()
+                    ? "No matching verified security."
+                    : marketError ||
+                      "Verified market securities are unavailable."}
+                </Text>
+              ) : null}
+
+              <ScrollView
+                style={styles.securityPickerList}
+                keyboardShouldPersistTaps="handled"
+              >
+                {practiceSecurityRows.map(
+                  (security) => {
+                    const marketPrice =
+                      Number(
+                        security?.price ??
+                          security?.lastPrice ??
+                          security?.currentPrice
+                      );
+
+                    const selected =
+                      String(
+                        security?.symbol || ""
+                      ).toUpperCase() ===
+                      String(
+                        order?.symbol || ""
+                      ).toUpperCase();
+
+                    return (
+                      <Pressable
+                        key={security.symbol}
+                        style={[
+                          styles.securityPickerRow,
+                          selected &&
+                            styles.securityPickerRowSelected
+                        ]}
+                        onPress={() =>
+                          choosePracticeSecurity(
+                            security
+                          )
+                        }
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={styles.securityPickerSymbol}>
+                            {security.symbol}
+                          </Text>
+
+                          <Text style={styles.securityPickerName}>
+                            {security.name ||
+                              security.symbol}
+                            {security.sector
+                              ? ` • ${security.sector}`
+                              : ""}
+                          </Text>
+                        </View>
+
+                        <Text style={styles.securityPickerPrice}>
+                          KES {money(marketPrice)}
+                        </Text>
+                      </Pressable>
+                    );
+                  }
+                )}
+              </ScrollView>
+            </Pressable>
+          </Pressable>
+        </Modal>
       ) : null}
 
       <View style={styles.sideRow}>
@@ -587,8 +1524,24 @@ function ReviewOrderCard({
       ) : null}
 
       <View style={styles.buttonRow}>
-        <Pressable style={styles.queueButton} onPress={onQueue}>
-          <Text style={styles.queueText}>Prepare This Order</Text>
+        <Pressable
+          style={[
+            styles.queueButton,
+            prepareDisabled && styles.queueButtonDisabled
+          ]}
+          disabled={prepareDisabled}
+          onPress={onQueue}
+        >
+          <Text
+            style={[
+              styles.queueText,
+              prepareDisabled && styles.queueTextDisabled
+            ]}
+          >
+            {isRealOrder && brokerEligibilityLoading
+              ? "Checking Broker Eligibility…"
+              : "Prepare This Order"}
+          </Text>
         </Pressable>
 
         <Pressable style={styles.deleteButton} onPress={onDelete}>
@@ -662,8 +1615,10 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     fontSize: 12
   },
-  screen: { flex: 1, backgroundColor: "#020617" },
-  content: { /* PC-030M20AV3AL RESPONSIVE UAT CALIBRATION */ width: "100%", maxWidth: 960, alignSelf: "center", padding: 22, paddingTop: 70, paddingBottom: 128 },
+  // PC-032G8D4E — ResponsiveScreen owns the route shell.
+  workingRegion: {
+    width: "100%"
+  },
   headerRow: {
     flexDirection: "row",
     flexWrap: "wrap",
@@ -672,6 +1627,14 @@ const styles = StyleSheet.create({
     gap: 12
   },
   title: { color: "white", fontSize: 32, fontWeight: "900", flex: 1 },
+  ordersReviewIdentity: {
+    flex: 1,
+    minWidth: 0
+  },
+  ordersReviewTitle: {
+    fontSize: 28,
+    lineHeight: 34
+  },
   subtitle: { color: "#94a3b8", marginTop: 10, lineHeight: 22 },
   dashboardButton: {
     backgroundColor: "#1e293b",
@@ -707,6 +1670,57 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     marginTop: 6,
     fontSize: 13
+  },
+  practiceFundingFeedback: {
+    marginTop: 18,
+    backgroundColor: "#221a09",
+    borderColor: "#a16207",
+    borderWidth: 1,
+    borderRadius: 16,
+    padding: 16
+  },
+  practiceFundingFeedbackTitle: {
+    color: "#facc15",
+    fontSize: 16,
+    fontWeight: "900"
+  },
+  practiceFundingFeedbackText: {
+    color: "#fef3c7",
+    marginTop: 7,
+    lineHeight: 20
+  },
+  practiceFundingFeedbackAmount: {
+    color: "#fde68a",
+    marginTop: 9,
+    fontWeight: "900"
+  },
+  practiceFundingFeedbackActions: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 10,
+    marginTop: 14
+  },
+  practiceFundingFeedbackButton: {
+    backgroundColor: "#9333ea",
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14
+  },
+  practiceFundingFeedbackButtonText: {
+    color: "white",
+    fontWeight: "900"
+  },
+  practiceFundingDismissButton: {
+    backgroundColor: "#1e293b",
+    borderColor: "#334155",
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 14
+  },
+  practiceFundingDismissText: {
+    color: "#cbd5e1",
+    fontWeight: "800"
   },
   search: {
     marginTop: 18,
@@ -764,6 +1778,114 @@ const styles = StyleSheet.create({
     color: "#cbd5e1",
     marginTop: 12,
     lineHeight: 20
+  },
+  changeSecurityButton: {
+    marginTop: 12,
+    alignSelf: "flex-start",
+    backgroundColor: "rgba(103,232,249,.08)",
+    borderColor: "rgba(103,232,249,.35)",
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 9,
+    paddingHorizontal: 12
+  },
+  changeSecurityButtonText: {
+    color: "#67e8f9",
+    fontWeight: "900"
+  },
+  changeSecurityButtonMeta: {
+    color: "#94a3b8",
+    fontSize: 10,
+    marginTop: 2
+  },
+  securityPickerOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(2,6,23,.82)",
+    justifyContent: "center",
+    padding: 18
+  },
+  securityPickerModal: {
+    width: "100%",
+    maxWidth: 680,
+    maxHeight: "82%",
+    alignSelf: "center",
+    backgroundColor: "#0f172a",
+    borderColor: "#334155",
+    borderWidth: 1,
+    borderRadius: 20,
+    padding: 16
+  },
+  securityPickerHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 12
+  },
+  securityPickerTitle: {
+    color: "#67e8f9",
+    fontSize: 18,
+    fontWeight: "900"
+  },
+  securityPickerHelp: {
+    color: "#94a3b8",
+    marginTop: 5,
+    lineHeight: 18
+  },
+  securityPickerClose: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#1e293b",
+    alignItems: "center",
+    justifyContent: "center"
+  },
+  securityPickerCloseText: {
+    color: "white",
+    fontSize: 22,
+    fontWeight: "900",
+    lineHeight: 24
+  },
+  securityPickerSearch: {
+    marginTop: 14,
+    backgroundColor: "#020617",
+    borderColor: "#334155",
+    borderWidth: 1,
+    borderRadius: 14,
+    padding: 13,
+    color: "white"
+  },
+  securityPickerMessage: {
+    color: "#94a3b8",
+    marginTop: 14,
+    lineHeight: 19
+  },
+  securityPickerList: {
+    marginTop: 12
+  },
+  securityPickerRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 10,
+    borderBottomColor: "#1e293b",
+    borderBottomWidth: 1
+  },
+  securityPickerRowSelected: {
+    backgroundColor: "rgba(147,51,234,.12)"
+  },
+  securityPickerSymbol: {
+    color: "white",
+    fontWeight: "900",
+    fontSize: 15
+  },
+  securityPickerName: {
+    color: "#94a3b8",
+    marginTop: 3,
+    fontSize: 12
+  },
+  securityPickerPrice: {
+    color: "#67e8f9",
+    fontWeight: "900"
   },
   sideRow: {
     flexDirection: "row",
@@ -877,11 +1999,19 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 16
   },
+  queueButtonDisabled: {
+    backgroundColor: "#334155",
+    borderColor: "#475569",
+    borderWidth: 1
+  },
   queueText: {
     color: "white",
     textAlign: "center",
     fontWeight: "900",
     fontSize: 12
+  },
+  queueTextDisabled: {
+    color: "#94a3b8"
   },
   deleteButton: {
     flexGrow: 1,

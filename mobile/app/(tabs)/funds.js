@@ -20,8 +20,14 @@ import {
 } from "../../src/security/importFileSecurity";
 
 import {
+  userGetItem,
   userSetItem
 } from "../../src/auth/userStorage";
+
+import {
+  loadInvestorContext,
+  savePracticePortfolio
+} from "../../src/features/investor/investorContextStore";
 import { getCurrentSession } from "../../src/auth/authStore";
 import { API_URL } from "../../src/config/apiConfig";
 import { extractBrokerPdf } from "../../src/services/brokers/brokerPdfExtractionApi";
@@ -51,9 +57,34 @@ import { rebuildCanonicalPortfolioLedger } from "../../src/features/trading/cano
 // PC-030M20AV3J RESPONSIVE CALIBRATION
 export default function Funds() {
   const params = useLocalSearchParams();
+
+  const practiceMode =
+    String(params?.source || "").toUpperCase() === "PRACTICE";
+
+  const returnToOrdersReview =
+    practiceMode &&
+    String(params?.returnTo || "").toUpperCase() ===
+      "ORDERS_REVIEW";
+
   const reconciliationMode =
+    !practiceMode &&
     String(params?.mode || "").toUpperCase() === "RECONCILE";
+
   const [cash, setCash] = useState("");
+  const [practiceAvailableCash, setPracticeAvailableCash] =
+    useState(0);
+  const [practiceLoading, setPracticeLoading] =
+    useState(false);
+
+  // PC-032G4B1C7E2E
+  //
+  // Practice funding authority remains unchanged. Funds may mutate
+  // availableCash only for an existing ACTIVE Practice Portfolio.
+  //
+  // React Native Alert callbacks are not a reliable recovery surface
+  // on web, so browser flows expose funding validation/recovery inline.
+  const [practiceFundingFeedback, setPracticeFundingFeedback] =
+    useState(null);
   const [broker, setBroker] = useState("AIB");
   const [status, setStatus] = useState("");
   const [selectedFile, setSelectedFile] = useState(null);
@@ -63,10 +94,76 @@ export default function Funds() {
   const [connectedRealBroker, setConnectedRealBroker] = useState(false);
 
   useEffect(() => {
+    if (practiceMode) {
+      setConnectedRealBroker(false);
+      loadPracticeFunds();
+
+      /*
+       * Practice funding amount passed from an investor-facing
+       * affordability boundary is presentation context only.
+       *
+       * updatePracticeFunds() remains the sole mutation owner and
+       * performs its existing validation before any Practice cash
+       * change.
+       */
+      const requestedAmount =
+        Number(params?.amount || 0);
+
+      if (
+        Number.isFinite(requestedAmount) &&
+        requestedAmount > 0
+      ) {
+        setCash(
+          requestedAmount.toFixed(2)
+        );
+      }
+
+      return;
+    }
+
     loadBrokerAccounts()
       .then((accounts) => setConnectedRealBroker(hasConnectedRealBrokerAccount(accounts)))
       .catch(() => setConnectedRealBroker(false));
-  }, []);
+  }, [practiceMode, params?.amount]);
+
+  async function loadPracticeFunds() {
+    try {
+      setPracticeLoading(true);
+
+      const context =
+        await loadInvestorContext();
+
+      const practice =
+        context?.practicePortfolio;
+
+      if (
+        !practice ||
+        practice?.status !== "ACTIVE"
+      ) {
+        setPracticeAvailableCash(0);
+        return;
+      }
+
+      setPracticeAvailableCash(
+        Math.max(
+          0,
+          Number(
+            practice?.availableCash ||
+            0
+          )
+        )
+      );
+    } catch (error) {
+      console.error(
+        "Unable to load Practice funds:",
+        error
+      );
+
+      setPracticeAvailableCash(0);
+    } finally {
+      setPracticeLoading(false);
+    }
+  }
 
   async function pickStatementFile() {
     try {
@@ -278,7 +375,292 @@ export default function Funds() {
     return NaN;
   }
 
+  function showPracticeFundingFeedback({
+    title,
+    message,
+    requiresPortfolio = false
+  }) {
+    if (Platform.OS === "web") {
+      setPracticeFundingFeedback({
+        title,
+        message,
+        requiresPortfolio
+      });
+      return true;
+    }
+
+    return false;
+  }
+
+  async function updatePracticeFunds(
+    transactionType
+  ) {
+    try {
+      setPracticeFundingFeedback(null);
+
+      const amount =
+        cleanNumber(cash);
+
+      if (
+        !Number.isFinite(amount) ||
+        amount <= 0
+      ) {
+        const title = "Invalid Amount";
+        const message =
+          "Enter a Practice funding amount greater than zero.";
+
+        if (
+          !showPracticeFundingFeedback({
+            title,
+            message
+          })
+        ) {
+          Alert.alert(title, message);
+        }
+
+        return;
+      }
+
+      setPracticeLoading(true);
+
+      const context =
+        await loadInvestorContext();
+
+      const practice =
+        context?.practicePortfolio;
+
+      if (
+        !practice ||
+        practice?.status !== "ACTIVE"
+      ) {
+        const title =
+          "Practice Portfolio Required";
+        const message =
+          "Create your Practice Portfolio before adding or withdrawing Practice funds.";
+
+        if (
+          !showPracticeFundingFeedback({
+            title,
+            message,
+            requiresPortfolio: true
+          })
+        ) {
+          Alert.alert(title, message);
+        }
+
+        return;
+      }
+
+      const currentCash =
+        Math.max(
+          0,
+          Number(
+            practice?.availableCash ||
+            0
+          )
+        );
+
+      const normalizedType =
+        String(
+          transactionType ||
+          ""
+        ).toUpperCase();
+
+      if (
+        normalizedType !==
+          "PRACTICE_DEPOSIT" &&
+        normalizedType !==
+          "PRACTICE_WITHDRAWAL"
+      ) {
+        throw new Error(
+          "Unsupported Practice funding transaction."
+        );
+      }
+
+      if (
+        normalizedType ===
+          "PRACTICE_WITHDRAWAL" &&
+        amount > currentCash
+      ) {
+        const title =
+          "Insufficient Practice Cash";
+        const message =
+          `Available Practice cash is KES ${money(currentCash)}.`;
+
+        if (
+          !showPracticeFundingFeedback({
+            title,
+            message
+          })
+        ) {
+          Alert.alert(title, message);
+        }
+
+        return;
+      }
+
+      const nextCash =
+        normalizedType ===
+          "PRACTICE_DEPOSIT"
+          ? currentCash + amount
+          : currentCash - amount;
+
+      const now =
+        new Date().toISOString();
+
+      const event = {
+        id:
+          `practice-funding-${Date.now()}`,
+
+        type:
+          normalizedType,
+
+        amount:
+          Number(
+            amount.toFixed(2)
+          ),
+
+        previousAvailableCash:
+          Number(
+            currentCash.toFixed(2)
+          ),
+
+        availableCashAfter:
+          Number(
+            nextCash.toFixed(2)
+          ),
+
+        source:
+          "GATECEP_PRACTICE_FUNDS",
+
+        isPractice:
+          true,
+
+        affectsRealCash:
+          false,
+
+        createdAt:
+          now
+      };
+
+      const historyRaw =
+        await userGetItem(
+          "practiceFundingEvents"
+        );
+
+      let history = [];
+
+      if (historyRaw) {
+        try {
+          const parsed =
+            JSON.parse(historyRaw);
+
+          history =
+            Array.isArray(parsed)
+              ? parsed
+              : [];
+        } catch {
+          history = [];
+        }
+      }
+
+      /*
+       * Practice cash mutation is canonical only inside
+       * practicePortfolio.availableCash.
+       *
+       * Do not write userStorage["availableCash"].
+       * Do not call /user-cash.
+       * Do not rebuild the REAL ledger.
+       * Do not refresh a REAL portfolio snapshot.
+       */
+      await savePracticePortfolio({
+        ...practice,
+
+        availableCash:
+          Number(
+            nextCash.toFixed(2)
+          ),
+
+        lastActivityType:
+          normalizedType,
+
+        lastPracticeFundingAt:
+          now
+      });
+
+      await userSetItem(
+        "practiceFundingEvents",
+        JSON.stringify([
+          event,
+          ...history
+        ])
+      );
+
+      setPracticeAvailableCash(
+        Number(
+          nextCash.toFixed(2)
+        )
+      );
+
+      setCash("");
+
+      const successTitle =
+        normalizedType ===
+          "PRACTICE_DEPOSIT"
+          ? "Practice Deposit Complete"
+          : "Practice Withdrawal Complete";
+
+      const successMessage =
+        `${
+          normalizedType ===
+            "PRACTICE_DEPOSIT"
+            ? "Deposited"
+            : "Withdrew"
+        } KES ${money(amount)}. Available Practice cash is now KES ${money(nextCash)}. No real money was moved.`;
+
+      if (
+        !showPracticeFundingFeedback({
+          title: successTitle,
+          message: successMessage
+        })
+      ) {
+        Alert.alert(
+          successTitle,
+          successMessage
+        );
+      }
+    } catch (error) {
+      console.error(
+        "Practice funds update failed:",
+        error
+      );
+
+      const title =
+        "Practice Funds Update Failed";
+      const message =
+        error?.message ||
+        "Unable to update Practice funds.";
+
+      if (
+        !showPracticeFundingFeedback({
+          title,
+          message
+        })
+      ) {
+        Alert.alert(title, message);
+      }
+    } finally {
+      setPracticeLoading(false);
+    }
+  }
+
   async function saveStatement() {
+    if (practiceMode) {
+      throw new Error(
+        "Practice Funds cannot use the REAL cash statement path."
+      );
+    }
+
     try {
       const amount = cleanNumber(cash);
 
@@ -426,6 +808,176 @@ const token =
     }
   }
 
+  if (practiceMode) {
+    return (
+      <ScrollView
+        style={styles.screen}
+        contentContainerStyle={styles.content}
+      >
+        <View style={styles.headerRow}>
+          <Text style={styles.title}>
+            Practice Funds
+          </Text>
+
+          <Pressable
+            style={styles.dashboardButton}
+            onPress={() =>
+              router.replace(
+                "/(tabs)/dashboard"
+              )
+            }
+          >
+            <Text
+              style={
+                styles.dashboardButtonText
+              }
+            >
+              Dashboard
+            </Text>
+          </Pressable>
+        </View>
+
+        <Text style={styles.subtitle}>
+          Add or withdraw simulated cash for your Practice Portfolio. No real money is moved and no REAL broker balance is changed.
+        </Text>
+
+        <View style={styles.statusBox}>
+          <Text style={styles.statusText}>
+            SIMULATION ONLY — NO REAL MONEY
+          </Text>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>
+            Available Practice Cash
+          </Text>
+
+          <Text style={styles.practiceCashValue}>
+            {practiceLoading
+              ? "Loading..."
+              : `KES ${money(
+                  practiceAvailableCash
+                )}`}
+          </Text>
+
+          <Text style={styles.help}>
+            This is buying power for simulated Practice trades. Deposits and withdrawals are not investment gains or losses.
+          </Text>
+        </View>
+
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>
+            Practice Funding Amount
+          </Text>
+
+          <TextInput
+            placeholder="Amount e.g. 20000"
+            placeholderTextColor="#64748b"
+            keyboardType="numeric"
+            value={cash}
+            onChangeText={setCash}
+            style={styles.input}
+          />
+        </View>
+
+        {Platform.OS === "web" &&
+        practiceFundingFeedback ? (
+          <View style={styles.practiceFundingFeedbackCard}>
+            <Text style={styles.practiceFundingFeedbackTitle}>
+              {practiceFundingFeedback.title}
+            </Text>
+
+            <Text style={styles.practiceFundingFeedbackText}>
+              {practiceFundingFeedback.message}
+            </Text>
+
+            {practiceFundingFeedback.requiresPortfolio ? (
+              <Pressable
+                style={styles.primary}
+                onPress={() =>
+                  router.push("/starter-plan")
+                }
+              >
+                <Text style={styles.primaryText}>
+                  Create / Open Practice Portfolio
+                </Text>
+              </Pressable>
+            ) : null}
+
+            <Pressable
+              style={styles.secondary}
+              onPress={() =>
+                setPracticeFundingFeedback(null)
+              }
+            >
+              <Text style={styles.secondaryText}>
+                Dismiss
+              </Text>
+            </Pressable>
+
+            {returnToOrdersReview ? (
+              <Pressable
+                style={styles.backButton}
+                onPress={() =>
+                  router.replace("/orders-review")
+                }
+              >
+                <Text style={styles.backText}>
+                  Back to Orders Review
+                </Text>
+              </Pressable>
+            ) : null}
+          </View>
+        ) : null}
+
+        <Pressable
+          style={styles.primary}
+          disabled={practiceLoading}
+          onPress={() =>
+            updatePracticeFunds(
+              "PRACTICE_DEPOSIT"
+            )
+          }
+        >
+          <Text style={styles.primaryText}>
+            Deposit Practice Funds
+          </Text>
+        </Pressable>
+
+        <Pressable
+          style={styles.secondary}
+          disabled={practiceLoading}
+          onPress={() =>
+            updatePracticeFunds(
+              "PRACTICE_WITHDRAWAL"
+            )
+          }
+        >
+          <Text style={styles.secondaryText}>
+            Withdraw Practice Funds
+          </Text>
+        </Pressable>
+
+        <Pressable
+          style={styles.backButton}
+          onPress={() =>
+            router.replace(
+              returnToOrdersReview
+                ? "/orders-review"
+                : "/(tabs)/dashboard"
+            )
+          }
+        >
+          <Text style={styles.backText}>
+            {returnToOrdersReview
+              ? "Back to Orders Review"
+              : "Back to Practice Portfolio"}
+          </Text>
+        </Pressable>
+      </ScrollView>
+    );
+  }
+
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
       <View style={styles.headerRow}>
@@ -567,6 +1119,34 @@ function money(v) {
 }
 
 const styles = StyleSheet.create({
+  practiceFundingFeedbackCard: {
+    marginBottom: 14,
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "rgba(34,211,238,.45)",
+    backgroundColor: "rgba(8,145,178,.10)",
+    gap: 10
+  },
+
+  practiceFundingFeedbackTitle: {
+    color: "#67e8f9",
+    fontSize: 16,
+    fontWeight: "900"
+  },
+
+  practiceFundingFeedbackText: {
+    color: "#cbd5e1",
+    lineHeight: 20
+  },
+
+  practiceCashValue: {
+    color: "#f8fafc",
+    fontSize: 28,
+    fontWeight: "900",
+    marginTop: 8,
+    marginBottom: 8
+  },
   screen: { flex: 1, backgroundColor: "#020617" },
   content: { width: "100%", maxWidth: 960, alignSelf: "center", padding: 22, paddingTop: 70, paddingBottom: 128 },
   title: { color: "white", fontSize: 34, fontWeight: "900" },

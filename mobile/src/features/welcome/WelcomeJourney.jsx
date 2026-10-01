@@ -251,8 +251,14 @@ export default function WelcomeJourney() {
         ))}
       </View>
 
-      <Pressable style={styles.primary} onPress={handleComplete}>
-        <Text style={styles.primaryText}>Build My Wealth Blueprint</Text>
+      <Pressable
+        style={[styles.primary, loading && { opacity: 0.6 }]}
+        onPress={handleComplete}
+        disabled={loading}
+      >
+        <Text style={styles.primaryText}>
+          {loading ? "Building Your Wealth Blueprint…" : "Build My Wealth Blueprint"}
+        </Text>
       </Pressable>
 
       <Pressable style={styles.secondary} onPress={goBack}>

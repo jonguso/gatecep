@@ -26,13 +26,34 @@ import CoachInsightCard from "./components/CoachInsightCard";
 import ConfidenceMeter from "./components/ConfidenceMeter";
 import LessonCard from "./components/LessonCard";
 import PortfolioAllocationCard from "./components/PortfolioAllocationCard";
-import { useMarketData } from "../../services/markets/useMarketData";
+import useMarketData from "../../services/markets/useMarketData";
 
 /*
  * ============================================================
  * ALLOCATION EDUCATION
  * ============================================================
  */
+
+/*
+ * ============================================================
+ * PRACTICE OPENING CAPITAL CONTRACT
+ * ============================================================
+ *
+ * A new Practice Portfolio starts with KES 10,000.
+ *
+ * The Practice allocation engine attempts to invest as much of
+ * that amount as possible into securities.
+ *
+ * Wealth Blueprint cash remains a wealth/planning concept. It is
+ * NOT an investable Practice Portfolio allocation.
+ *
+ * Any amount that cannot be invested because whole shares cannot
+ * be purchased becomes Practice available cash.
+ *
+ * Additional Practice cash must come from an explicit future
+ * Practice deposit. No synthetic buying-power balance is seeded.
+ */
+const PRACTICE_INITIAL_INVESTMENT_CAPITAL = 10000;
 
 const ALLOCATION_REASONS = {
   "Growth Stocks":
@@ -254,7 +275,7 @@ export default function PracticePortfolio() {
    * Use one source consistently throughout this screen.
    */
 
-  const startingAmount = useMemo(() => {
+  const investorPlanningAmount = useMemo(() => {
     return Number(
       savedProfile?.starterPlan?.startingAmount ??
       savedProfile?.profile?.amount ??
@@ -262,6 +283,13 @@ export default function PracticePortfolio() {
       0
     );
   }, [savedProfile]);
+
+  /*
+   * The Practice account has its own fixed opening investment
+   * capital. Investor DNA amount remains planning evidence only.
+   */
+  const startingAmount =
+    PRACTICE_INITIAL_INVESTMENT_CAPITAL;
 
   /*
    * ==========================================================
@@ -285,21 +313,60 @@ export default function PracticePortfolio() {
           ? "Growth Stocks"
           : "ETF / Diversifier";
 
+      const equityWeight =
+        Math.max(
+          0,
+          Number(
+            allocation.equity || 0
+          )
+        );
+
+      const incomeWeight =
+        Math.max(
+          0,
+          Number(
+            allocation.income || 0
+          )
+        );
+
+      const investableWeight =
+        equityWeight +
+        incomeWeight;
+
+      /*
+       * Wealth cash is intentionally excluded here.
+       *
+       * Normalize only investable categories so the Practice
+       * engine attempts to deploy the full KES 10,000.
+       */
+      if (investableWeight <= 0) {
+        return [];
+      }
+
+      const normalizedEquityWeight =
+        (
+          equityWeight /
+          investableWeight
+        ) * 100;
+
+      const normalizedIncomeWeight =
+        (
+          incomeWeight /
+          investableWeight
+        ) * 100;
+
       return [
         {
           name: equityName,
 
           weight:
-            Number(
-              allocation.equity || 0
-            ),
+            normalizedEquityWeight,
 
           amount:
             startingAmount *
             (
-              Number(
-                allocation.equity || 0
-              ) / 100
+              normalizedEquityWeight /
+              100
             )
         },
 
@@ -307,33 +374,13 @@ export default function PracticePortfolio() {
           name: "Dividend Stocks",
 
           weight:
-            Number(
-              allocation.income || 0
-            ),
+            normalizedIncomeWeight,
 
           amount:
             startingAmount *
             (
-              Number(
-                allocation.income || 0
-              ) / 100
-            )
-        },
-
-        {
-          name: "Cash Reserve",
-
-          weight:
-            Number(
-              allocation.cash || 0
-            ),
-
-          amount:
-            startingAmount *
-            (
-              Number(
-                allocation.cash || 0
-              ) / 100
+              normalizedIncomeWeight /
+              100
             )
         }
       ];
@@ -360,8 +407,12 @@ export default function PracticePortfolio() {
     useMemo(() => {
       return buildPracticeHoldings(
         allocations,
-      marketRows);
-    }, [allocations]);
+        marketRows
+      );
+    }, [
+      allocations,
+      marketRows
+    ]);
 
   /*
    * ==========================================================
@@ -371,15 +422,18 @@ export default function PracticePortfolio() {
 
     /*
    * ==========================================================
-   * PORTFOLIO ACCOUNTING
+   * PRACTICE OPENING ACCOUNTING
    * ==========================================================
    *
-   * Any money that cannot purchase a whole share
-   * remains available cash.
+   * Invest the maximum practical amount of the KES 10,000
+   * opening capital.
    *
-   * Accounting invariant:
+   * Only the unavoidable whole-share remainder becomes
+   * Practice available cash.
    *
-   * startingAmount =
+   * Accounting invariant at creation:
+   *
+   * openingInvestmentCapital =
    * investedAmount + availableCash
    */
 
@@ -391,7 +445,7 @@ export default function PracticePortfolio() {
     );
   }, [practiceHoldings]);
 
-  const cashReserve = useMemo(() => {
+  const initialAllocationRemainder = useMemo(() => {
     return Math.max(
       0,
       Number(
@@ -475,6 +529,16 @@ export default function PracticePortfolio() {
         type:
           "GATECEP_PRACTICE_PORTFOLIO",
 
+        capitalModel:
+          "GATECEP_PRACTICE_INVEST_MAX_V1",
+
+        investorPlanningAmount,
+
+        initialInvestmentCapital:
+          PRACTICE_INITIAL_INVESTMENT_CAPITAL,
+
+        initialAllocationRemainder,
+
         status:
           "ACTIVE",
 
@@ -501,7 +565,7 @@ export default function PracticePortfolio() {
         investedAmount,
 
         availableCash:
-          cashReserve,
+          initialAllocationRemainder,
 
         holdings:
           practiceHoldings,
@@ -544,12 +608,14 @@ export default function PracticePortfolio() {
         )
       );
 
-      await userSetItem(
-        "availableCash",
-        String(
-          cashReserve
-        )
-      );
+      /*
+       * Do not copy Practice available cash into
+       * userStorage["availableCash"].
+       *
+       * That key belongs to the REAL/legacy cash path.
+       * Practice cash is canonical only inside
+       * practicePortfolio.availableCash.
+       */
 
       /*
        * ------------------------------------------------------
@@ -838,9 +904,9 @@ export default function PracticePortfolio() {
         />
 
         <Metric
-          label="Cash Reserve"
+          label="Available Cash"
           value={`KES ${money(
-            cashReserve
+            initialAllocationRemainder
           )}`}
         />
 

@@ -1,5 +1,6 @@
 import React, {
   useMemo,
+  useRef,
   useState
 } from "react";
 
@@ -19,12 +20,21 @@ import {
 
 import {
   buildFilingExtractionWorkspace,
+  buildFilingExtractionWorkspaceFromFinancialEvidencePreview,
   buildFilingReadyJson
 } from "../src/features/fundamentals/extraction/filingExtractionService";
 
 import {
   submitExtractionWorkspaceToFilings
 } from "../src/features/fundamentals/extraction/extractionSubmissionHandoff";
+
+import {
+  useAuth
+} from "../src/features/auth/hooks/useAuth";
+
+import {
+  retrieveIssuerFinancialEvidencePreview
+} from "../src/features/fundamentals/api/fundamentalEvidenceApi";
 
 /*
  * ============================================================
@@ -67,6 +77,12 @@ const PERIOD_FIELDS = [
 // PC-030M20AV3G RESPONSIVE CALIBRATION
 export default function FilingExtractionScreen() {
   const { width: windowWidth } = useWindowDimensions();
+  const { accessToken } = useAuth();
+
+  const scrollViewRef = useRef(null);
+  const extractionValidationYRef = useRef(null);
+  const pendingIssuerReviewScrollRef = useRef(false);
+
   const [
     symbol,
     setSymbol
@@ -155,6 +171,45 @@ export default function FilingExtractionScreen() {
     setSubmissionResult
   ] = useState(null);
 
+  // PC-032G5D7C2
+  // Qualified issuer/regulator retrieval remains preview-only.
+  // It does not populate the manual verified-entry authority,
+  // generate filing-ready JSON, or submit a filing.
+  const [
+    issuerPreviewUrl,
+    setIssuerPreviewUrl
+  ] = useState("");
+
+  const [
+    issuerPreviewLoading,
+    setIssuerPreviewLoading
+  ] = useState(false);
+
+  const [
+    issuerPreviewError,
+    setIssuerPreviewError
+  ] = useState("");
+
+  const [
+    issuerPreview,
+    setIssuerPreview
+  ] = useState(null);
+
+  const [
+    issuerPreviewWorkspace,
+    setIssuerPreviewWorkspace
+  ] = useState(null);
+
+  const [
+    resultOrigin,
+    setResultOrigin
+  ] = useState("MANUAL");
+
+  const [
+    issuerLifecyclePrepared,
+    setIssuerLifecyclePrepared
+  ] = useState(false);
+
   const period =
     useMemo(
       () => ({
@@ -237,6 +292,127 @@ export default function FilingExtractionScreen() {
       ]
     );
 
+  async function retrieveIssuerPreview() {
+    try {
+      setIssuerPreviewLoading(true);
+      setIssuerPreviewError("");
+      setIssuerPreview(null);
+      setIssuerPreviewWorkspace(null);
+
+      // Keep the issuer retrieval path completely separate from the
+      // manual verified-entry path and any filing submission state.
+      setSubmissionResult(null);
+
+      const preview =
+        await retrieveIssuerFinancialEvidencePreview({
+          accessToken,
+          symbol,
+          url:
+            issuerPreviewUrl
+        });
+
+      const workspace =
+        buildFilingExtractionWorkspaceFromFinancialEvidencePreview(
+          preview
+        );
+
+      setIssuerPreview(
+        preview
+      );
+
+      setIssuerPreviewWorkspace(
+        workspace
+      );
+    } catch (
+      previewError
+    ) {
+      setIssuerPreviewError(
+        previewError?.message ||
+          "Unable to retrieve issuer financial evidence."
+      );
+    } finally {
+      setIssuerPreviewLoading(false);
+    }
+  }
+
+  function useIssuerPreviewForReview() {
+    if (!issuerPreviewWorkspace) {
+      setIssuerPreviewError(
+        "Retrieve issuer evidence before opening the PC-025 review workspace."
+      );
+      return;
+    }
+
+    // PC-032G5D7C4
+    // This is a review handoff only.
+    //
+    // The preview workspace remains the authority exactly as produced
+    // by the fail-closed financial-evidence adapter. Do not flatten it
+    // into the manual verified-entry fields.
+    setResult(
+      issuerPreviewWorkspace
+    );
+
+    setResultOrigin(
+      "ISSUER_PREVIEW"
+    );
+
+    // A retrieved preview is not filing-ready merely because an
+    // investor/reviewer chose to inspect it in the PC-025 workspace.
+    setOutputJson("");
+    setSubmissionResult(null);
+    setIssuerLifecyclePrepared(false);
+
+    // PC-032G5D7C5F
+    // Request navigation to the review destination. The actual scroll
+    // occurs from that destination's onLayout callback, after React has
+    // committed and measured the newly rendered review workspace.
+    pendingIssuerReviewScrollRef.current = true;
+  }
+
+  function prepareIssuerPreviewForFilingLifecycle() {
+    if (
+      resultOrigin !== "ISSUER_PREVIEW" ||
+      !result
+    ) {
+      setIssuerPreviewError(
+        "Open retrieved issuer evidence in the PC-025 review workspace first."
+      );
+      return;
+    }
+
+    if (
+      result?.status !== "READY" ||
+      Number(result?.completenessPercentage || 0) < 100 ||
+      (Array.isArray(result?.errors) &&
+        result.errors.length > 0)
+    ) {
+      setIssuerPreviewError(
+        "Issuer evidence must be READY, 100% complete, and free of extraction errors before entering the filing lifecycle."
+      );
+      return;
+    }
+
+    const filingReady =
+      buildFilingReadyJson({
+        workspace: result
+      });
+
+    setOutputJson(
+      JSON.stringify(
+        filingReady,
+        null,
+        2
+      )
+    );
+
+    setSubmissionResult(null);
+    setSubmitForReview(false);
+    setAllowDuplicate(false);
+    setIssuerLifecyclePrepared(true);
+    setIssuerPreviewError("");
+  }
+
   function runValidation() {
     const workspace =
       buildFilingExtractionWorkspace({
@@ -308,6 +484,12 @@ export default function FilingExtractionScreen() {
     setResult(
       workspace
     );
+
+    setResultOrigin(
+      "MANUAL"
+    );
+
+    setIssuerLifecyclePrepared(false);
 
     setOutputJson(
       JSON.stringify(
@@ -387,12 +569,15 @@ export default function FilingExtractionScreen() {
     );
 
     setResult(null);
+    setResultOrigin("MANUAL");
     setOutputJson("");
     setSubmissionResult(null);
+    setIssuerLifecyclePrepared(false);
   }
 
   return (
     <ScrollView
+      ref={scrollViewRef}
       style={
         styles.screen
       }
@@ -431,6 +616,212 @@ export default function FilingExtractionScreen() {
         references, run accounting checks, and generate filing-ready
         JSON for PC-025B review.
       </Text>
+
+      <Section
+        title="Qualified Issuer Evidence Preview"
+        description="Retrieve a qualified issuer or regulator PDF for extraction preview. Retrieved evidence remains unverified, non-authoritative, and non-persistent until the separate PC-025 filing lifecycle explicitly reviews it."
+      >
+        <Field
+          label="Issuer / Regulator PDF URL"
+          value={
+            issuerPreviewUrl
+          }
+          onChangeText={
+            setIssuerPreviewUrl
+          }
+          autoCapitalize="none"
+          autoCorrect={
+            false
+          }
+          placeholder="https://..."
+        />
+
+        <Pressable
+          disabled={
+            issuerPreviewLoading
+          }
+          style={[
+            styles.primaryButton,
+            issuerPreviewLoading && {
+              opacity:
+                0.55
+            }
+          ]}
+          onPress={
+            retrieveIssuerPreview
+          }
+        >
+          <Text
+            style={
+              styles.primaryButtonText
+            }
+          >
+            {issuerPreviewLoading
+              ? "Retrieving Preview..."
+              : "Retrieve Issuer Evidence Preview"}
+          </Text>
+        </Pressable>
+
+        {issuerPreviewError ? (
+          <View
+            style={
+              styles.previewBoundaryCard
+            }
+          >
+            <Text
+              style={
+                styles.previewBoundaryTitle
+              }
+            >
+              Preview Retrieval Failed
+            </Text>
+
+            <Text
+              style={
+                styles.previewBoundaryText
+              }
+            >
+              {issuerPreviewError}
+            </Text>
+          </View>
+        ) : null}
+
+        {issuerPreview &&
+        issuerPreviewWorkspace ? (
+          <View
+            style={
+              styles.previewBoundaryCard
+            }
+          >
+            <Text
+              style={
+                styles.previewBoundaryTitle
+              }
+            >
+              Issuer Evidence Preview
+            </Text>
+
+            <Metric
+              label="Symbol"
+              value={
+                issuerPreview?.symbol ||
+                "N/A"
+              }
+            />
+
+            <Metric
+              label="Company"
+              value={
+                issuerPreview?.companyName ||
+                "N/A"
+              }
+            />
+
+            <Metric
+              label="Identity"
+              value={
+                issuerPreview?.identityStatus ||
+                "N/A"
+              }
+            />
+
+            <Metric
+              label="Extraction"
+              value={
+                issuerPreview?.extractionStatus ||
+                "N/A"
+              }
+            />
+
+            <Metric
+              label="Fiscal Year"
+              value={
+                issuerPreview?.fiscalYear ??
+                "N/A"
+              }
+            />
+
+            <Metric
+              label="Period End"
+              value={
+                issuerPreview?.periodEnd ||
+                "N/A"
+              }
+            />
+
+            <Metric
+              label="Evidence Records"
+              value={
+                Array.isArray(
+                  issuerPreview?.evidence
+                )
+                  ? issuerPreview
+                      .evidence
+                      .length
+                  : 0
+              }
+            />
+
+            <Metric
+              label="Workspace Status"
+              value={
+                formatLabel(
+                  issuerPreviewWorkspace
+                    ?.status
+                )
+              }
+            />
+
+            <Metric
+              label="Completeness"
+              value={`${Number(
+                issuerPreviewWorkspace
+                  ?.completenessPercentage ||
+                  0
+              ).toFixed(2)}%`}
+            />
+
+            <Text
+              style={
+                styles.previewBoundaryText
+              }
+            >
+              Preview only | Persistence NONE |
+              Unverified | Non-authoritative
+            </Text>
+
+            <Text
+              style={
+                styles.previewBoundaryText
+              }
+            >
+              No filing-ready JSON has been generated
+              and no filing has been created or
+              submitted.
+            </Text>
+
+            <Pressable
+              style={[
+                styles.secondaryButtonInline,
+                {
+                  marginTop: 14
+                }
+              ]}
+              onPress={
+                useIssuerPreviewForReview
+              }
+            >
+              <Text
+                style={
+                  styles.secondaryButtonText
+                }
+              >
+                Use This Preview for PC-025 Review
+              </Text>
+            </Pressable>
+          </View>
+        ) : null}
+      </Section>
 
       <Section
         title="Filing Information"
@@ -616,10 +1007,73 @@ export default function FilingExtractionScreen() {
 
       {result ? (
         <>
+          <View
+            onLayout={(event) => {
+              const reviewY =
+                event.nativeEvent.layout.y;
+
+              extractionValidationYRef.current =
+                reviewY;
+
+              if (
+                pendingIssuerReviewScrollRef.current &&
+                resultOrigin === "ISSUER_PREVIEW"
+              ) {
+                pendingIssuerReviewScrollRef.current =
+                  false;
+
+                scrollViewRef.current?.scrollTo({
+                  y: Math.max(
+                    0,
+                    reviewY - 16
+                  ),
+                  animated: true
+                });
+              }
+            }}
+          >
           <Section
             title="Extraction Validation"
-            description="Review completeness, errors, warnings, and reconciliation checks."
+            description={
+              resultOrigin === "ISSUER_PREVIEW"
+                ? "Review retrieved issuer evidence, completeness, errors, warnings, and reconciliation checks. This evidence remains unverified and non-authoritative."
+                : "Review completeness, errors, warnings, and reconciliation checks."
+            }
           >
+            {resultOrigin === "ISSUER_PREVIEW" ? (
+              <View
+                style={
+                  styles.previewBoundaryCard
+                }
+              >
+                <Text
+                  style={
+                    styles.previewBoundaryTitle
+                  }
+                >
+                  Issuer Evidence Review
+                </Text>
+
+                <Text
+                  style={
+                    styles.previewBoundaryText
+                  }
+                >
+                  Preview only | Persistence NONE |
+                  Unverified | Non-authoritative
+                </Text>
+
+                <Text
+                  style={
+                    styles.previewBoundaryText
+                  }
+                >
+                  Reviewing this evidence does not create
+                  or submit a filing and does not promote
+                  canonical fundamentals.
+                </Text>
+              </View>
+            ) : null}
             <View
               style={
                 styles.metricGrid
@@ -683,7 +1137,46 @@ export default function FilingExtractionScreen() {
                 )
               )}
           </Section>
+          </View>
 
+          {resultOrigin === "ISSUER_PREVIEW" &&
+          !issuerLifecyclePrepared ? (
+            <Section
+              title="PC-025 Filing Lifecycle"
+              description="The reviewed issuer evidence is still preview-only. Continue only when you deliberately want to prepare this exact reviewed workspace for the existing PC-025 filing lifecycle."
+            >
+              <Text style={styles.helperText}>
+                This step does not create a filing, submit evidence for review,
+                verify or approve evidence, or promote canonical fundamentals.
+              </Text>
+
+              <Pressable
+                style={[
+                  styles.primaryButton,
+                  {
+                    marginTop: 14
+                  }
+                ]}
+                onPress={
+                  prepareIssuerPreviewForFilingLifecycle
+                }
+              >
+                <Text
+                  style={
+                    styles.primaryButtonText
+                  }
+                >
+                  Continue to Filing Lifecycle
+                </Text>
+              </Pressable>
+            </Section>
+          ) : null}
+
+          {resultOrigin === "MANUAL" ||
+          (
+            resultOrigin === "ISSUER_PREVIEW" &&
+            issuerLifecyclePrepared
+          ) ? (
           <Section
             title="Filing-Ready JSON"
             description="Review the generated record, then create a draft or submit it directly for filing review."
@@ -803,6 +1296,7 @@ export default function FilingExtractionScreen() {
               />
             ) : null}
           </Section>
+          ) : null}
         </>
       ) : null}
 
@@ -1847,5 +2341,28 @@ const styles =
 
       marginTop:
         7
-    }
-  });
+    },
+    previewBoundaryCard: {
+    marginTop: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#334155",
+    borderRadius: 14,
+    backgroundColor: "#0f172a"
+  },
+
+  previewBoundaryTitle: {
+    color: "#f8fafc",
+    fontSize: 16,
+    fontWeight: "700",
+    marginBottom: 10
+  },
+
+  previewBoundaryText: {
+    color: "#cbd5e1",
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: 10
+  },
+
+});

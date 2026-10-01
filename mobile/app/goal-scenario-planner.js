@@ -6,6 +6,7 @@ import { loadRealCurrentInvestorWealthJourney } from "../src/features/wealth-jou
 import { loadUnifiedPortfolioRuntime } from "../src/portfolio/unifiedPortfolioApi";
 import { buildGoalDiversificationScenario } from "../src/features/wealth-journey/goalDiversificationScenarioService";
 import InvestorJourneyNavigation from "../src/components/mobile/InvestorJourneyNavigation";
+import { InvestorTopChromeHeader } from "../src/components/mobile/MobileUI";
 
 export default function GoalScenarioPlanner() {
   const { width: viewportWidth } = useWindowDimensions();
@@ -92,9 +93,14 @@ export default function GoalScenarioPlanner() {
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={[styles.content, viewportWidth >= 720 && styles.av3bContentWide, viewportWidth < 720 && styles.av3bContentCompact, viewportWidth < 480 && styles.av3bContentNarrow]}>
-      <Text style={styles.eyebrow}>COACH G • SIMULATION ONLY</Text>
-      <Text style={[styles.title, viewportWidth < 720 && styles.av3bTitleCompact, viewportWidth < 480 && styles.av3bTitleNarrow]}>Goal Recovery Simulator</Text>
-      <Text style={styles.subtitle}>Change the assumptions and see the impact. Your REAL portfolio, goal, Investor DNA, and contributions will not be changed.</Text>
+      <InvestorTopChromeHeader
+        compact={viewportWidth < 720}
+        testID="goal-scenario-planner-top-chrome"
+      >
+        <Text style={styles.eyebrow}>COACH G • SIMULATION ONLY</Text>
+        <Text style={[styles.title, viewportWidth < 720 && styles.av3bTitleCompact, viewportWidth < 480 && styles.av3bTitleNarrow]}>Goal Recovery Simulator</Text>
+        <Text style={styles.subtitle}>Change the assumptions and see the impact. Your REAL portfolio, goal, Investor DNA, and contributions will not be changed.</Text>
+      </InvestorTopChromeHeader>
 
       {error ? <View style={styles.warning}><Text style={styles.warningTitle}>Scenario unavailable</Text><Text style={styles.body}>{error}</Text></View> : null}
 

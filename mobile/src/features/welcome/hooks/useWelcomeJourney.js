@@ -2,7 +2,10 @@ import { useState } from "react";
 import { router } from "expo-router";
 
 import { createInvestorDNA } from "../../investor-dna/api/investorDNAApi";
-import { userSetItem } from "../../../auth/userStorage";
+import {
+  userGetItem,
+  userSetItem
+} from "../../../auth/userStorage";
 
 const INITIAL_ANSWERS = {
   goal: null,
@@ -139,9 +142,63 @@ export function useWelcomeJourney() {
         wealthBlueprint
       );
 
+    /*
+     * Preserve identity and other investor-profile fields
+     * collected before the questionnaire.
+     *
+     * /onboarding/name writes firstName / lastName into the
+     * canonical user-scoped investorProfile. The Welcome
+     * Journey must extend that record, never replace it.
+     */
+    const existingProfileRaw =
+      await userGetItem(
+        "investorProfile"
+      );
+
+    let existingProfile = {};
+
+    if (existingProfileRaw) {
+      try {
+        existingProfile =
+          typeof existingProfileRaw === "string"
+            ? JSON.parse(
+                existingProfileRaw
+              )
+            : existingProfileRaw;
+      } catch {
+        existingProfile = {};
+      }
+    }
+
+    const existingNestedProfile =
+      existingProfile?.profile &&
+      typeof existingProfile.profile === "object"
+        ? existingProfile.profile
+        : {};
+
+    const firstName =
+      existingProfile?.firstName ||
+      existingNestedProfile?.firstName ||
+      null;
+
+    const lastName =
+      existingProfile?.lastName ||
+      existingNestedProfile?.lastName ||
+      null;
+
     const saved = {
+      ...existingProfile,
+
+      firstName,
+      lastName,
+
       profile: {
+        ...existingNestedProfile,
         ...answers,
+
+        firstName,
+        lastName,
+
         dna,
         wealthBlueprint,
         risk: String(

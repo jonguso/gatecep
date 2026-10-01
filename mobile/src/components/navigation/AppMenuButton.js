@@ -1,9 +1,10 @@
 import React from "react";
-import { Pressable, StyleSheet, Text, View } from "react-native";
+import { Platform, Pressable, StyleSheet, Text, View, useWindowDimensions } from "react-native";
 import { router, usePathname } from "expo-router";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 
 import { useAuth } from "../../features/auth/hooks/useAuth";
+import { WEB_SHELL_MIN_WIDTH } from "../web/WebTopNavigation";
 
 const HIDDEN_PATHS = new Set([
   "/",
@@ -22,11 +23,21 @@ function shouldHide(pathname) {
 export default function AppMenuButton() {
   const pathname = usePathname();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
   const { user, loading } = useAuth();
+  const wideWeb = Platform.OS === "web" && width >= WEB_SHELL_MIN_WIDTH;
 
-  if (loading || !user || shouldHide(pathname)) return null;
+  if (wideWeb || loading || !user || shouldHide(pathname)) return null;
 
-  const isTabRoute = ["/markets", "/trading", "/calendar", "/news"].includes(pathname);
+  /*
+   * PC-031M4R5C1
+   *
+   * Global authenticated menu chrome is top-left by default.
+   * HIDDEN_PATHS remains the authority for routes that must not
+   * render this control. Dashboard stays hidden because Portfolio
+   * owns its local hamburger.
+   */
+  const useTopChrome = true;
 
   return (
     <View pointerEvents="box-none" style={styles.layer}>
@@ -38,12 +49,17 @@ export default function AppMenuButton() {
         onPress={() => router.push("/menu")}
         style={({ pressed }) => [
           styles.button,
-          { bottom: Math.max(insets.bottom, 10) + (isTabRoute ? 70 : 8) },
+          useTopChrome && styles.tabChromeButton,
+          {
+            top: Math.max(insets.top, 8) + 8,
+            left: 14,
+            right: "auto",
+            bottom: "auto"
+          },
           pressed && styles.buttonPressed
         ]}
       >
         <Text style={styles.icon}>☰</Text>
-        <Text style={styles.label}>Menu</Text>
       </Pressable>
     </View>
   );
@@ -70,6 +86,13 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     shadowOffset: { width: 0, height: 4 },
     elevation: 8
+  },
+  tabChromeButton: {
+    minWidth: 48,
+    width: 48,
+    height: 40,
+    paddingHorizontal: 0,
+    borderRadius: 14
   },
   buttonPressed: { backgroundColor: "#334155", borderColor: "#67e8f9" },
   icon: { color: "#67e8f9", fontSize: 20, fontWeight: "900" },

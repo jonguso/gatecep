@@ -6,6 +6,7 @@ import { router, useLocalSearchParams } from "expo-router";
 import { calculatePreserveGoalFundingNeed } from "../src/features/wealth-journey/preserveGoalRecoveryService";
 import { startDecisionConversation } from "../src/features/trading/coachGDecisionConversationSession";
 import { requestFloatingCoachGOpen } from "../src/features/trading/floatingCoachGActivationService";
+import { InvestorTopChromeHeader } from "../src/components/mobile/MobileUI";
 
 function first(params,names=[]){for(const name of names){const v=params?.[name];if(v!==undefined&&v!==null&&String(v).trim()!=="")return Array.isArray(v)?v[0]:v;}return null;}
 function num(v){if(v===null||v===undefined||v==="")return null;const x=Number(v);return Number.isFinite(x)?x:null;}
@@ -61,8 +62,13 @@ export default function GoalRecoveryChoice(){
   }
 
   return <ScrollView style={styles.screen} contentContainerStyle={[styles.content, av3cWidth >= 720 && { width: "100%", maxWidth: 960, alignSelf: "center" }, av3cWidth < 720 && { paddingHorizontal: 16, paddingBottom: 128 }, av3cWidth < 480 && { paddingHorizontal: 12 }]}>
-    <Text style={styles.eyebrow}>COACH G · GOAL RECOVERY</Text>
-    <Text style={[styles.title, av3cWidth < 720 && { fontSize: 28, lineHeight: 34 }, av3cWidth < 480 && { fontSize: 25, lineHeight: 31 }]}>Choose how you want to close the gap</Text>
+    <InvestorTopChromeHeader
+      compact={av3cWidth < 720}
+      testID="goal-recovery-choice-top-chrome"
+    >
+      <Text style={styles.eyebrow}>COACH G · GOAL RECOVERY</Text>
+      <Text style={[styles.title, av3cWidth < 720 && { fontSize: 28, lineHeight: 34 }, av3cWidth < 480 && { fontSize: 25, lineHeight: 31 }]}>Choose how you want to close the gap</Text>
+    </InvestorTopChromeHeader>
     <Text style={styles.body}>A projected future shortfall, a lump sum needed today, and an additional monthly contribution are different recovery amounts.</Text>
 
     <View style={styles.card}>

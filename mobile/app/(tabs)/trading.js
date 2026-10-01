@@ -6,7 +6,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View, Modal, TextInput,
 import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import ActiveUserBanner from "../../src/components/ActiveUserBanner";
 import { loadTradingHubData } from "../../src/services/trade/tradingHubStore";
-import { ContainedPanel } from "../../src/components/mobile/MobileUI";
+import { ContainedPanel, InvestorTopChromeHeader } from "../../src/components/mobile/MobileUI";
 
 import {
   buildAccommodationAnalysis,
@@ -252,7 +252,12 @@ export default function Trading() {
       av3dWidth < 720 && { paddingHorizontal: 16, paddingTop: 32, paddingBottom: 128 },
       av3dWidth < 480 && { paddingHorizontal: 12, paddingTop: 24 }
     ]}>
-    <View style={[s.header, av3dWidth < 600 && { flexDirection: "column", alignItems: "stretch" }]}><View style={{flex:1}}><Text style={[s.title, av3dWidth < 720 && { fontSize: 28, lineHeight: 34 }, av3dWidth < 480 && { fontSize: 25, lineHeight: 31 }]}>Trading</Text><Text style={s.subtitle}>Test investment decisions against your portfolio, goals and risk before you act.</Text></View><Pressable style={s.headerButton} onPress={()=>router.replace("/(tabs)/dashboard")}><Text style={s.headerButtonText}>Home</Text></Pressable></View>
+    <InvestorTopChromeHeader testID="trading-top-chrome">
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={[s.title, av3dWidth < 720 && { fontSize: 28, lineHeight: 34 }, av3dWidth < 480 && { fontSize: 25, lineHeight: 31 }]}>Trading</Text>
+        <Text style={s.subtitle}>Test investment decisions against your portfolio, goals and risk before you act.</Text>
+      </View>
+    </InvestorTopChromeHeader>
           {/* PC-030M20AQ3 UI consolidation — account context first; legacy broker evidence UI removed. */}
       <ActiveUserBanner />
 

@@ -25,6 +25,7 @@ import {
 import CoachGReconciliationCard from "../../src/features/wealth-journey/components/CoachGReconciliationCard";
 import { loadCanonicalRealTransactionHistory } from "../../src/features/wealth-journey/canonicalRealBehaviorHistoryService";
 import InvestorJourneyNavigation from "../../src/components/mobile/InvestorJourneyNavigation";
+import { InvestorTopChromeHeader } from "../../src/components/mobile/MobileUI";
 
 export default function Coach() {
   const { width: viewportWidth } = useWindowDimensions();
@@ -290,7 +291,6 @@ export default function Coach() {
       "Mfg. and Allied": [
         ["EABL", 248, "Breweries and manufacturing exposure", "East African Breweries", 5.2],
         ["BAT", 520, "Consumer defensive manufacturer", "BAT Kenya", 7.8],
-        ["BAMB", 37, "Cement and building materials exposure", "Bamburi Cement", 3.5]
       ],
       Telecom: [
         ["SCOM", 30.6, "Telecom and mobile money exposure", "Safaricom", 4.7]
@@ -385,11 +385,16 @@ export default function Coach() {
   return (
     <ScrollView style={styles.screen} contentContainerStyle={[styles.content, styles.av3agContent, !isCompactViewport && styles.av3agContentWide, isCompactViewport && styles.av3agContentCompact, isNarrowViewport && styles.av3agContentNarrow]}>
       <View style={[styles.headerRow, isCompactViewport && styles.av3agHeaderCompact]}>
-        <Text style={[styles.title, isCompactViewport && styles.av3agTitleCompact, isNarrowViewport && styles.av3agTitleNarrow]}>Coach G Insights</Text>
-        <View style={[styles.headerActions, isCompactViewport && styles.av3agHeaderActionsCompact]}>
-          <Pressable style={[styles.headerButton, isCompactViewport && styles.av3agHeaderButtonCompact]} onPress={() => router.canGoBack?.() ? router.back() : router.replace("/(tabs)/dashboard")}><Text style={styles.headerButtonText}>‹ Back</Text></Pressable>
-          <Pressable style={[styles.headerButton, isCompactViewport && styles.av3agHeaderButtonCompact]} onPress={() => router.replace("/(tabs)/dashboard")}><Text style={styles.headerButtonText}>Home</Text></Pressable>
-        </View>
+        <InvestorTopChromeHeader
+          compact={isCompactViewport}
+          reserveRight={false}
+          style={styles.coachGInsightsIdentity}
+          testID="real-coach-g-top-chrome"
+        >
+          <Text style={[styles.title, isCompactViewport && styles.av3agTitleCompact, isNarrowViewport && styles.av3agTitleNarrow]}>
+            Coach G Insights
+          </Text>
+        </InvestorTopChromeHeader>
       </View>
 
       <CoachGReconciliationCard compact={true} />
@@ -779,6 +784,10 @@ function money(v) {
 const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: "#020617" },
   content: { padding: 20, paddingTop: 60, paddingBottom: 120 },
+  coachGInsightsIdentity: {
+    flex: 1,
+    minWidth: 0
+  },
   headerRow: { flexDirection: "row", alignItems: "flex-start", gap: 10 }, headerActions: { flexDirection: "row", gap: 6 }, headerButton: { minHeight: 42, borderRadius: 13, borderWidth: 1, borderColor: "#334155", backgroundColor: "#1e293b", paddingHorizontal: 10, alignItems: "center", justifyContent: "center" }, headerButtonText: { color: "#67e8f9", fontWeight: "900", fontSize: 11 },
   title: { flex: 1, fontSize: 34, fontWeight: "900", color: "white" },
 

@@ -11,10 +11,13 @@ import {
 import { router, useFocusEffect } from "expo-router";
 
 import ActiveUserBanner from "../src/components/ActiveUserBanner";
-import { ContainedPanel } from "../src/components/mobile/MobileUI";
+import {
+  ContainedPanel,
+  ResponsiveScreen,
+  ResponsiveWorkingRegion
+} from "../src/components/mobile/MobileUI";
 import {
   cancelExecutionOrder,
-  createBasketExecution,
   loadBasketExecution,
   markExecutionOrderFilled,
   routeExecutionOrderByMode,
@@ -37,12 +40,22 @@ export default function Orders() {
   );
 
   async function load() {
-    let saved = await loadBasketExecution();
+    const saved = await loadBasketExecution();
 
-    if (!saved) {
-      saved = await createBasketExecution();
-    }
-
+    /*
+     * PC-031B4M7C5D7F5J2C1:
+     *
+     * This screen is an OMS observer, not an execution
+     * creation authority.
+     *
+     * An empty activeBasketExecution slot must remain empty.
+     * In particular, do not recreate OMS REVIEW orders from
+     * a previously persisted activeTradeBasket merely because
+     * this screen is opened, focused, refreshed, or revisited.
+     *
+     * Fresh execution creation belongs to an explicit investor
+     * workflow such as Coach G / Trade basket confirmation.
+     */
     setExecution(saved);
   }
 
@@ -207,20 +220,23 @@ export default function Orders() {
 
   if (!execution || !orders.length) {
     return (
-      <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-        <Text style={styles.title}>Orders</Text>
+      <ResponsiveScreen mode="flow" testID="orders-empty-screen">
+        <ResponsiveWorkingRegion style={styles.workingRegion}>
+          <Text style={styles.title}>Orders</Text>
         <Text style={styles.subtitle}>No active orders found.</Text>
 
-        <Pressable style={styles.primary} onPress={() => router.push("/trade-basket")}>
-          <Text style={styles.primaryText}>Open Trade Basket</Text>
-        </Pressable>
-      </ScrollView>
+          <Pressable style={styles.primary} onPress={() => router.push("/trade-basket")}>
+            <Text style={styles.primaryText}>Open Trade Basket</Text>
+          </Pressable>
+        </ResponsiveWorkingRegion>
+      </ResponsiveScreen>
     );
   }
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <View style={styles.headerRow}>
+    <ResponsiveScreen mode="flow" testID="orders-screen">
+      <ResponsiveWorkingRegion style={styles.workingRegion}>
+        <View style={styles.headerRow}>
         <Text style={styles.title}>Orders</Text>
 
         <Pressable
@@ -296,10 +312,11 @@ export default function Orders() {
         <Text style={styles.secondaryText}>Open Orders Review</Text>
       </Pressable>
 
-      <Pressable style={styles.secondary} onPress={() => router.push("/basket-execution")}>
-        <Text style={styles.secondaryText}>Open Basket Execution</Text>
-      </Pressable>
-    </ScrollView>
+        <Pressable style={styles.secondary} onPress={() => router.push("/basket-execution")}>
+          <Text style={styles.secondaryText}>Open Basket Execution</Text>
+        </Pressable>
+      </ResponsiveWorkingRegion>
+    </ResponsiveScreen>
   );
 }
 
@@ -478,8 +495,10 @@ function money(value) {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: "#020617" },
-  content: { /* PC-030M20AV3AL RESPONSIVE UAT CALIBRATION */ width: "100%", maxWidth: 960, alignSelf: "center", padding: 22, paddingTop: 70, paddingBottom: 128 },
+  // PC-032G8D2 — ResponsiveScreen owns the route shell.
+  workingRegion: {
+    width: "100%"
+  },
   headerRow: {
     flexDirection: "row",
     flexWrap: "wrap",

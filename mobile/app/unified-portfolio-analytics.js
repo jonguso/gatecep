@@ -13,7 +13,10 @@ import { router, useLocalSearchParams } from "expo-router";
 import { buildUnifiedPortfolioAnalytics } from "../src/features/analytics/unifiedPortfolioAnalyticsService";
 import { buildPortfolioHealthScore } from "../src/features/analytics/portfolioHealthScoreService";
 import { buildExecutiveActionQueue } from "../src/features/analytics/executiveActionQueueService";
-import { calculateResponsivePanelHeight } from "../src/components/mobile/MobileUI";
+import {
+  calculateResponsivePanelHeight,
+  InvestorTopChromeHeader
+} from "../src/components/mobile/MobileUI";
 import InvestorJourneyNavigation from "../src/components/mobile/InvestorJourneyNavigation";
 
 const ALERT_FILTERS = ["ALL", "CRITICAL", "HIGH", "MEDIUM", "LOW", "INFO"];
@@ -174,13 +177,17 @@ export default function UnifiedPortfolioAnalyticsScreen() {
         windowWidth < 480 && { paddingHorizontal: 12, paddingTop: 24 }
       ]}>
       <View style={[styles.headerRow, windowWidth < 600 && { flexDirection: "column", alignItems: "stretch" }]}>
-        <View style={{ flex: 1 }}>
+        <InvestorTopChromeHeader
+          compact={windowWidth < 720}
+          style={styles.portfolioAnalysisIdentity}
+          testID="portfolio-analysis-top-chrome-header"
+        >
           <Text style={styles.eyebrow}>PC-022</Text>
           <Text style={[styles.title, windowWidth < 720 && { fontSize: 28, lineHeight: 34 }, windowWidth < 480 && { fontSize: 25, lineHeight: 31 }]}>Portfolio Analysis</Text>
           <Text style={styles.subtitle}>{activeSection
             ? ANALYTICS_SECTIONS.find((section) => section.id === activeSection)?.title
             : "Executive health, risk, performance, operations, alerts, and priorities."}</Text>
-        </View>
+        </InvestorTopChromeHeader>
         <View style={styles.headerActions}>
           <Pressable style={styles.headerButton} onPress={() => activeSection ? returnToAnalysis() : goBack()}>
             <Text style={styles.headerButtonText}>{activeSection ? "Overview" : "‹ Back"}</Text>
@@ -684,6 +691,7 @@ const styles = StyleSheet.create({
   },
   loadingText: { color: "#94a3b8", marginTop: 14 },
   headerRow: { flexDirection: "row", alignItems: "flex-start", gap: 12 },
+  portfolioAnalysisIdentity: { flex: 1, minWidth: 0 },
   headerActions: { flexDirection: "row", gap: 6 }, headerButton: { minHeight: 44, borderRadius: 14, backgroundColor: "#1e293b", borderColor: "#334155", borderWidth: 1, paddingHorizontal: 10, alignItems: "center", justifyContent: "center" },
   headerButtonText: { color: "#67e8f9", fontWeight: "900", fontSize: 12 },
   eyebrow: { color: "#22d3ee", fontWeight: "900" },

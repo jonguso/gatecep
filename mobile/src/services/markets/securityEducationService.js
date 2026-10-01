@@ -9,17 +9,78 @@ export function buildSecurityEducationModel(security = {}, fundamentals = null) 
   const source = fundamentals?.source || fundamentals?.metadata?.source || {};
   const metric = (...values) => numeric(first(...values));
   const fields = {
-    marketCap: metric(fundamentals?.marketCapitalization, ratios?.marketCapitalization, latest?.marketCapitalization),
-    pe: metric(fundamentals?.peRatio, ratios?.peRatio, latest?.peRatio),
-    pb: metric(fundamentals?.priceToBookRatio, ratios?.priceToBookRatio, latest?.priceToBookRatio),
-    eps: metric(latest?.earningsPerShare, fundamentals?.earningsPerShare),
-    dps: metric(latest?.dividendPerShare, fundamentals?.dividendPerShare),
-    dividendYield: metric(fundamentals?.dividendYieldPercentage, ratios?.dividendYieldPercentage, latest?.dividendYieldPercentage),
-    revenue: metric(latest?.revenue, latest?.totalRevenue),
-    netIncome: metric(latest?.netIncome, latest?.profitAfterTax),
-    assets: metric(latest?.totalAssets),
-    equity: metric(latest?.totalEquity, latest?.shareholdersEquity),
-    debt: metric(latest?.totalDebt, latest?.borrowings)
+    marketCap: metric(
+      fundamentals?.marketCapitalization,
+      ratios?.marketCapitalization,
+      latest?.marketCapitalization
+    ),
+    pe: metric(
+      fundamentals?.peRatio,
+      ratios?.peRatio,
+      latest?.peRatio
+    ),
+    pb: metric(
+      fundamentals?.priceToBookRatio,
+      ratios?.priceToBookRatio,
+      latest?.priceToBookRatio
+    ),
+    eps: metric(
+      fundamentals?.earningsPerShare,
+      latest?.earningsPerShare
+    ),
+    bookValuePerShare: metric(
+      fundamentals?.bookValuePerShare,
+      latest?.bookValuePerShare
+    ),
+    dps: metric(
+      fundamentals?.dividendPerShare,
+      latest?.dividendPerShare
+    ),
+    dividendYield: metric(
+      fundamentals?.dividendYieldPercentage,
+      ratios?.dividendYieldPercentage,
+      latest?.dividendYieldPercentage
+    ),
+    revenue: metric(
+      fundamentals?.revenue,
+      latest?.revenue,
+      latest?.totalRevenue
+    ),
+    netIncome: metric(
+      fundamentals?.netIncome,
+      latest?.netIncome,
+      latest?.profitAfterTax
+    ),
+    assets: metric(
+      fundamentals?.totalAssets,
+      latest?.totalAssets
+    ),
+    liabilities: metric(
+      fundamentals?.totalLiabilities,
+      latest?.totalLiabilities
+    ),
+    equity: metric(
+      fundamentals?.totalEquity,
+      latest?.totalEquity,
+      latest?.shareholdersEquity
+    ),
+    operatingCashFlow: metric(
+      fundamentals?.operatingCashFlow,
+      latest?.operatingCashFlow
+    ),
+    sharesOutstanding: metric(
+      fundamentals?.sharesOutstanding,
+      latest?.sharesOutstanding
+    ),
+    returnOnEquity: metric(
+      fundamentals?.returnOnEquityPercentage,
+      latest?.returnOnEquityPercentage
+    ),
+    debt: metric(
+      fundamentals?.totalDebt,
+      latest?.totalDebt,
+      latest?.borrowings
+    )
   };
   const evidenceCount = Object.values(fields).filter((value) => value !== null).length;
   return {

@@ -12,6 +12,13 @@ import {saveBasketExecution} from "../src/services/trade/basketExecutionStore";
 import {saveBrokerActionPlan} from "../src/services/trade/brokerActionPlanStore";
 import {loadBrokerAccounts} from "../src/services/brokers/brokerAccountStore";
 import {buildChargesAwareRecoveryBasket} from "../src/features/wealth-journey/goalRecoveryChargesAwareBasketService";
+import {
+  startDecisionConversation
+} from "../src/features/trading/coachGDecisionConversationSession";
+
+import {
+  requestFloatingCoachGOpen
+} from "../src/features/trading/floatingCoachGActivationService";
 
 function first(v){return Array.isArray(v)?v[0]:v;}
 function num(v){const x=Number(first(v));return Number.isFinite(x)?x:0;}
@@ -72,6 +79,57 @@ export default function GoalRecoveryPortfolioPreview(){
     }catch(error){
       setState({loading:false,error:error?.message||"Unable to build projected portfolio review.",preview:null});
     }
+  }
+
+  function discussReviewedAllocationWithCoachG(){
+    if(!state.preview?.available)return;
+
+    const reviewedAllocation=state.executionAllocation||allocation;
+
+    const scenario={
+      source:"COACH_G_RECOVERY_REVIEW",
+      action:"EXPLORE",
+      amount:recoveryAmount,
+      security:null,
+      quantity:null,
+      price:null,
+      investorReason:
+        `Explain the already-reviewed diversified recovery allocation for ${goalName} without replacing the basket.`,
+      decisionPriority:"GOAL_RECOVERY_DIVERSIFICATION",
+      goalContext:{
+        goalName,
+        targetAmount,
+        targetDate,
+        monthlyContribution,
+        additionalAmountNow:recoveryAmount,
+        preserveGoal:true,
+        preserveTargetDate:true,
+        preserveContribution:true
+      },
+      recommendationContext:{
+        type:"REVIEWED_DIVERSIFIED_RECOVERY_ALLOCATION",
+        allocation:reviewedAllocation,
+        projectedPortfolio:state.preview,
+        discussionOnly:true,
+        preserveReviewedBasket:true
+      }
+    };
+
+    const openingQuestion=
+      "Would you like me to explain why each security is included and what this reviewed basket changes in your projected portfolio?";
+
+    startDecisionConversation({
+      scenario,
+      openingText:
+        `You have already reviewed the proposed recovery basket for ${goalName}. I can explain that same allocation without replacing it or creating a trade.`,
+      openingQuestion
+    });
+
+    requestFloatingCoachGOpen({
+      source:"GOAL_RECOVERY_REVIEWED_ALLOCATION",
+      question:openingQuestion,
+      context:scenario
+    });
   }
 
   async function prepareBrokerActionPlan(){
@@ -167,8 +225,45 @@ export default function GoalRecoveryPortfolioPreview(){
         <Text style={styles.bodySmall}>No REAL cash, holdings, cost basis, goal, Investor DNA, Practice portfolio or broker execution record has changed.</Text>
       </View>
 
-      <Pressable style={styles.primary} onPress={prepareBrokerActionPlan}><Text style={styles.primaryText}>Continue to Broker Action Plan</Text></Pressable>
-      <Pressable style={styles.secondary} onPress={()=>router.back()}><Text style={styles.secondaryText}>Revise diversified allocation</Text></Pressable>
+      <View style={styles.card}>
+        <Text style={styles.cardTitle}>Review complete — choose your next step</Text>
+        <Text style={styles.bodySmall}>
+          Coach G can explain this already-reviewed allocation. Discussing it does not replace
+          the basket, create an order or change your portfolio. You can also skip the discussion
+          and continue with the reviewed allocation.
+        </Text>
+
+        <Pressable
+          style={styles.secondary}
+          onPress={discussReviewedAllocationWithCoachG}
+        >
+          <Text style={styles.secondaryText}>
+            Discuss reviewed allocation with Coach G
+          </Text>
+        </Pressable>
+
+        <Pressable
+          style={styles.secondary}
+          onPress={() => {}}
+        >
+          <Text style={styles.secondaryText}>
+            Skip for now
+          </Text>
+        </Pressable>
+
+        <Pressable
+          style={styles.primary}
+          onPress={prepareBrokerActionPlan}
+        >
+          <Text style={styles.primaryText}>
+            Continue with Reviewed Allocation
+          </Text>
+        </Pressable>
+      </View>
+
+      <Pressable style={styles.secondary} onPress={()=>router.back()}>
+        <Text style={styles.secondaryText}>Revise diversified allocation</Text>
+      </Pressable>
     </>:null}
   </ScrollView>;
 }

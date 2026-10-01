@@ -24,7 +24,10 @@ import {
 import {
   buildCoachGRiskAdvice
 } from "../src/features/risk/riskAdvisorService";
-import { calculateResponsivePanelHeight } from "../src/components/mobile/MobileUI";
+import {
+  calculateResponsivePanelHeight,
+  InvestorTopChromeHeader
+} from "../src/components/mobile/MobileUI";
 import InvestorJourneyNavigation from "../src/components/mobile/InvestorJourneyNavigation";
 
 const PROFILE_ORDER = [
@@ -262,13 +265,18 @@ export default function PortfolioRiskScreen() {
         windowWidth < 480 && { paddingHorizontal: 12, paddingTop: 24 }
       ]}>
       <View style={[styles.pageHeader, windowWidth < 600 && { flexDirection: "column", alignItems: "stretch" }]}>
-        <View style={styles.pageHeaderText}>
-          <Text style={styles.eyebrow}>PC-020</Text>
-          <Text style={[styles.title, windowWidth < 720 && { fontSize: 28, lineHeight: 34 }, windowWidth < 480 && { fontSize: 25, lineHeight: 31 }]}>Portfolio Risk</Text>
-          <Text style={styles.subtitle}>
-            Review current REAL portfolio risk, then open one focused detail.
-          </Text>
-        </View>
+        <InvestorTopChromeHeader
+          compact={windowWidth < 720}
+          testID="portfolio-risk-top-chrome"
+        >
+          <View style={styles.pageHeaderText}>
+            <Text style={styles.eyebrow}>PC-020</Text>
+            <Text style={[styles.title, windowWidth < 720 && { fontSize: 28, lineHeight: 34 }, windowWidth < 480 && { fontSize: 25, lineHeight: 31 }]}>Portfolio Risk</Text>
+            <Text style={styles.subtitle}>
+              Review current REAL portfolio risk, then open one focused detail.
+            </Text>
+          </View>
+        </InvestorTopChromeHeader>
         <View style={styles.headerActions}>
           <Pressable style={styles.headerButton} onPress={() => activeSection ? moveToSection(null) : exitRisk()}>
             <Text style={styles.headerButtonText}>{activeSection ? "Overview" : "‹ Back"}</Text>

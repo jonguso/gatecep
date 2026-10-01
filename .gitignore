@@ -11,3 +11,10 @@ mobile/node_modules/
 mobile/.expo/
 
 .vercel
+
+# GateCEP generated verification/build output
+mobile/.expo-*/
+mobile/dist-*/
+
+# GateCEP local patch / recovery backups
+*.bak

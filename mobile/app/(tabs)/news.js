@@ -7,7 +7,7 @@ import useMarketData from "../../src/services/markets/useMarketData";
 import { loadCorporateActions } from "../../src/features/corporate-actions/corporateActionStore";
 import { loadVerifiedNews } from "../../src/services/news/verifiedNewsApi";
 import { NEWS_TABS, buildVerifiedNews, getNewsForTab, getNewsSummary } from "../../src/news/newsHubData";
-import { ContainedPanel } from "../../src/components/mobile/MobileUI";
+import { ContainedPanel, InvestorTopChromeHeader } from "../../src/components/mobile/MobileUI";
 import { loadUnifiedPortfolioRuntime } from "../../src/portfolio/unifiedPortfolioApi";
 import { buildPortfolioAwareInvestorAlerts } from "../../src/features/intelligence/portfolioAwareInvestorAlertService";
 import { loadRebalanceTarget } from "../../src/features/rebalancing/rebalanceStore";
@@ -56,8 +56,12 @@ export default function News() {
   const summary = useMemo(() => getNewsSummary(all), [all]);
 
   return <ScrollView style={s.screen} contentContainerStyle={s.content}>
-    <Text style={s.title}>News & Insights</Text>
-    <Text style={s.subtitle}>Official NSE evidence, attributable reporting, and clearly labelled Coach G analysis.</Text>
+    <InvestorTopChromeHeader testID="news-top-chrome">
+      <View style={{ flex: 1, minWidth: 0 }}>
+        <Text style={s.title}>News & Insights</Text>
+        <Text style={s.subtitle}>Official NSE evidence, attributable reporting, and clearly labelled Coach G analysis.</Text>
+      </View>
+    </InvestorTopChromeHeader>
     <ActiveUserBanner />
     <View style={s.status}>
       <View style={s.statusTop}><Text style={s.statusTitle}>{newsStatus.loading ? "Loading verified news" : newsStatus.error ? "Verified news source unavailable" : "Verified news sources connected"}</Text><Pressable style={s.refresh} onPress={refreshNews}><Text style={s.refreshText}>Refresh</Text></Pressable></View>

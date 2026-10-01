@@ -34,6 +34,7 @@ import { buildRecoveryBasketExecution } from "../src/features/wealth-journey/goa
 import { saveBasketExecution } from "../src/services/trade/basketExecutionStore";
 import { saveBrokerActionPlan } from "../src/services/trade/brokerActionPlanStore";
 import { buildRecoveryBrokerActionPlan } from "../src/features/wealth-journey/goalRecoveryBrokerActionPlanBridge";
+import { InvestorTopChromeHeader } from "../src/components/mobile/MobileUI";
 
 function first(params, names = []) {
   for (const name of names) {
@@ -270,8 +271,13 @@ export default function GoalRecoveryAllocation() {
       style={styles.screen}
       contentContainerStyle={[styles.content, av3cWidth >= 720 && { width: "100%", maxWidth: 960, alignSelf: "center" }, av3cWidth < 720 && { paddingHorizontal: 16, paddingBottom: 128 }, av3cWidth < 480 && { paddingHorizontal: 12 }]}
     >
-      <Text style={styles.eyebrow}>COACH G · RECOVERY ALLOCATION</Text>
-      <Text style={[styles.title, av3cWidth < 720 && { fontSize: 28, lineHeight: 34 }, av3cWidth < 480 && { fontSize: 25, lineHeight: 31 }]}>Use the new money without worsening concentration</Text>
+      <InvestorTopChromeHeader
+        compact={av3cWidth < 720}
+        testID="goal-recovery-allocation-top-chrome"
+      >
+        <Text style={styles.eyebrow}>COACH G · RECOVERY ALLOCATION</Text>
+        <Text style={[styles.title, av3cWidth < 720 && { fontSize: 28, lineHeight: 34 }, av3cWidth < 480 && { fontSize: 25, lineHeight: 31 }]}>Use the new money without worsening concentration</Text>
+      </InvestorTopChromeHeader>
 
       <Text style={styles.body}>
         This is a temporary recovery scenario. Your REAL cash and holdings remain unchanged.
@@ -389,15 +395,6 @@ export default function GoalRecoveryAllocation() {
         </Pressable>
       ) : null}
 
-      <Pressable
-        style={styles.primary}
-        onPress={discussWithCoachG}
-        disabled={loading}
-      >
-        <Text style={styles.primaryText}>
-          Discuss this allocation with Coach G
-        </Text>
-      </Pressable>
 
       <View style={styles.safeguard}>
         <Text style={styles.safeguardTitle}>Recovery funding is scenario funding</Text>
