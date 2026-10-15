@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Alert,
   Platform,
@@ -21,6 +21,18 @@ import { router, useLocalSearchParams } from "expo-router";
 
 import ActiveUserBanner from "../src/components/ActiveUserBanner";
 import { userSetItem } from "../src/auth/userStorage";
+import {
+  loadBrokerAccounts
+} from "../src/services/brokers/brokerAccountStore";
+import {
+  buildBrokerAccountKey,
+  extractOrderHistoryIdentity,
+  loadVerifiedUserCds,
+  requireValidBrokerEvidenceIdentity
+} from "../src/features/broker-sync/brokerEvidenceIdentityService";
+import {
+  saveBrokerTransactionHistoryEvidence
+} from "../src/features/trading/brokerTransactionHistoryEvidenceStore";
 import { buildSyncStatus } from "../src/portfolio/syncStatus";
 import { rebuildCanonicalPortfolioLedger } from "../src/features/trading/canonicalPortfolioLedgerService";
 import { partitionBrokerExecutionEvidence } from "../src/features/broker-sync/brokerExecutionEvidencePolicy";
@@ -44,9 +56,81 @@ export default function TransactionsUpload() {
   const recoveryBrokerId = String(
     params?.recoveryBrokerId || ""
   ).trim().toUpperCase();
+
+  const requestedBrokerAccountKey = String(
+    params?.brokerAccountKey || ""
+  ).trim().toUpperCase();
+
   const [selectedFile, setSelectedFile] = useState(null);
   const [transactions, setTransactions] = useState([]);
+  const [rawEvidenceRows, setRawEvidenceRows] = useState([]);
+  const [evidenceInternalIdentity, setEvidenceInternalIdentity] = useState(null);
+  const [selectedBrokerAccount, setSelectedBrokerAccount] = useState(null);
+  const [accountResolutionReady, setAccountResolutionReady] = useState(false);
   const [status, setStatus] = useState("");
+
+  useEffect(() => {
+    let active = true;
+
+    async function resolveBrokerAccount() {
+      try {
+        setAccountResolutionReady(false);
+
+        if (!requestedBrokerAccountKey) {
+          if (active) {
+            setSelectedBrokerAccount(null);
+            setAccountResolutionReady(true);
+          }
+          return;
+        }
+
+        const accounts = await loadBrokerAccounts();
+
+        const matched = accounts.find((account) => {
+          const accountKey = buildBrokerAccountKey({
+            brokerId: account.brokerId,
+            clientAccount:
+              account.clientNumber ||
+              account.accountNumber,
+            tradingAccount:
+              account.tradingAccount
+          });
+
+          return (
+            String(accountKey || "")
+              .trim()
+              .toUpperCase() ===
+            requestedBrokerAccountKey
+          );
+        });
+
+        if (!matched) {
+          throw new Error(
+            "The selected broker account is not connected to this GateCEP profile."
+          );
+        }
+
+        if (active) {
+          setSelectedBrokerAccount(matched);
+          setAccountResolutionReady(true);
+        }
+      } catch (error) {
+        if (active) {
+          setSelectedBrokerAccount(null);
+          setAccountResolutionReady(true);
+          setStatus(
+            `Broker account unavailable: ${error.message}`
+          );
+        }
+      }
+    }
+
+    resolveBrokerAccount();
+
+    return () => {
+      active = false;
+    };
+  }, [requestedBrokerAccountKey]);
 
   async function pickFile() {
     try {
@@ -80,7 +164,8 @@ export default function TransactionsUpload() {
       setSelectedFile(file);
       setStatus(`Reading ${file.name}...`);
 
-      const rows = await parseFile(file);
+      const parsed = await parseFile(file);
+      const rows = parsed.rows;
       const normalized = normalizeTransactions(rows);
 
       if (!normalized.length) {
@@ -89,9 +174,16 @@ export default function TransactionsUpload() {
         );
       }
 
+      setRawEvidenceRows(rows);
+      setEvidenceInternalIdentity(
+        parsed.internalIdentity ||
+        extractOrderHistoryIdentity(rows)
+      );
       setTransactions(normalized);
       setStatus(`${normalized.length} transactions detected.`);
     } catch (error) {
+      setRawEvidenceRows([]);
+      setEvidenceInternalIdentity(null);
       setTransactions([]);
       setStatus(`Upload failed: ${error.message}`);
       Alert.alert("Upload Failed", error.message);
@@ -103,7 +195,14 @@ export default function TransactionsUpload() {
 
     if (name.endsWith(".pdf")) {
       const result = await extractBrokerPdf(file, "orders");
-      return requireSafeImportRows(result.rows);
+      const rows = requireSafeImportRows(result.rows);
+
+      return {
+        rows,
+        internalIdentity:
+          result.identity ||
+          extractOrderHistoryIdentity(rows)
+      };
     }
 
     if (name.endsWith(".csv")) {
@@ -113,9 +212,16 @@ export default function TransactionsUpload() {
 
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
 
-      return requireSafeImportRows(XLSX.utils.sheet_to_json(sheet, {
-        defval: ""
-      }));
+      const rows = requireSafeImportRows(
+        XLSX.utils.sheet_to_json(sheet, {
+          defval: ""
+        })
+      );
+
+      return {
+        rows,
+        internalIdentity: extractOrderHistoryIdentity(rows)
+      };
     }
 
     const base64 = await readFileBase64(file);
@@ -124,9 +230,16 @@ export default function TransactionsUpload() {
 
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
 
-    return requireSafeImportRows(XLSX.utils.sheet_to_json(sheet, {
-      defval: ""
-    }));
+    const rows = requireSafeImportRows(
+      XLSX.utils.sheet_to_json(sheet, {
+        defval: ""
+      })
+    );
+
+    return {
+      rows,
+      internalIdentity: extractOrderHistoryIdentity(rows)
+    };
   }
 
   async function readFileText(file) {
@@ -366,9 +479,52 @@ export default function TransactionsUpload() {
       return;
     }
 
-    const { verified, unverified } = partitionBrokerExecutionEvidence(transactions);
-    await userSetItem("transactionHistory", JSON.stringify(verified));
-    await userSetItem("unverifiedTransactionHistory", JSON.stringify(unverified));
+    if (!requestedBrokerAccountKey) {
+      Alert.alert(
+        "Broker Account Required",
+        "Choose the connected broker account this transaction history belongs to before saving evidence."
+      );
+      return;
+    }
+
+    if (!accountResolutionReady || !selectedBrokerAccount) {
+      Alert.alert(
+        "Broker Account Unavailable",
+        "The selected broker account could not be verified against your connected GateCEP accounts."
+      );
+      return;
+    }
+
+    const userCds = await loadVerifiedUserCds();
+
+    const identityResult =
+      requireValidBrokerEvidenceIdentity({
+        fileName: selectedFile?.name || "",
+        userCds,
+        brokerId: selectedBrokerAccount.brokerId,
+        clientAccount:
+          selectedBrokerAccount.clientNumber ||
+          selectedBrokerAccount.accountNumber,
+        tradingAccount:
+          selectedBrokerAccount.tradingAccount,
+        internalIdentity:
+          evidenceInternalIdentity ||
+          extractOrderHistoryIdentity(rawEvidenceRows),
+        expectedAccountKey: requestedBrokerAccountKey
+      });
+
+    const { verified, unverified } =
+      partitionBrokerExecutionEvidence(transactions);
+
+    const savedEvidence =
+      await saveBrokerTransactionHistoryEvidence({
+        brokerAccountKey: identityResult.brokerAccountKey,
+        verified,
+        unverified,
+        fileName: selectedFile?.name || null,
+        source: "TRANSACTION_UPLOAD"
+      });
+
     await userSetItem("transactionsUploaded", verified.length ? "true" : "false");
     await userSetItem(
       "transactionUploadSummary",
@@ -376,6 +532,12 @@ export default function TransactionsUpload() {
         count: verified.length,
         rejectedCount: unverified.length,
         fileName: selectedFile?.name || null,
+        brokerAccountKey: identityResult.brokerAccountKey,
+        brokerId: selectedBrokerAccount.brokerId,
+        clientNumber:
+          selectedBrokerAccount.clientNumber ||
+          selectedBrokerAccount.accountNumber ||
+          null,
         uploadedAt: new Date().toISOString()
       })
     );
@@ -389,7 +551,9 @@ export default function TransactionsUpload() {
       recoveryResult =
         await reconcileUncertainRealOrderFromVerifiedEvidence({
           orderId: recoveryOrderId,
-          records: verified
+          records: savedEvidence.verified,
+          expectedBrokerAccountKey:
+            savedEvidence.brokerAccountKey
         });
     }
 

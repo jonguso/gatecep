@@ -11,7 +11,10 @@ import {
 import { router, useFocusEffect } from "expo-router";
 import { SafeAreaView } from "react-native-safe-area-context";
 
-import { loadUnifiedPortfolioRuntime } from "../src/portfolio/unifiedPortfolioApi";
+import {
+  aggregateUnifiedHoldingsBySymbol,
+  loadUnifiedPortfolioRuntime
+} from "../src/portfolio/unifiedPortfolioApi";
 import { calculatePortfolioSummary } from "../src/shared/portfolio/engine";
 import { ContainedPanel, StatusBanner } from "../src/components/mobile/MobileUI";
 import InvestorJourneyNavigation from "../src/components/mobile/InvestorJourneyNavigation";
@@ -33,7 +36,11 @@ export default function HoldingDetails() {
     try {
       setLoading(true);
       const result = await loadUnifiedPortfolioRuntime({ broker: "ALL" });
-      setHoldings(Array.isArray(result?.holdings) ? result.holdings : []);
+      setHoldings(
+        aggregateUnifiedHoldingsBySymbol(
+          Array.isArray(result?.holdings) ? result.holdings : []
+        )
+      );
       setHasVerifiedData(true);
       setNotice(result?.runtimeStatus && result.runtimeStatus !== "LIVE"
         ? {

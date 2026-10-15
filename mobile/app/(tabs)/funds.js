@@ -36,9 +36,11 @@ import {
   refreshCanonicalRealPortfolioSnapshot
 } from "../../src/services/portfolio/portfolioSnapshotTrigger";
 import {
-  attachVerifiedBrokerCashEvidence,
-  loadBrokerMirror
+  attachVerifiedBrokerCashEvidence
 } from "../../src/features/broker-sync/brokerSyncService";
+import {
+  loadBrokerAccountEvidence
+} from "../../src/features/broker-sync/brokerAccountEvidenceStore";
 import {
   extractStatementIdentity,
   loadVerifiedUserCds,
@@ -57,6 +59,8 @@ import { rebuildCanonicalPortfolioLedger } from "../../src/features/trading/cano
 // PC-030M20AV3J RESPONSIVE CALIBRATION
 export default function Funds() {
   const params = useLocalSearchParams();
+  const requestedBrokerAccountKey =
+    String(params?.brokerAccountKey || "").trim().toUpperCase() || null;
 
   const practiceMode =
     String(params?.source || "").toUpperCase() === "PRACTICE";
@@ -689,7 +693,13 @@ export default function Funds() {
           return;
         }
 
-        const mirror = await loadBrokerMirror();
+        if (!requestedBrokerAccountKey) {
+        throw new Error(
+          "Select a connected broker account from Portfolio Sync Center before uploading cash / ledger evidence."
+        );
+      }
+
+      const mirror = await loadBrokerAccountEvidence(requestedBrokerAccountKey);
         if (!mirror?.brokerAccountKey) {
           throw new Error("Upload and verify the broker valuation before cash evidence.");
         }

@@ -13,6 +13,175 @@ function realPortfolioCacheKey(options = {}) {
   return `${REAL_PORTFOLIO_CACHE_KEY}:${broker || "ALL"}`;
 }
 
+
+export function aggregateUnifiedHoldingsBySymbol(holdings = []) {
+  const groups = new Map();
+
+  for (const holding of Array.isArray(holdings) ? holdings : []) {
+    const symbol = String(holding?.symbol || "")
+      .trim()
+      .toUpperCase();
+
+    const quantity = Number(
+      holding?.quantity ??
+      holding?.shares ??
+      0
+    );
+
+    if (!symbol || !(quantity > 0)) continue;
+
+    if (!groups.has(symbol)) {
+      groups.set(symbol, []);
+    }
+
+    groups.get(symbol).push({
+      ...holding,
+      symbol,
+      quantity
+    });
+  }
+
+  return [...groups.entries()].map(([symbol, rows]) => {
+    const first = rows[0] || {};
+
+    const quantity = rows.reduce(
+      (sum, row) => sum + Number(row.quantity || 0),
+      0
+    );
+
+    const hasSettlementEvidence = rows.every(
+      (row) =>
+        row?.settledQuantity != null ||
+        row?.sellableQuantity != null
+    );
+
+    const settledQuantity = hasSettlementEvidence
+      ? rows.reduce(
+          (sum, row) =>
+            sum +
+            Number(
+              row.settledQuantity ??
+              row.sellableQuantity ??
+              0
+            ),
+          0
+        )
+      : null;
+
+    const costValue = rows.reduce((sum, row) => {
+      const rowQuantity = Number(row.quantity || 0);
+      const explicitCost = Number(
+        row.costValue ??
+        row.investedValue ??
+        0
+      );
+
+      if (explicitCost > 0) {
+        return sum + explicitCost;
+      }
+
+      const averagePrice = Number(
+        row.averagePrice ??
+        row.averageCost ??
+        row.weightedAveragePrice ??
+        0
+      );
+
+      return sum + rowQuantity * averagePrice;
+    }, 0);
+
+    const marketValue = rows.reduce((sum, row) => {
+      const explicitValue = Number(
+        row.marketValue ??
+        row.value ??
+        0
+      );
+
+      if (explicitValue > 0) {
+        return sum + explicitValue;
+      }
+
+      return (
+        sum +
+        Number(row.quantity || 0) *
+          Number(
+            row.marketPrice ??
+            row.price ??
+            row.lastPrice ??
+            0
+          )
+      );
+    }, 0);
+
+    const averagePrice =
+      quantity > 0 && costValue > 0
+        ? costValue / quantity
+        : 0;
+
+    const marketPrice =
+      quantity > 0 && marketValue > 0
+        ? marketValue / quantity
+        : Number(
+            first.marketPrice ??
+            first.price ??
+            first.lastPrice ??
+            0
+          );
+
+    const profitLoss = marketValue - costValue;
+    const profitLossPct =
+      costValue > 0
+        ? (profitLoss / costValue) * 100
+        : 0;
+
+    const brokerAccounts = [
+      ...new Set(
+        rows
+          .map((row) =>
+            String(
+              row.brokerAccountKey ??
+              row.broker ??
+              ""
+            ).trim()
+          )
+          .filter(Boolean)
+      )
+    ];
+
+    return {
+      ...first,
+      symbol,
+      broker:
+        brokerAccounts.length === 1
+          ? brokerAccounts[0]
+          : "MULTI_BROKER",
+      brokerAccountKey:
+        brokerAccounts.length === 1
+          ? brokerAccounts[0]
+          : null,
+      brokerAccounts,
+      sourceRows: rows,
+      sourceAccountCount: brokerAccounts.length,
+      quantity,
+      settledQuantity,
+      sellableQuantity: settledQuantity,
+      averagePrice,
+      averageCost: averagePrice,
+      weightedAveragePrice: averagePrice,
+      costValue,
+      investedValue: costValue,
+      marketPrice,
+      price: marketPrice,
+      lastPrice: marketPrice,
+      marketValue,
+      value: marketValue,
+      profitLoss,
+      profitLossPct,
+      changePct: profitLossPct
+    };
+  });
+}
+
 export class PortfolioAuthenticationError extends Error {
   constructor(message, code = "AUTH_REQUIRED", status = 401) {
     super(message);

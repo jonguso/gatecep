@@ -30,7 +30,10 @@ import {
   analyzeWeightedAverageBuy
 } from "../src/features/trading/weightedAverageBuyGuardService";
 import { buildHistoricalSecurityLotLedger } from "../src/features/trading/historicalSecurityLotLedgerService";
-import { loadUnifiedPortfolioRuntime } from "../src/portfolio/unifiedPortfolioApi";
+import {
+  aggregateUnifiedHoldingsBySymbol,
+  loadUnifiedPortfolioRuntime
+} from "../src/portfolio/unifiedPortfolioApi";
 import { addBrokerActionPlanOrder } from "../src/services/trade/brokerActionPlanStore";
 import { saveTradeBasket } from "../src/trade/tradeBasketStore";
 import { loadBrokerLotHistoryEvidence } from "../src/features/trading/brokerLotHistoryEvidenceService";
@@ -387,7 +390,7 @@ export default function Trade() {
 
   const realHolding = useMemo(
     () =>
-      realHoldings.find(
+      aggregateUnifiedHoldingsBySymbol(realHoldings).find(
         (item) =>
           canonicalSecuritySymbol(item.symbol) ===
           canonicalSecuritySymbol(selectedStock.symbol)

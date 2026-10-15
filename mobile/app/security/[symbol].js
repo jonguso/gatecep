@@ -14,7 +14,10 @@ import { router, useFocusEffect, useLocalSearchParams } from "expo-router";
 import ActiveUserBanner from "../../src/components/ActiveUserBanner";
 import CompanyLogo from "../../src/components/markets/CompanyLogo";
 import useMarketData from "../../src/services/markets/useMarketData";
-import { loadUnifiedPortfolioRuntime } from "../../src/portfolio/unifiedPortfolioApi";
+import {
+  aggregateUnifiedHoldingsBySymbol,
+  loadUnifiedPortfolioRuntime
+} from "../../src/portfolio/unifiedPortfolioApi";
 import MarketDepthModal from "../../src/components/markets/MarketDepthModal";
 import { loadFundamentalRecord } from "../../src/features/fundamentals/fundamentalRepository";
 import { buildSecurityEducationModel } from "../../src/services/markets/securityEducationService";
@@ -70,13 +73,14 @@ export default function SecurityDetail() {
   }, [security]);
 
   const realHolding = useMemo(() => {
-    return realHoldings.find(
-      (item) =>
-        String(item?.symbol || "")
-          .trim()
-          .toUpperCase() === targetSymbol &&
-        Number(item?.quantity || 0) > 0
-    ) || null;
+    return (
+      aggregateUnifiedHoldingsBySymbol(realHoldings).find(
+        (item) =>
+          String(item?.symbol || "")
+            .trim()
+            .toUpperCase() === targetSymbol
+      ) || null
+    );
   }, [realHoldings, targetSymbol]);
 
   const realQuantity = Number(realHolding?.quantity || 0);

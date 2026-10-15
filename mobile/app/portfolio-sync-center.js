@@ -6,9 +6,10 @@ import { router, useFocusEffect } from "expo-router";
 
 import { userGetItem } from "../src/auth/userStorage";
 import { loadUnifiedPortfolio } from "../src/portfolio/unifiedPortfolioApi";
-import { loadBrokerMirror } from "../src/features/broker-sync/brokerSyncService";
+import { loadBrokerAccountEvidence } from "../src/features/broker-sync/brokerAccountEvidenceStore";
 import { adoptVerifiedBrokerSnapshot, loadAuthoritativeBrokerSnapshotPreview } from "../src/features/broker-sync/brokerAuthoritativeSnapshotService";
 import { loadBrokerAccounts } from "../src/services/brokers/brokerAccountStore";
+import { buildBrokerAccountKey } from "../src/features/broker-sync/brokerEvidenceIdentityService";
 import { hasConnectedRealBrokerAccount } from "../src/features/broker-sync/brokerCashEvidencePolicy";
 import { loadBrokerLotHistoryEvidence } from "../src/features/trading/brokerLotHistoryEvidenceService";
 import ActiveUserBanner from "../src/components/ActiveUserBanner";
@@ -30,6 +31,8 @@ const STEPS = ["Verify", "Confirm", "Complete"];
 export default function PortfolioSyncCenter() {
   const { width: av3dWidth } = useWindowDimensions();
   const [state, setState] = useState({ loading: true, saving: false, error: "", holdingsCount: 0, portfolioValue: 0, cash: 0, source: "", mirror: null, preview: null, connectedRealBroker: false, lotHistory: null });
+  const [brokerAccounts, setBrokerAccounts] = useState([]);
+  const [selectedBrokerAccountId, setSelectedBrokerAccountId] = useState(null);
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [activePanel, setActivePanel] = useState("evidence");
 
@@ -37,15 +40,59 @@ export default function PortfolioSyncCenter() {
 
   async function load() {
     try {
-      const [portfolio, cashRaw, mirror, preview, brokerAccounts, lotHistory] = await Promise.all([
+      const [portfolio, cashRaw, loadedBrokerAccounts] = await Promise.all([
         loadUnifiedPortfolio(),
         userGetItem("availableCash"),
-        loadBrokerMirror(),
-        loadAuthoritativeBrokerSnapshotPreview(),
-        loadBrokerAccounts(),
-        loadBrokerLotHistoryEvidence()
+        loadBrokerAccounts()
       ]);
+
+      const connectedAccounts = loadedBrokerAccounts.filter(
+        (account) =>
+          account?.connected === true &&
+          account?.status !== "INACTIVE" &&
+          account?.brokerId !== "GATECEP_PRACTICE"
+      );
+
+      const selectedAccount =
+        connectedAccounts.find(
+          (account) => account.id === selectedBrokerAccountId
+        ) ||
+        connectedAccounts.find(
+          (account) => account.defaultBroker
+        ) ||
+        connectedAccounts[0] ||
+        null;
+
+      const selectedAccountKey = selectedAccount
+        ? buildBrokerAccountKey({
+            brokerId: selectedAccount.brokerId,
+            clientAccount:
+              selectedAccount.clientNumber ||
+              selectedAccount.accountNumber,
+            tradingAccount:
+              selectedAccount.tradingAccount
+          })
+        : null;
+
+      const [mirror, preview, lotHistory] = selectedAccountKey
+        ? await Promise.all([
+            loadBrokerAccountEvidence(selectedAccountKey),
+            loadAuthoritativeBrokerSnapshotPreview({
+              brokerAccountKey: selectedAccountKey
+            }),
+            loadBrokerLotHistoryEvidence({
+              brokerAccountKey: selectedAccountKey
+            })
+          ])
+        : [null, null, null];
+
       const holdings = portfolio?.holdings || [];
+
+      setBrokerAccounts(connectedAccounts);
+      setSelectedBrokerAccountId(
+        selectedAccount?.id || null
+      );
+
       setState({
         loading: false,
         error: "",
@@ -55,7 +102,7 @@ export default function PortfolioSyncCenter() {
         source: portfolio?.priceSource || portfolio?.source || "",
         mirror,
         preview,
-        connectedRealBroker: hasConnectedRealBrokerAccount(brokerAccounts),
+        connectedRealBroker: hasConnectedRealBrokerAccount(loadedBrokerAccounts),
         lotHistory
       });
     } catch (error) {
@@ -63,15 +110,142 @@ export default function PortfolioSyncCenter() {
     }
   }
 
+  const selectedBrokerAccount =
+    brokerAccounts.find(
+      (account) => account.id === selectedBrokerAccountId
+    ) || null;
+
+  const selectedBrokerAccountKey = selectedBrokerAccount
+    ? buildBrokerAccountKey({
+        brokerId: selectedBrokerAccount.brokerId,
+        clientAccount:
+          selectedBrokerAccount.clientNumber ||
+          selectedBrokerAccount.accountNumber,
+        tradingAccount:
+          selectedBrokerAccount.tradingAccount
+      })
+    : null;
+
   const valuationReady = Boolean(state.mirror);
   const cashEvidenceReady = state.mirror?.cashEvidenceAvailable === true;
-  const transactionHistoryReady = state.lotHistory?.ready === true;
-  const evidenceReady = valuationReady && cashEvidenceReady && transactionHistoryReady;
+  const transactionHistoryReady =
+    Boolean(selectedBrokerAccountKey) &&
+    state.lotHistory?.ready === true;
+  const evidenceReady =
+    valuationReady &&
+    cashEvidenceReady;
+
+  async function selectBrokerAccount(account) {
+    const accountKey = buildBrokerAccountKey({
+      brokerId: account.brokerId,
+      clientAccount:
+        account.clientNumber ||
+        account.accountNumber,
+      tradingAccount:
+        account.tradingAccount
+    });
+
+    setSelectedBrokerAccountId(account.id);
+
+    try {
+      const [mirror, preview, lotHistory] = await Promise.all([
+        loadBrokerAccountEvidence(accountKey),
+        loadAuthoritativeBrokerSnapshotPreview({
+          brokerAccountKey: accountKey
+        }),
+        loadBrokerLotHistoryEvidence({
+          brokerAccountKey: accountKey
+        })
+      ]);
+
+      setState((current) => ({
+        ...current,
+        mirror,
+        preview,
+        lotHistory,
+        error: ""
+      }));
+    } catch (error) {
+      setState((current) => ({
+        ...current,
+        mirror: null,
+        preview: null,
+        lotHistory: null,
+        error:
+          error?.message ||
+          "Unable to load evidence for the selected broker account."
+      }));
+    }
+  }
+
+  function openValuationUpload() {
+    if (!selectedBrokerAccountKey) {
+      setState((current) => ({
+        ...current,
+        error:
+          "Select a connected broker account before uploading portfolio valuation evidence."
+      }));
+      return;
+    }
+
+    router.push({
+      pathname: "/import-portfolio",
+      params: {
+        mode: "RECONCILE",
+        brokerAccountKey: selectedBrokerAccountKey
+      }
+    });
+  }
+
+  function openCashUpload() {
+    if (!selectedBrokerAccountKey) {
+      setState((current) => ({
+        ...current,
+        error:
+          "Select a connected broker account before uploading cash / ledger evidence."
+      }));
+      return;
+    }
+
+    router.push({
+      pathname: "/(tabs)/funds",
+      params: {
+        mode: "RECONCILE",
+        brokerAccountKey: selectedBrokerAccountKey
+      }
+    });
+  }
+
+  function openTransactionUpload() {
+    if (!selectedBrokerAccountKey) {
+      setState((current) => ({
+        ...current,
+        error:
+          "Select a connected broker account before uploading transaction history."
+      }));
+      return;
+    }
+
+    router.push({
+      pathname: "/transactions-upload",
+      params: {
+        mode: "RECONCILE",
+        brokerAccountKey: selectedBrokerAccountKey
+      }
+    });
+  }
 
   function continueJourney() {
-    if (!valuationReady) return router.push("/import-portfolio?mode=RECONCILE");
-    if (!cashEvidenceReady) return router.push("/(tabs)/funds?mode=RECONCILE");
-    if (!transactionHistoryReady) return router.push("/transactions-upload?mode=RECONCILE");
+    if (!valuationReady) {
+      openValuationUpload();
+      return;
+    }
+
+    if (!cashEvidenceReady) {
+      openCashUpload();
+      return;
+    }
+
     confirmReplacement();
   }
 
@@ -85,7 +259,15 @@ export default function PortfolioSyncCenter() {
     try {
       setConfirmVisible(false);
       setState((current) => ({ ...current, saving: true, error: "" }));
-      await adoptVerifiedBrokerSnapshot();
+      if (!selectedBrokerAccountKey) {
+        throw new Error(
+          "Select a connected broker account before confirming the broker snapshot."
+        );
+      }
+
+      await adoptVerifiedBrokerSnapshot({
+        brokerAccountKey: selectedBrokerAccountKey
+      });
       router.replace("/portfolio-hub?brokerSnapshot=ADOPTED");
     } catch (error) {
       setState((current) => ({ ...current, saving: false, error: error?.message || "Unable to adopt broker snapshot." }));
@@ -96,8 +278,6 @@ export default function PortfolioSyncCenter() {
     ? "Upload Portfolio Valuation"
     : !cashEvidenceReady
     ? "Upload Cash / Ledger Evidence"
-    : !transactionHistoryReady
-    ? "Upload Transaction History"
     : state.saving ? "Applying Broker Snapshot…" : "Confirm Broker Snapshot";
 
   return (
@@ -135,8 +315,8 @@ export default function PortfolioSyncCenter() {
         tone={evidenceReady ? "success" : "warning"}
         title={evidenceReady ? "Broker evidence complete" : "Broker evidence required"}
         message={evidenceReady
-          ? "Portfolio valuation, cash statement, and transaction history are available. Confirm once to replace the REAL record."
-          : "Current portfolio valuation, cash/ledger statement, and completed transaction history are required."}
+          ? "Portfolio valuation and cash statement are available. Confirm once to replace the REAL snapshot. Transaction history is optional supporting evidence."
+          : "Current portfolio valuation and cash/ledger statement are required. Transaction history is optional supporting evidence."}
       />
 
       <View style={styles.panelTabs}>
@@ -147,14 +327,67 @@ export default function PortfolioSyncCenter() {
         ))}
       </View>
 
-      {activePanel === "evidence" ? <ContainedPanel title="Required Broker Evidence" subtitle="Complete all three records before confirmation" testID="real-sync-evidence-panel">
+      {activePanel === "evidence" ? <ContainedPanel title="Broker Evidence" subtitle="Complete the two required records; transaction history is optional supporting evidence" testID="real-sync-evidence-panel">
+        <View style={styles.accountSelector}>
+          <Text style={styles.accountSelectorLabel}>
+            Broker account for this evidence
+          </Text>
+
+          {brokerAccounts.length ? (
+            <View style={styles.accountSelectorOptions}>
+              {brokerAccounts.map((account) => {
+                const selected =
+                  account.id === selectedBrokerAccountId;
+
+                const accountNumber =
+                  account.clientNumber ||
+                  account.accountNumber ||
+                  "Account number unavailable";
+
+                return (
+                  <Pressable
+                    key={account.id}
+                    testID={`sync-broker-account-${account.id}`}
+                    style={[
+                      styles.accountOption,
+                      selected && styles.accountOptionSelected
+                    ]}
+                    onPress={() => selectBrokerAccount(account)}
+                  >
+                    <Text
+                      style={[
+                        styles.accountOptionTitle,
+                        selected && styles.accountOptionTitleSelected
+                      ]}
+                    >
+                      {account.nickname ||
+                        account.brokerName ||
+                        account.brokerId}
+                    </Text>
+
+                    <Text style={styles.accountOptionMeta}>
+                      {account.brokerName || account.brokerId}
+                      {" • "}
+                      {accountNumber}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : (
+            <Text style={styles.accountSelectorEmpty}>
+              Connect a REAL broker account before uploading broker evidence.
+            </Text>
+          )}
+        </View>
+
         <EvidenceRow
           compact={av3dWidth < 520}
           label="Portfolio Valuation"
           ready={valuationReady}
           value={valuationReady ? `${state.mirror.holdings?.length || 0} holdings • ${state.mirror.accountName || state.mirror.broker}` : "Required"}
           actionLabel={valuationReady ? "Replace" : "Upload"}
-          onPress={() => router.push("/import-portfolio?mode=RECONCILE")}
+          onPress={openValuationUpload}
         />
         <EvidenceRow
           compact={av3dWidth < 520}
@@ -163,15 +396,26 @@ export default function PortfolioSyncCenter() {
           value={cashEvidenceReady ? `KES ${money(state.mirror.cashBalance)}` : valuationReady ? "Required to complete comparison" : "Upload valuation first"}
           actionLabel={cashEvidenceReady ? "Replace" : "Upload"}
           disabled={!valuationReady}
-          onPress={() => router.push("/(tabs)/funds?mode=RECONCILE")}
+          onPress={openCashUpload}
         />
         <EvidenceRow
           compact={av3dWidth < 520}
           label="Transaction / Lot History"
           ready={transactionHistoryReady}
-          value={transactionHistoryReady ? `${state.lotHistory.completedCount} completed executions • ${state.lotHistory.symbols.length} securities` : "Required for FIFO lots, realized results, and post-sale WAP"}
-          actionLabel={transactionHistoryReady ? "Replace" : "Upload"}
-          onPress={() => router.push("/transactions-upload?mode=RECONCILE")}
+          value={
+            transactionHistoryReady
+              ? `${state.lotHistory.completedCount} completed executions • ${state.lotHistory.symbols.length} securities • ${selectedBrokerAccount?.nickname || selectedBrokerAccount?.brokerName || selectedBrokerAccount?.brokerId}`
+              : selectedBrokerAccount
+              ? "Optional supporting evidence for this broker account"
+              : "Optional � select a broker account to upload"
+          }
+          actionLabel={
+            transactionHistoryReady
+              ? "Update This Account"
+              : "Upload"
+          }
+          disabled={!selectedBrokerAccountKey}
+          onPress={openTransactionUpload}
         />
       </ContainedPanel> : null}
 
@@ -274,6 +518,15 @@ const styles = StyleSheet.create({
   panelTabActive: { backgroundColor: "#9333ea" },
   panelTabText: { color: "#94a3b8", fontWeight: "900", fontSize: 12 },
   panelTabTextActive: { color: "white" },
+  accountSelector: { padding: 15, borderBottomColor: "#1e293b", borderBottomWidth: 1 },
+  accountSelectorLabel: { color: "white", fontWeight: "900", fontSize: 14, marginBottom: 10 },
+  accountSelectorOptions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
+  accountOption: { minWidth: 150, flexGrow: 1, borderWidth: 1, borderColor: "#334155", backgroundColor: "#020617", borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12 },
+  accountOptionSelected: { borderColor: "#9333ea", backgroundColor: "#1e1b4b" },
+  accountOptionTitle: { color: "#cbd5e1", fontWeight: "900", fontSize: 12 },
+  accountOptionTitleSelected: { color: "white" },
+  accountOptionMeta: { color: "#94a3b8", fontSize: 11, marginTop: 3 },
+  accountSelectorEmpty: { color: "#fbbf24", lineHeight: 18, fontSize: 12 },
   evidenceRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 15, borderBottomColor: "#1e293b", borderBottomWidth: 1 },
   evidenceText: { flex: 1 },
   evidenceLabel: { color: "white", fontWeight: "900", fontSize: 15 },

@@ -132,8 +132,12 @@ export async function upsertBrokerAccount({
   const resolvedBrokerId = brokerId || broker.id;
   const resolvedBrokerName = brokerName || broker.name;
 
+  const normalizedClientNumber = cleanText(clientNumber).toUpperCase();
+
   const existing = accounts.find(
-    (item) => item.brokerId === resolvedBrokerId
+    (item) =>
+      item.brokerId === resolvedBrokerId &&
+      cleanText(item.clientNumber).toUpperCase() === normalizedClientNumber
   );
 
   const now = new Date().toISOString();
@@ -158,7 +162,9 @@ export async function upsertBrokerAccount({
     lastSyncAt: existing?.lastSyncAt || null
   };
 
-  let next = accounts.filter((item) => item.brokerId !== resolvedBrokerId);
+  let next = accounts.filter(
+    (item) => item.id !== existing?.id
+  );
 
   next.unshift(nextAccount);
 

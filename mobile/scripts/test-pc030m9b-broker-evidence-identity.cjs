@@ -3,7 +3,7 @@ const fs = require("fs");
 const vm = require("vm");
 const babel = require("@babel/core");
 
-const path = "src/features/broker-sync/brokerEvidenceIdentityService.js";
+const path = "mobile/src/features/broker-sync/brokerEvidenceIdentityService.js";
 const source = fs.readFileSync(path, "utf8");
 const compiled = babel.transformSync(source, {
   filename: path,

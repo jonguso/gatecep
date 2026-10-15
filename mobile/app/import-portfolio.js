@@ -34,6 +34,8 @@ export default function ImportPortfolio() {
   const params = useLocalSearchParams();
   const reconciliationMode =
     String(params?.mode || "").toUpperCase() === "RECONCILE";
+  const requestedBrokerAccountKey =
+    String(params?.brokerAccountKey || "").trim().toUpperCase() || null;
   const [status, setStatus] = useState("");
   const [brokerId, setBrokerId] = useState("AIB");
   const [tradingAccount, setTradingAccount] = useState("");
@@ -55,6 +57,12 @@ export default function ImportPortfolio() {
 
   async function pickFile() {
     try {
+      if (reconciliationMode && !requestedBrokerAccountKey) {
+        throw new Error(
+          "Select a connected broker account from Portfolio Sync Center before uploading valuation evidence."
+        );
+      }
+
       const brokerIsConnected = connectedRealBroker || hasConnectedRealBrokerAccount(await loadBrokerAccounts());
       if (!reconciliationMode && brokerIsConnected) {
         Alert.alert(
@@ -108,7 +116,8 @@ export default function ImportPortfolio() {
           userCds: savedCds || enteredCds,
           brokerId,
           clientAccount: tradingAccount,
-          internalIdentity: parsed.internalIdentity
+          internalIdentity: parsed.internalIdentity,
+          expectedAccountKey: requestedBrokerAccountKey
         });
         if (!savedCds) {
           await saveCdsProfile({
@@ -128,6 +137,9 @@ export default function ImportPortfolio() {
           importMode: reconciliationMode
             ? "BROKER_RECONCILIATION_EVIDENCE"
             : "INITIAL_REAL_PORTFOLIO",
+          brokerAccountKey: reconciliationMode
+            ? requestedBrokerAccountKey
+            : null,
           accountIdentity
         })
       );
@@ -168,7 +180,10 @@ export default function ImportPortfolio() {
       router.push({
         pathname: "/review-portfolio-import",
         params: {
-          mode: reconciliationMode ? "RECONCILE" : "INITIAL"
+          mode: reconciliationMode ? "RECONCILE" : "INITIAL",
+          ...(reconciliationMode && requestedBrokerAccountKey
+            ? { brokerAccountKey: requestedBrokerAccountKey }
+            : {})
         }
       });
     } catch (error) {

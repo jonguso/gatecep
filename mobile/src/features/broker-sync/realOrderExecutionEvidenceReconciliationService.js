@@ -35,7 +35,8 @@ export {
 
 export async function reconcileUncertainRealOrderFromVerifiedEvidence({
   orderId,
-  records = []
+  records = [],
+  expectedBrokerAccountKey = null
 } = {}) {
   const execution =
     await loadBasketExecution();
@@ -50,7 +51,8 @@ export async function reconcileUncertainRealOrderFromVerifiedEvidence({
       order,
       executionMode:
         execution?.executionMode,
-      records
+      records,
+      expectedBrokerAccountKey
     });
 
   if (!decision.resolved) {

@@ -12,6 +12,8 @@ import ActiveUserBanner from "../src/components/ActiveUserBanner";
 import { loadBasketExecution } from "../src/trade/basketExecutionStore";
 import { userGetItem } from "../src/auth/userStorage";
 import { buildVerifiedEvidenceMatchAudit } from "../src/features/broker-sync/realOrderExecutionEvidenceReconciliationService";
+import { buildBrokerAccountKey } from "../src/features/broker-sync/brokerEvidenceIdentityService";
+import { loadBrokerAccounts } from "../src/services/brokers/brokerAccountStore";
 import { buildExecutionStatusReadModel } from "../src/services/trade/realExecutionStatusReadModel";
 
 function parseStoredEvidence(value) {
@@ -48,6 +50,7 @@ export default function RealOrderRecovery() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [evidenceRecords, setEvidenceRecords] = useState([]);
+  const [brokerAccounts, setBrokerAccounts] = useState([]);
 
   function statusViewFor(order) {
     return buildExecutionStatusReadModel(order, execution);
@@ -67,14 +70,25 @@ export default function RealOrderRecovery() {
       const [
         saved,
         verifiedRaw,
-        unverifiedRaw
+        unverifiedRaw,
+        loadedBrokerAccounts
       ] = await Promise.all([
         loadBasketExecution(),
         userGetItem("transactionHistory"),
-        userGetItem("unverifiedTransactionHistory")
+        userGetItem("unverifiedTransactionHistory"),
+        loadBrokerAccounts()
       ]);
 
       setExecution(saved || null);
+
+      setBrokerAccounts(
+        loadedBrokerAccounts.filter(
+          (account) =>
+            account?.connected === true &&
+            account?.status !== "INACTIVE" &&
+            account?.brokerId !== "GATECEP_PRACTICE"
+        )
+      );
 
       setEvidenceRecords([
         ...parseStoredEvidence(verifiedRaw),
@@ -108,27 +122,110 @@ export default function RealOrderRecovery() {
       for (
         const order of recoveryOrders
       ) {
+        const requestedAccountId = String(
+          order?.brokerAccountId || ""
+        ).trim();
+
+        const requestedBrokerId = String(
+          order?.brokerId || ""
+        ).trim().toUpperCase();
+
+        const matchedAccount =
+          requestedAccountId
+            ? brokerAccounts.find(
+                (account) =>
+                  String(account?.id || "").trim() ===
+                    requestedAccountId &&
+                  String(account?.brokerId || "")
+                    .trim()
+                    .toUpperCase() ===
+                    requestedBrokerId
+              )
+            : null;
+
+        const expectedBrokerAccountKey =
+          matchedAccount
+            ? buildBrokerAccountKey({
+                brokerId: matchedAccount.brokerId,
+                clientAccount:
+                  matchedAccount.clientNumber ||
+                  matchedAccount.accountNumber,
+                tradingAccount:
+                  matchedAccount.tradingAccount
+              })
+            : null;
+
+        const accountBoundButUnresolved =
+          Boolean(requestedAccountId) &&
+          !expectedBrokerAccountKey;
+
         next[order.id] =
           buildVerifiedEvidenceMatchAudit({
             order,
-            records: evidenceRecords
+            records:
+              accountBoundButUnresolved
+                ? []
+                : evidenceRecords,
+            expectedBrokerAccountKey
           });
       }
 
       return next;
     }, [
       recoveryOrders,
-      evidenceRecords
+      evidenceRecords,
+      brokerAccounts
     ]);
 
   function openTransactionEvidence(order) {
+    const requestedAccountId = String(
+      order?.brokerAccountId || ""
+    ).trim();
+
+    const requestedBrokerId = String(
+      order?.brokerId || ""
+    ).trim().toUpperCase();
+
+    const matchedAccount = brokerAccounts.find(
+      (account) =>
+        String(account?.id || "").trim() ===
+          requestedAccountId &&
+        String(account?.brokerId || "")
+          .trim()
+          .toUpperCase() === requestedBrokerId
+    );
+
+    if (!matchedAccount) {
+      setError(
+        "The broker account assigned to this REAL order could not be resolved. Reconnect or restore that exact broker account before uploading recovery evidence."
+      );
+      return;
+    }
+
+    const brokerAccountKey = buildBrokerAccountKey({
+      brokerId: matchedAccount.brokerId,
+      clientAccount:
+        matchedAccount.clientNumber ||
+        matchedAccount.accountNumber,
+      tradingAccount:
+        matchedAccount.tradingAccount
+    });
+
+    if (!brokerAccountKey) {
+      setError(
+        "The broker account assigned to this REAL order does not have sufficient verified account identity for recovery evidence."
+      );
+      return;
+    }
+
     router.push({
       pathname: "/transactions-upload",
       params: {
         mode: "RECONCILE",
         recoveryOrderId: order?.id || "",
         recoverySymbol: order?.symbol || "",
-        recoveryBrokerId: order?.brokerId || ""
+        recoveryBrokerId: order?.brokerId || "",
+        brokerAccountKey
       }
     });
   }

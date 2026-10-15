@@ -200,9 +200,28 @@ function verifiedRecords(records = []) {
 
 export function findVerifiedEvidenceMatches({
   order,
-  records = []
+  records = [],
+  expectedBrokerAccountKey = null
 } = {}) {
-  const verified = verifiedRecords(records);
+  const normalizedExpectedBrokerAccountKey =
+    upper(expectedBrokerAccountKey);
+
+  const verified = verifiedRecords(records).filter(
+    (record) => {
+      if (!normalizedExpectedBrokerAccountKey) {
+        return true;
+      }
+
+      const evidenceBrokerAccountKey =
+        upper(record?.brokerAccountKey);
+
+      return (
+        Boolean(evidenceBrokerAccountKey) &&
+        evidenceBrokerAccountKey ===
+          normalizedExpectedBrokerAccountKey
+      );
+    }
+  );
 
   const brokerOrderId =
     text(order?.brokerOrderId);
@@ -225,13 +244,32 @@ export function findVerifiedEvidenceMatches({
 
 export function buildVerifiedEvidenceMatchAudit({
   order,
-  records = []
+  records = [],
+  expectedBrokerAccountKey = null
 } = {}) {
+  const normalizedExpectedBrokerAccountKey =
+    upper(expectedBrokerAccountKey);
+
   const classified = (
     Array.isArray(records) ? records : []
-  ).map((record) =>
-    classifyBrokerExecutionEvidence(record)
-  );
+  )
+    .map((record) =>
+      classifyBrokerExecutionEvidence(record)
+    )
+    .filter((record) => {
+      if (!normalizedExpectedBrokerAccountKey) {
+        return true;
+      }
+
+      const evidenceBrokerAccountKey =
+        upper(record?.brokerAccountKey);
+
+      return (
+        Boolean(evidenceBrokerAccountKey) &&
+        evidenceBrokerAccountKey ===
+          normalizedExpectedBrokerAccountKey
+      );
+    });
 
   const brokerOrderId =
     text(order?.brokerOrderId);

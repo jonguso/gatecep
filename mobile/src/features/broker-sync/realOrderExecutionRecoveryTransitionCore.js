@@ -36,6 +36,7 @@ export function buildRealOrderRecoveryTransition({
   order,
   executionMode,
   records = [],
+  expectedBrokerAccountKey = null,
   now = new Date().toISOString()
 } = {}) {
   if (!order) {
@@ -111,7 +112,8 @@ export function buildRealOrderRecoveryTransition({
   const matchedEvidence =
     findVerifiedEvidenceMatches({
       order,
-      records
+      records,
+      expectedBrokerAccountKey
     });
 
   /*

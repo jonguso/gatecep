@@ -1,4 +1,7 @@
 import { brokerExecutionFillIdentity } from "../broker-sync/brokerExecutionFillIdentity.js";
+import {
+  loadCombinedBrokerTransactionHistoryEvidence
+} from "./brokerTransactionHistoryEvidenceStore.js";
 
 function parseArray(raw) {
   if (!raw) return [];
@@ -16,30 +19,83 @@ export function isCompletedLotExecution(row = {}) {
     && String(row.executionDate || row.date || row.createdAt || "").trim();
 }
 
-export async function loadBrokerLotHistoryEvidence() {
-  const { userGetItem } = await import("../../services/auth/userStorage.js");
-  const [verifiedRaw, incompleteRaw] = await Promise.all([
-    userGetItem("transactionHistory"),
-    userGetItem("unverifiedTransactionHistory")
-  ]);
-  const combined = [...parseArray(verifiedRaw), ...parseArray(incompleteRaw)];
+export async function loadBrokerLotHistoryEvidence({
+  brokerAccountKey = null
+} = {}) {
+  const evidence =
+    await loadCombinedBrokerTransactionHistoryEvidence();
+
+  const normalizedAccountKey =
+    String(brokerAccountKey || "")
+      .trim()
+      .toUpperCase();
+
+  const combined = [
+    ...evidence.verified,
+    ...evidence.unverified
+  ].filter(
+    (row) =>
+      !normalizedAccountKey ||
+      String(row?.brokerAccountKey || "")
+        .trim()
+        .toUpperCase() === normalizedAccountKey
+  );
+
   const seen = new Set();
-  const records = combined.filter(isCompletedLotExecution).filter((row) => {
-    const key =
-      brokerExecutionFillIdentity(row) ||
-      String(
-        row.id ||
-        `${row.date}-${row.symbol}-${row.side}-${row.quantity}-${row.price}`
-      );
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
+
+  const records =
+    combined
+      .filter(isCompletedLotExecution)
+      .filter((row) => {
+        const accountKey = String(
+          row?.brokerAccountKey ||
+          "LEGACY_UNSCOPED"
+        )
+          .trim()
+          .toUpperCase();
+
+        const fillKey =
+          brokerExecutionFillIdentity(row) ||
+          String(
+            row.id ||
+            `${row.date}-${row.symbol}-${row.side}-${row.quantity}-${row.price}`
+          );
+
+        const key = `${accountKey}::${fillKey}`;
+
+        if (seen.has(key)) return false;
+
+        seen.add(key);
+        return true;
+      });
+
   return {
     ready: records.length > 0,
+    brokerAccountKey:
+      normalizedAccountKey || null,
     records,
     completedCount: records.length,
-    symbols: [...new Set(records.map((row) => String(row.symbol).toUpperCase()))],
-    analyticsOnlyCount: records.filter((row) => row.canAffectRealPortfolio !== true).length
+    symbols: [
+      ...new Set(
+        records.map(
+          (row) =>
+            String(row.symbol).toUpperCase()
+        )
+      )
+    ],
+    accountCount: new Set(
+      records
+        .map((row) => row?.brokerAccountKey)
+        .filter(Boolean)
+    ).size,
+    legacyUnscopedCount:
+      records.filter(
+        (row) => !row?.brokerAccountKey
+      ).length,
+    analyticsOnlyCount:
+      records.filter(
+        (row) =>
+          row.canAffectRealPortfolio !== true
+      ).length
   };
 }

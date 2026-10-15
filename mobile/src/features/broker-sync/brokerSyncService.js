@@ -10,6 +10,10 @@ import {
   syncBrokerPortfolio
 } from "../../services/brokers/brokerPortfolioSync";
 import { requireVerifiedBrokerCashEvidence } from "./brokerCashEvidencePolicy";
+import {
+  loadBrokerAccountEvidence,
+  saveBrokerAccountEvidence
+} from "./brokerAccountEvidenceStore";
 
 const BROKER_MIRROR_KEY =
   "brokerMirrorPortfolio";
@@ -412,25 +416,93 @@ export async function saveVerifiedUploadedBrokerMirror({
     throw new Error("Verified CDS, broker, and trading-account identity are required.");
   }
 
-  return saveBrokerMirror({
-    brokerAccountId: accountIdentity.brokerAccountKey,
-    brokerId: accountIdentity.brokerId,
-    clientAccount: accountIdentity.clientAccount || accountIdentity.tradingAccount,
-    tradingAccount: accountIdentity.clientAccount || accountIdentity.tradingAccount,
-    cdsNumber: accountIdentity.cdsNumber,
-    brokerAccountKey: accountIdentity.brokerAccountKey,
-    brokerFileIdentifier: accountIdentity.brokerFileIdentifier,
-    identityStatus: accountIdentity.identityStatus,
+  const normalized = normalizeBrokerAccount({
+    brokerAccountId:
+      accountIdentity.brokerAccountKey,
+    brokerId:
+      accountIdentity.brokerId,
+    clientAccount:
+      accountIdentity.clientAccount ||
+      accountIdentity.tradingAccount,
+    tradingAccount:
+      accountIdentity.clientAccount ||
+      accountIdentity.tradingAccount,
     broker,
     accountName,
     currency: "KES",
-    cashBalance: cashBalance ?? 0,
+    cashBalance:
+      cashBalance ?? 0,
+    holdings
+  });
+
+  const now = new Date().toISOString();
+
+  const mirror = {
+    type:
+      "GATECEP_BROKER_MIRROR",
+
+    status:
+      "ACTIVE",
+
+    source:
+      "BROKER_VALUATION_UPLOAD",
+
+    runtimeMode:
+      "REAL_VERIFIED_UPLOAD",
+
+    evidenceFileName:
+      fileName,
+
     cashEvidenceAvailable:
-      cashBalance !== null && cashBalance !== undefined && cashBalance !== "",
-    holdings,
-    source: "BROKER_VALUATION_UPLOAD",
-    runtimeMode: "REAL_VERIFIED_UPLOAD",
-    fileName
+      cashBalance !== null &&
+      cashBalance !== undefined &&
+      cashBalance !== "",
+
+    cashEvidenceFileName:
+      null,
+
+    brokerId:
+      accountIdentity.brokerId,
+
+    clientAccount:
+      accountIdentity.clientAccount ||
+      accountIdentity.tradingAccount,
+
+    tradingAccount:
+      accountIdentity.clientAccount ||
+      accountIdentity.tradingAccount,
+
+    cdsNumber:
+      accountIdentity.cdsNumber,
+
+    brokerAccountKey:
+      accountIdentity.brokerAccountKey,
+
+    brokerFileIdentifier:
+      accountIdentity.brokerFileIdentifier,
+
+    identityStatus:
+      accountIdentity.identityStatus,
+
+    ...normalized,
+
+    brokerAccountId:
+      accountIdentity.brokerAccountKey,
+
+    brokerAccountKey:
+      accountIdentity.brokerAccountKey,
+
+    createdAt:
+      now,
+
+    updatedAt:
+      now
+  };
+
+  return saveBrokerAccountEvidence({
+    brokerAccountKey:
+      accountIdentity.brokerAccountKey,
+    mirror
   });
 }
 
@@ -444,9 +516,22 @@ export async function attachVerifiedBrokerCashEvidence({
   const verified = requireVerifiedBrokerCashEvidence({
     cashBalance, statementEffectiveDate, accountIdentity
   });
+
   const amount = verified.cashBalance;
 
-  const mirror = await loadBrokerMirror();
+  const requestedAccountKey =
+    accountIdentity?.brokerAccountKey;
+
+  if (!requestedAccountKey) {
+    throw new Error(
+      "Verified broker account identity is required for cash evidence."
+    );
+  }
+
+  const mirror =
+    await loadBrokerAccountEvidence(
+      requestedAccountKey
+    );
 
   if (!mirror || mirror.runtimeMode !== "REAL_VERIFIED_UPLOAD") {
     throw new Error(
@@ -454,22 +539,49 @@ export async function attachVerifiedBrokerCashEvidence({
     );
   }
 
-  if (!accountIdentity || accountIdentity.identityStatus !== "VERIFIED" ||
+  if (!accountIdentity ||
+      accountIdentity.identityStatus !== "VERIFIED" ||
       accountIdentity.cdsNumber !== mirror.cdsNumber ||
       accountIdentity.brokerAccountKey !== mirror.brokerAccountKey) {
-    throw new Error("Cash evidence must match the valuation CDS, broker, and trading account.");
+    throw new Error(
+      "Cash evidence must match the valuation CDS, broker, and trading account."
+    );
   }
 
-  return saveBrokerMirror({
-    ...mirror,
-    broker: broker || mirror.broker,
-    fileName: mirror.evidenceFileName,
-    cashBalance: amount,
-    cashEvidenceAvailable: true,
-    cashEvidenceFileName: fileName,
-    cashEvidenceEffectiveDate: verified.statementEffectiveDate,
-    source: "BROKER_VALUATION_AND_CASH_UPLOAD",
-    runtimeMode: "REAL_VERIFIED_UPLOAD"
+  return saveBrokerAccountEvidence({
+    brokerAccountKey:
+      mirror.brokerAccountKey,
+
+    mirror: {
+      ...mirror,
+
+      broker:
+        broker || mirror.broker,
+
+      evidenceFileName:
+        mirror.evidenceFileName,
+
+      cashBalance:
+        amount,
+
+      cashEvidenceAvailable:
+        true,
+
+      cashEvidenceFileName:
+        fileName,
+
+      cashEvidenceEffectiveDate:
+        verified.statementEffectiveDate,
+
+      source:
+        "BROKER_VALUATION_AND_CASH_UPLOAD",
+
+      runtimeMode:
+        "REAL_VERIFIED_UPLOAD",
+
+      updatedAt:
+        new Date().toISOString()
+    }
   });
 }
 

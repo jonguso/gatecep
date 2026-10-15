@@ -18,10 +18,7 @@ import {
   requireSafeImportRows,
   safeWorkbookReadOptions
 } from "../src/security/importFileSecurity";
-import { userSetItem } from "../src/auth/userStorage";
-import { buildSyncStatus } from "../src/portfolio/syncStatus";
-import { rebuildCanonicalPortfolioLedger } from "../src/features/trading/canonicalPortfolioLedgerService";
-import { partitionBrokerExecutionEvidence } from "../src/features/broker-sync/brokerExecutionEvidencePolicy";
+import { userGetItem, userSetItem } from "../src/auth/userStorage";
 import { ContainedPanel } from "../src/components/mobile/MobileUI";
 import { extractBrokerPdf } from "../src/services/brokers/brokerPdfExtractionApi";
 
@@ -311,62 +308,94 @@ export default function TransactionImport() {
   }
 
   async function saveTransactions() {
-  if (!transactions.length) {
-    Alert.alert("No Transactions", "Add or upload at least one transaction.");
-    return;
+    if (!transactions.length) {
+      Alert.alert(
+        "No Transactions",
+        "Add at least one manual transaction note."
+      );
+      return;
+    }
+
+    if (selectedFile) {
+      Alert.alert(
+        "Use Broker Evidence Upload",
+        "Broker transaction files must be uploaded from Portfolio Sync Center after selecting the exact broker account."
+      );
+      return;
+    }
+
+    const recordedAt = new Date().toISOString();
+
+    const manualNotes = transactions.map((row, index) => ({
+      ...row,
+      id:
+        row.id ||
+        `manual-transaction-note-${Date.now()}-${index}`,
+      evidenceStatus: "UNVERIFIED_MANUAL_NOTE",
+      canAffectRealPortfolio: false,
+      sourceType: "MANUAL_TRANSACTION_NOTE",
+      source: "MANUAL_ENTRY",
+      recordedAt
+    }));
+
+    const existingRaw =
+      await userGetItem("manualTransactionNotes");
+
+    let existing = [];
+
+    try {
+      const parsed = existingRaw
+        ? JSON.parse(existingRaw)
+        : [];
+
+      existing = Array.isArray(parsed)
+        ? parsed
+        : [];
+    } catch {
+      existing = [];
+    }
+
+    await userSetItem(
+      "manualTransactionNotes",
+      JSON.stringify([
+        ...existing,
+        ...manualNotes
+      ])
+    );
+
+    Alert.alert(
+      "Manual Notes Saved",
+      `${manualNotes.length} manual transaction note${manualNotes.length === 1 ? "" : "s"} saved. Manual notes are not REAL broker execution evidence and do not affect holdings, lots, or available cash.`
+    );
+
+    router.replace("/portfolio-sync-center");
   }
-
-  const { verified, unverified } = partitionBrokerExecutionEvidence(transactions);
-  await userSetItem("transactionHistory", JSON.stringify(verified));
-  await userSetItem("unverifiedTransactionHistory", JSON.stringify(unverified));
-  await userSetItem("transactionsUploaded", verified.length ? "true" : "false");
-
-  await userSetItem(
-    "transactionUploadSummary",
-    JSON.stringify({
-      count: verified.length,
-      rejectedCount: unverified.length,
-      uploadedAt: new Date().toISOString(),
-      source: selectedFile ? "TRANSACTION_IMPORT_FILE" : "MANUAL_ENTRY",
-      fileName: selectedFile?.name || null
-    })
-  );
-
-  await rebuildCanonicalPortfolioLedger();
-  await buildSyncStatus();
-
-  Alert.alert("Evidence Reviewed", `${verified.length} verified broker executions saved; ${unverified.length} incomplete records remain UNVERIFIED.`);
-
-  router.replace("/portfolio-sync-center");
-}
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={styles.content}>
-      <Text style={styles.title}>Broker Execution Evidence</Text>
+      <Text style={styles.title}>Manual Transaction Notes</Text>
 
       <Text style={styles.subtitle}>
-        REAL activity requires broker date, reference, broker identity, executed quantity and price, fees, and settlement evidence. Manual or incomplete rows remain UNVERIFIED.
+        Manual notes are for your own reference only. They never become REAL broker execution evidence and cannot change holdings, lots, available cash, or Coach G REAL trading history.
       </Text>
 
       <View style={styles.card}>
-        <Text style={styles.cardTitle}>Upload Transaction File</Text>
-
-        <Text style={styles.help}>
-          Select PDF, CSV, or Excel order history from your phone. Expected columns may
-          include Symbol, Buy/Sell, Quantity, Price, and Date.
+        <Text style={styles.cardTitle}>
+          Verified Broker Transaction Evidence
         </Text>
 
-        <Pressable style={styles.secondary} onPress={pickTransactionFile}>
+        <Text style={styles.help}>
+          Broker files require an exact connected broker account. Use Portfolio Sync Center to select the account before uploading evidence.
+        </Text>
+
+        <Pressable
+          style={styles.secondary}
+          onPress={() => router.push("/portfolio-sync-center")}
+        >
           <Text style={styles.secondaryText}>
-            {selectedFile ? `Selected: ${selectedFile.name}` : "Upload Transaction File"}
+            Go to Portfolio Sync Center
           </Text>
         </Pressable>
-
-        {status ? (
-          <View style={styles.statusBox}>
-            <Text style={styles.statusText}>{status}</Text>
-          </View>
-        ) : null}
       </View>
 
       <View style={styles.card}>

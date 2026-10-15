@@ -50,7 +50,7 @@ export default function BrokerUpload() {
 
         <Pressable
           style={styles.docOption}
-          onPress={() => router.push("/transaction-import")}
+          onPress={() => router.push("/portfolio-sync-center")}
         >
           <Text style={styles.docTitle}>Transaction / Order History</Text>
           <Text style={styles.optional}>Optional</Text>

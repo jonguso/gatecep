@@ -3,9 +3,14 @@ import { userGetItem, userSetItem } from "../../auth/userStorage";
 import { getStoredAccessToken } from "../auth/storage/authStorage";
 import { loadPortfolio, savePortfolio } from "../../services/portfolio/portfolioStore";
 import { replaceAuthoritativeBrokerPortfolio } from "../../services/portfolio/uploadPortfolioApi";
+import { loadUnifiedPortfolio } from "../../services/portfolio/unifiedPortfolioApi";
 import { refreshCanonicalRealPortfolioSnapshot } from "../../services/portfolio/portfolioSnapshotTrigger";
 import { addBrokerSyncAuditEvent } from "./brokerSyncAuditStore";
-import { clearVerifiedUploadedBrokerEvidence, isVerifiedRealBrokerMirror, loadBrokerMirror } from "./brokerSyncService";
+import { isVerifiedRealBrokerMirror } from "./brokerSyncService";
+import {
+  loadBrokerAccountEvidence,
+  removeBrokerAccountEvidence
+} from "./brokerAccountEvidenceStore";
 
 function money(value) {
   const amount = Number(value || 0);
@@ -16,8 +21,16 @@ function holdingsValue(holdings = []) {
   return money(holdings.reduce((sum, item) => sum + Number(item?.marketValue ?? item?.value ?? 0), 0));
 }
 
-export async function loadAuthoritativeBrokerSnapshotPreview() {
-  const mirror = await loadBrokerMirror();
+export async function loadAuthoritativeBrokerSnapshotPreview({
+  brokerAccountKey
+} = {}) {
+  const normalizedAccountKey =
+    String(brokerAccountKey || "").trim().toUpperCase();
+
+  if (!normalizedAccountKey) {
+    return null;
+  }
+  const mirror = await loadBrokerAccountEvidence(normalizedAccountKey);
   if (!isVerifiedRealBrokerMirror(mirror) || mirror?.cashEvidenceAvailable !== true) return null;
 
   const currentHoldings = await loadPortfolio({ revalue: false });
@@ -31,8 +44,12 @@ export async function loadAuthoritativeBrokerSnapshotPreview() {
   };
 }
 
-export async function adoptVerifiedBrokerSnapshot() {
-  const preview = await loadAuthoritativeBrokerSnapshotPreview();
+export async function adoptVerifiedBrokerSnapshot({
+  brokerAccountKey
+} = {}) {
+  const preview = await loadAuthoritativeBrokerSnapshotPreview({
+    brokerAccountKey
+  });
   if (!preview) throw new Error("Verified valuation and matching cash evidence are required.");
 
   const { mirror, current, next } = preview;
@@ -48,8 +65,23 @@ export async function adoptVerifiedBrokerSnapshot() {
       broker: mirror.brokerAccountKey,
       source: "AUTHORITATIVE_BROKER_SNAPSHOT"
     }));
-    await savePortfolio(authoritativeHoldings);
-    await userSetItem("availableCash", String(next.cash));
+    const normalizedAccountKey = String(
+      mirror.brokerAccountKey || ""
+    ).trim().toUpperCase();
+
+    const preservedHoldings = previousHoldings.filter(
+      (holding) =>
+        String(
+          holding?.brokerAccountKey ??
+          holding?.broker ??
+          ""
+        ).trim().toUpperCase() !== normalizedAccountKey
+    );
+
+    await savePortfolio([
+      ...preservedHoldings,
+      ...authoritativeHoldings
+    ]);
     const replacement = await replaceAuthoritativeBrokerPortfolio({
       holdings: authoritativeHoldings,
       cashBalance: next.cash,
@@ -90,9 +122,37 @@ export async function adoptVerifiedBrokerSnapshot() {
       extraAtBroker: 0,
       issues: []
     });
-    await refreshCanonicalRealPortfolioSnapshot({ reason: "AUTHORITATIVE_BROKER_SNAPSHOT_ADOPTED" });
-    await clearVerifiedUploadedBrokerEvidence();
-    return { adoptedAt, ...next };
+    const canonicalPortfolio = await loadUnifiedPortfolio({
+      broker: "ALL"
+    });
+
+    const combinedAvailableCash =
+      Number(canonicalPortfolio?.availableCash);
+
+    if (!Number.isFinite(combinedAvailableCash)) {
+      throw new Error(
+        "Canonical combined broker cash is unavailable after authoritative replacement."
+      );
+    }
+
+    await userSetItem(
+      "availableCash",
+      String(combinedAvailableCash)
+    );
+
+    await refreshCanonicalRealPortfolioSnapshot({
+      reason: "AUTHORITATIVE_BROKER_SNAPSHOT_ADOPTED"
+    });
+
+    await removeBrokerAccountEvidence(
+      normalizedAccountKey
+    );
+
+    return {
+      adoptedAt,
+      ...next,
+      availableCash: combinedAvailableCash
+    };
   } catch (error) {
     await savePortfolio(previousHoldings);
     await userSetItem("availableCash", previousCash ?? "0");
