@@ -403,7 +403,21 @@ const ScreenContainer =
                 </View>
 
                 {rows.map((row) => {
-                  const changePct = Number(row.changePct || 0);
+                  const hasVerifiedPrice =
+                    row?.hasVerifiedPrice === true &&
+                    Number.isFinite(Number(row.price)) &&
+                    Number(row.price) > 0;
+
+                  const hasVerifiedChange =
+                    hasVerifiedPrice &&
+                    row.changePct !== null &&
+                    row.changePct !== undefined &&
+                    row.changePct !== "" &&
+                    Number.isFinite(Number(row.changePct));
+
+                  const changePct = hasVerifiedChange
+                    ? Number(row.changePct)
+                    : null;
 
                   return (
                     <Pressable
@@ -424,17 +438,25 @@ const ScreenContainer =
                         style={[styles.price, styles.equitiesPriceColumn]}
                         numberOfLines={1}
                       >
-                        {Number(row.price).toFixed(2)}
+                        {hasVerifiedPrice
+                          ? Number(row.price).toFixed(2)
+                          : "Price unavailable"}
                       </Text>
 
                       <Text
                         style={[
                           styles.equitiesChangeColumn,
-                          changePct >= 0 ? styles.positive : styles.negative
+                          hasVerifiedChange
+                            ? changePct >= 0
+                              ? styles.positive
+                              : styles.negative
+                            : null
                         ]}
                         numberOfLines={1}
                       >
-                        {changePct >= 0 ? "+" : ""}{changePct.toFixed(2)}%
+                        {hasVerifiedChange
+                          ? `${changePct >= 0 ? "+" : ""}${changePct.toFixed(2)}%`
+                          : "—"}
                       </Text>
 
                       <Text style={[styles.rowChevron, styles.equitiesChevronColumn]}>
@@ -587,6 +609,29 @@ const ScreenContainer =
       (item) => item.symbol === symbol
     ) || {};
 
+  const hasWatchlistVerifiedPrice =
+    stock?.hasVerifiedPrice === true &&
+    Number.isFinite(Number(stock.price)) &&
+    Number(stock.price) > 0;
+
+  const hasWatchlistVerifiedChange =
+    hasWatchlistVerifiedPrice &&
+    stock.changePct !== null &&
+    stock.changePct !== undefined &&
+    stock.changePct !== "" &&
+    Number.isFinite(Number(stock.changePct));
+
+  const watchlistChangePct = hasWatchlistVerifiedChange
+    ? Number(stock.changePct)
+    : null;
+
+  const hasWatchlistVolume =
+    hasWatchlistVerifiedPrice &&
+    stock.volume !== null &&
+    stock.volume !== undefined &&
+    stock.volume !== "" &&
+    Number.isFinite(Number(stock.volume));
+
   return (
     <Pressable
   key={symbol}
@@ -612,38 +657,45 @@ const ScreenContainer =
       </Text>
 
       <Text style={styles.volumeText}>
-        Vol {Number(stock.volume || 0).toLocaleString()}
+        Vol {hasWatchlistVolume ? Number(stock.volume).toLocaleString() : "—"}
       </Text>
     </View>
   </View>
 
   <View style={styles.watchlistRight}>
     <Text style={styles.price}>
-      {Number(stock.price || 0).toFixed(2)}
+      {hasWatchlistVerifiedPrice
+        ? Number(stock.price).toFixed(2)
+        : "Price unavailable"}
     </Text>
 
     <Text
       style={
-        Number(stock.changePct || 0) >= 0
-          ? styles.positive
-          : styles.negative
+        hasWatchlistVerifiedChange
+          ? watchlistChangePct >= 0
+            ? styles.positive
+            : styles.negative
+          : null
       }
     >
-      {Number(stock.changePct || 0) >= 0 ? "+" : ""}
-      {Number(stock.changePct || 0).toFixed(2)}%
+      {hasWatchlistVerifiedChange
+        ? `${watchlistChangePct >= 0 ? "+" : ""}${watchlistChangePct.toFixed(2)}%`
+        : "—"}
     </Text>
 
    <Text
   style={[
     styles.sparkline,
-    Number(stock.changePct || 0) >= 0
-      ? styles.positive
-      : styles.negative
+    hasWatchlistVerifiedChange
+      ? watchlistChangePct >= 0
+        ? styles.positive
+        : styles.negative
+      : null
   ]}
 >
-  {generateSparkline(
-    Number(stock.changePct || 0)
-  )}
+  {hasWatchlistVerifiedChange
+    ? generateSparkline(watchlistChangePct)
+    : "—"}
 </Text>
    
   </View>

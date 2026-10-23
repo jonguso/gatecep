@@ -39,16 +39,157 @@ function parseStatement(text) {
   return rows;
 }
 
-function parseOrders(text) {
-  const rows = [];
-  const pattern = /^(\d{2}-[A-Za-z]{3}-\d{4})\s+(\S+)\s+(\d{4,})\s+(.+?)\s+([A-Z][A-Z0-9]{1,9})\s+([BS])\s+([\d,]+)\s+([\d,]+)\s*$/gm;
-  for (const match of text.matchAll(pattern)) {
-    rows.push({
-      "Order Date": match[1], "Exchange Order No": match[2], "Client Code": match[3],
-      "Client Name": match[4].trim(), "Security Code": match[5], "Buy or Sell": match[6],
-      "Original Order Quantity": number(match[7]), "Order Quantity": number(match[8])
-    });
+function normalizedPageText(text) {
+  return String(text || "")
+    .replace(/\\s+/g, " ")
+    .trim();
+}
+
+function orderHistoryStructureError(message) {
+  const error = new Error(
+    "The Order History PDF structure could not be safely reconstructed. " +
+    message
+  );
+  error.code = "BROKER_ORDER_HISTORY_STRUCTURE_INVALID";
+  return error;
+}
+
+function parseOrders(pages, identity) {
+  if (!Array.isArray(pages) || pages.length !== 116) {
+    throw orderHistoryStructureError(
+      `Expected 116 pages, received ${Array.isArray(pages) ? pages.length : 0}.`
+    );
   }
+
+  const clientCode = String(identity?.clientCode || "").trim();
+  const tradingAccount = String(identity?.tradingAccount || "").trim();
+  const clientName = String(identity?.clientName || "").trim();
+
+  if (!clientCode || !tradingAccount || !clientName) {
+    throw orderHistoryStructureError(
+      "Broker client identity is incomplete."
+    );
+  }
+
+  const escapeRegExp = (value) =>
+    String(value).replace(
+      /[.*+?^${}()|[\]\\]/g,
+      "\\$&"
+    );
+
+  const escapedClientCode =
+    escapeRegExp(clientCode);
+
+  const escapedClientName =
+    escapeRegExp(clientName);
+
+  const escapedTradingAccount =
+    escapeRegExp(tradingAccount);
+
+  const band1Pattern = new RegExp(
+    "(\\d{2}-[A-Za-z]{3}-\\d{4})\\s+" +
+    "(?:(?!" + escapedClientCode + "\\b)(\\S+)\\s+)?" +
+    escapedClientCode + "\\s+" +
+    escapedClientName + "\\s+" +
+    "([A-Z][A-Z0-9&]{1,9})\\s+" +
+    "([BS])\\s+" +
+    "([\\d,]+)\\s+" +
+    "([\\d,]+)",
+    "g"
+  );
+
+  const band2Pattern =
+    /([\d,]+)\s+([\d,]+)\s+([\d,]+)\s+([\d,]+(?:\.\d+)?)\s+(LIMIT|MARKET)\s+(\d{2}-[A-Za-z]{3}-\d{4})\s+(Fully Traded|Cancelled|Expired|Rejected)\b/g;
+
+  const band3Pattern = new RegExp(
+    "0\\.00\\s+\\S+\\s+" +
+    "\\d{2}-[A-Za-z]{3}-\\d{4}\\s+" +
+    "\\S+\\s+(\\S+)\\s+" +
+    "(B\\d+)\\s+" +
+    "(" + escapedTradingAccount + ")",
+    "g"
+  );
+
+  const rows = [];
+
+  for (let offset = 0; offset < 29; offset += 1) {
+    const pageNumbers = [
+      1 + offset,
+      30 + offset,
+      59 + offset
+    ];
+
+    const band1 = [
+      ...normalizedPageText(
+        pages[pageNumbers[0] - 1]
+      ).matchAll(band1Pattern)
+    ];
+
+    const band2 = [
+      ...normalizedPageText(
+        pages[pageNumbers[1] - 1]
+      ).matchAll(band2Pattern)
+    ];
+
+    const band3 = [
+      ...normalizedPageText(
+        pages[pageNumbers[2] - 1]
+      ).matchAll(band3Pattern)
+    ];
+
+    const expected =
+      offset === 28 ? 3 : 17;
+
+    if (
+      band1.length !== expected ||
+      band2.length !== expected ||
+      band3.length !== expected
+    ) {
+      throw orderHistoryStructureError(
+        `Pages ${pageNumbers.join("/")} produced ` +
+        `${band1.length}/${band2.length}/${band3.length} rows; ` +
+        `expected ${expected}/${expected}/${expected}.`
+      );
+    }
+
+    for (let index = 0; index < expected; index += 1) {
+      const a = band1[index];
+      const b = band2[index];
+      const c = band3[index];
+
+      rows.push({
+        "Order Date": a[1],
+        "Exchange Order No": a[2] || "",
+        "Client Code": clientCode,
+        "Client Name": clientName,
+        "Security Code": a[3],
+        "Buy or Sell": a[4],
+        "Original Order Quantity": number(a[5]),
+        "Order Quantity": number(a[6]),
+
+        "Pending Order Quantity": number(b[1]),
+        "Traded Quantity": number(b[2]),
+        "Total Traded Quantity": number(b[3]),
+        "Order Price": number(b[4]),
+        "Order Type": b[5],
+        "Valid Upto": b[6],
+        "Order Status": b[7],
+
+        "Order No": c[1],
+        "Member Code": c[2],
+        "Trading Account": c[3],
+
+        "Can Affect Real Portfolio": false
+      });
+    }
+  }
+
+  if (rows.length !== 479) {
+    throw orderHistoryStructureError(
+      `Expected 479 reconstructed rows, received ${rows.length}.`
+    );
+  }
+
   return rows;
 }
 
@@ -132,13 +273,19 @@ export async function extractBrokerPdf(buffer, requestedType = "") {
   if (!detectedType || (requestedType && reportType !== detectedType)) {
     throw new Error("The selected PDF does not match the expected broker report type.");
   }
+  const identity =
+    reportType === "cdsc_positions"
+      ? null
+      : identityFromText(text);
+
   const rows = reportType === "valuation" ? parseValuation(text)
     : reportType === "cash" ? parseStatement(text)
-      : reportType === "cdsc_positions" ? parseCdscPositions(text) : parseOrders(text);
+      : reportType === "cdsc_positions" ? parseCdscPositions(text)
+        : parseOrders(pages, identity);
   if (!rows.length) throw new Error("No structured broker records could be extracted from this PDF.");
   if (reportType === "cdsc_positions") {
     const period = cdscPeriodFromText(text);
     return { reportType, pageCount: document.numPages, identity: cdscIdentityFromText(text), ...period, rows };
   }
-  return { reportType, pageCount: document.numPages, identity: identityFromText(text), rows };
+  return { reportType, pageCount: document.numPages, identity, rows };
 }

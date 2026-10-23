@@ -57,6 +57,28 @@ export const MENU_SECTIONS = [
 export default function Menu() {
   const { user } = useAuth();
 
+  const isAdmin =
+    String(user?.role || "")
+      .trim()
+      .toUpperCase() === "ADMIN";
+
+  const visibleSections = isAdmin
+    ? [
+        ...MENU_SECTIONS,
+        {
+          title: "Operations",
+          summary: "Privileged GateCEP administration and operational workspaces",
+          items: [
+            {
+              title: "Operations Console",
+              detail: "Open authenticated administrative operations and evidence workspaces",
+              route: "/admin"
+            }
+          ]
+        }
+      ]
+    : MENU_SECTIONS;
+
   async function handleLogout() {
     await logout();
     await AsyncStorage.removeItem("gatecepSession");
@@ -80,7 +102,7 @@ export default function Menu() {
         <Text style={styles.userName}>{user?.username || user?.email || "Investor"}</Text>
       </View>
 
-      {MENU_SECTIONS.map((section) => (
+      {visibleSections.map((section) => (
         <CollapsibleSection
           key={section.title}
           title={section.title}

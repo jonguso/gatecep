@@ -6,6 +6,7 @@
  */
 
 import express from "express";
+import multer from "multer";
 
 import {
   authRequired
@@ -20,10 +21,18 @@ import {
 } from "./fundamentalProviderIdentity.js";
 
 import {
-  previewIssuerFinancialEvidence
+  previewIssuerFinancialEvidence,
+  previewIssuerFinancialEvidenceFromBuffer
 } from "./issuerFinancialEvidencePreview.service.js";
 
 const router = express.Router();
+
+const issuerDocumentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 20 * 1024 * 1024
+  }
+});
 
 /*
  * PC-032G4B1C8G3D6B
@@ -215,6 +224,133 @@ router.post(
           verified: false,
           authoritative: false,
 
+          error: message
+        });
+    }
+  }
+);
+
+router.post(
+  "/issuer-document/upload-preview",
+  authRequired,
+  issuerDocumentUpload.single("file"),
+  async (req, res) => {
+    try {
+      const symbol =
+        String(
+          req.body?.symbol || ""
+        )
+          .trim()
+          .toUpperCase();
+
+      if (!symbol) {
+        return res.status(400).json({
+          ok: false,
+          previewOnly: true,
+          extractionOnly: true,
+          persistence: "NONE",
+          verifiedFiling: false,
+          verified: false,
+          authoritative: false,
+          error:
+            "A security symbol is required."
+        });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({
+          ok: false,
+          previewOnly: true,
+          extractionOnly: true,
+          persistence: "NONE",
+          verifiedFiling: false,
+          verified: false,
+          authoritative: false,
+          error:
+            "An issuer or regulator PDF is required."
+        });
+      }
+
+      const fileName =
+        String(
+          req.file.originalname || "issuer-document.pdf"
+        ).trim();
+
+      const mimeType =
+        String(
+          req.file.mimetype || ""
+        )
+          .trim()
+          .toLowerCase();
+
+      const pdfByName =
+        fileName.toLowerCase().endsWith(".pdf");
+
+      const pdfByType =
+        mimeType === "application/pdf" ||
+        mimeType === "application/x-pdf";
+
+      const pdfBySignature =
+        req.file.buffer
+          ?.subarray(0, 5)
+          .toString("ascii") === "%PDF-";
+
+      if (
+        !pdfBySignature ||
+        (!pdfByName && !pdfByType)
+      ) {
+        return res.status(415).json({
+          ok: false,
+          previewOnly: true,
+          extractionOnly: true,
+          persistence: "NONE",
+          verifiedFiling: false,
+          verified: false,
+          authoritative: false,
+          error:
+            "Only PDF issuer or regulator evidence is accepted."
+        });
+      }
+
+      const retrieval = {
+        retrievalMethod: "LOCAL_PDF_UPLOAD",
+        fileName,
+        contentType:
+          mimeType || "application/pdf",
+        byteLength:
+          req.file.buffer.length,
+        retrievedAt:
+          new Date().toISOString(),
+        persistence: "NONE",
+        verifiedFiling: false,
+        verified: false,
+        authoritative: false
+      };
+
+      const result =
+        await previewIssuerFinancialEvidenceFromBuffer({
+          symbol,
+          documentBuffer:
+            req.file.buffer,
+          retrieval
+        });
+
+      return res.json(result);
+    } catch (error) {
+      const message =
+        error?.message ||
+        "Uploaded issuer financial evidence preview failed.";
+
+      return res
+        .status(422)
+        .json({
+          ok: false,
+          previewOnly: true,
+          extractionOnly: true,
+          persistence: "NONE",
+          verifiedFiling: false,
+          verified: false,
+          authoritative: false,
           error: message
         });
     }

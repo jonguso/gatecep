@@ -18,6 +18,8 @@ import {
   router
 } from "expo-router";
 
+import * as DocumentPicker from "expo-document-picker";
+
 import {
   buildFilingExtractionWorkspace,
   buildFilingExtractionWorkspaceFromFinancialEvidencePreview,
@@ -33,8 +35,13 @@ import {
 } from "../src/features/auth/hooks/useAuth";
 
 import {
-  retrieveIssuerFinancialEvidencePreview
+  retrieveIssuerFinancialEvidencePreview,
+  uploadIssuerFinancialEvidencePreview
 } from "../src/features/fundamentals/api/fundamentalEvidenceApi";
+
+import {
+  composeFinancialEvidencePreviews
+} from "../src/features/fundamentals/extraction/financialEvidenceCompositionService";
 
 /*
  * ============================================================
@@ -74,8 +81,23 @@ const PERIOD_FIELDS = [
   "dividendPerShare"
 ];
 
+import {
+  AdminAccessGate
+} from "../src/features/admin/components/AdminAccessGate";
+
 // PC-030M20AV3G RESPONSIVE CALIBRATION
-export default function FilingExtractionScreen() {
+
+export default function AdminProtectedFilingExtractionScreen() {
+  return (
+    <AdminAccessGate
+      testID="filing-extraction-admin"
+    >
+      <FilingExtractionScreen />
+    </AdminAccessGate>
+  );
+}
+
+function FilingExtractionScreen() {
   const { width: windowWidth } = useWindowDimensions();
   const { accessToken } = useAuth();
 
@@ -162,11 +184,6 @@ export default function FilingExtractionScreen() {
   ] = useState(false);
 
   const [
-    allowDuplicate,
-    setAllowDuplicate
-  ] = useState(false);
-
-  const [
     submissionResult,
     setSubmissionResult
   ] = useState(null);
@@ -199,6 +216,16 @@ export default function FilingExtractionScreen() {
     issuerPreviewWorkspace,
     setIssuerPreviewWorkspace
   ] = useState(null);
+
+  const [
+    issuerEvidencePreviews,
+    setIssuerEvidencePreviews
+  ] = useState([]);
+
+  const [
+    issuerCompositionError,
+    setIssuerCompositionError
+  ] = useState("");
 
   const [
     resultOrigin,
@@ -298,6 +325,8 @@ export default function FilingExtractionScreen() {
       setIssuerPreviewError("");
       setIssuerPreview(null);
       setIssuerPreviewWorkspace(null);
+      setIssuerEvidencePreviews([]);
+      setIssuerCompositionError("");
 
       // Keep the issuer retrieval path completely separate from the
       // manual verified-entry path and any filing submission state.
@@ -332,6 +361,218 @@ export default function FilingExtractionScreen() {
       );
     } finally {
       setIssuerPreviewLoading(false);
+    }
+  }
+
+  async function addSupportingIssuerPreview() {
+    try {
+      if (!issuerPreview) {
+        setIssuerPreviewError(
+          "Retrieve the primary issuer evidence preview before adding a supporting document."
+        );
+        return;
+      }
+
+      setIssuerPreviewLoading(true);
+      setIssuerPreviewError("");
+      setIssuerCompositionError("");
+
+      const supportingPreview =
+        await retrieveIssuerFinancialEvidencePreview({
+          accessToken,
+          symbol,
+          url:
+            issuerPreviewUrl
+        });
+
+      setIssuerEvidencePreviews(
+        current => {
+          const base =
+            current.length
+              ? current
+              : [issuerPreview];
+
+          return [
+            ...base,
+            supportingPreview
+          ];
+        }
+      );
+
+      setOutputJson("");
+      setSubmissionResult(null);
+      setIssuerLifecyclePrepared(false);
+    } catch (
+      previewError
+    ) {
+      setIssuerPreviewError(
+        previewError?.message ||
+          "Unable to retrieve supporting issuer financial evidence."
+      );
+    } finally {
+      setIssuerPreviewLoading(false);
+    }
+  }
+
+  async function addSupportingIssuerPdf() {
+    try {
+      if (!issuerPreview) {
+        setIssuerPreviewError(
+          "Retrieve the primary issuer evidence preview before adding a supporting PDF."
+        );
+        return;
+      }
+
+      setIssuerPreviewLoading(true);
+      setIssuerPreviewError("");
+      setIssuerCompositionError("");
+
+      const selection =
+        await DocumentPicker.getDocumentAsync({
+          copyToCacheDirectory: true,
+          multiple: false,
+          type: "application/pdf"
+        });
+
+      if (selection.canceled) {
+        return;
+      }
+
+      const file =
+        selection.assets?.[0];
+
+      if (!file) {
+        throw new Error(
+          "No supporting PDF was selected."
+        );
+      }
+
+      const supportingPreview =
+        await uploadIssuerFinancialEvidencePreview({
+          accessToken,
+          symbol,
+          file
+        });
+
+      setIssuerEvidencePreviews(
+        current => {
+          const base =
+            current.length
+              ? current
+              : [issuerPreview];
+
+          return [
+            ...base,
+            supportingPreview
+          ];
+        }
+      );
+
+      setOutputJson("");
+      setSubmissionResult(null);
+      setIssuerLifecyclePrepared(false);
+    } catch (
+      previewError
+    ) {
+      setIssuerPreviewError(
+        previewError?.message ||
+          "Unable to upload supporting issuer financial evidence."
+      );
+    } finally {
+      setIssuerPreviewLoading(false);
+    }
+  }
+
+  function composeIssuerEvidenceForReview() {
+
+    try {
+      setIssuerCompositionError("");
+
+      const previews =
+        issuerEvidencePreviews.length
+          ? issuerEvidencePreviews
+          : issuerPreview
+            ? [issuerPreview]
+            : [];
+
+      if (previews.length < 2) {
+        setIssuerCompositionError(
+          "Retrieve at least two issuer evidence documents before composition."
+        );
+        return;
+      }
+
+
+      const composedPreview =
+        composeFinancialEvidencePreviews(
+          previews
+        );
+
+
+      console.table(
+        (composedPreview?.periods || []).map(
+          period => ({
+            fiscalYear:
+              period?.fiscalYear ?? null,
+            periodEnd:
+              period?.periodEnd ?? null,
+            revenue:
+              period?.revenue ?? null,
+            netIncome:
+              period?.netIncome ?? null,
+            totalAssets:
+              period?.totalAssets ?? null,
+            totalLiabilities:
+              period?.totalLiabilities ?? null,
+            totalEquity:
+              period?.totalEquity ?? null,
+            operatingCashFlow:
+              period?.operatingCashFlow ?? null
+          })
+        )
+      );
+
+      const workspace =
+        buildFilingExtractionWorkspaceFromFinancialEvidencePreview(
+          composedPreview
+        );
+
+
+
+      setIssuerPreview(
+        composedPreview
+      );
+
+      setIssuerPreviewWorkspace(
+        workspace
+      );
+
+      setResult(null);
+      setResultOrigin(
+        "ISSUER_PREVIEW"
+      );
+      setOutputJson("");
+      setSubmissionResult(null);
+      setIssuerLifecyclePrepared(false);
+    } catch (
+      compositionError
+    ) {
+
+      const conflictCount =
+        Array.isArray(
+          compositionError?.conflicts
+        )
+          ? compositionError.conflicts.length
+          : 0;
+
+      setIssuerCompositionError(
+        conflictCount
+          ? "Evidence composition blocked by " +
+              conflictCount +
+              " unresolved conflict(s)."
+          : compositionError?.message ||
+              "Unable to compose issuer financial evidence."
+      );
     }
   }
 
@@ -408,7 +649,6 @@ export default function FilingExtractionScreen() {
 
     setSubmissionResult(null);
     setSubmitForReview(false);
-    setAllowDuplicate(false);
     setIssuerLifecyclePrepared(true);
     setIssuerPreviewError("");
   }
@@ -521,17 +761,9 @@ export default function FilingExtractionScreen() {
           workspaceType:
             "SINGLE_PERIOD",
 
-          actor: {
-            id:
-              "gatecep-extraction-user",
-
-            name:
-              "Gatecep Extraction User"
-          },
+          accessToken,
 
           submitForReview,
-
-          allowDuplicate,
 
           note:
             "Submitted directly from the PC-025D extraction workspace."
@@ -570,6 +802,8 @@ export default function FilingExtractionScreen() {
 
     setResult(null);
     setResultOrigin("MANUAL");
+    setIssuerEvidencePreviews([]);
+    setIssuerCompositionError("");
     setOutputJson("");
     setSubmissionResult(null);
     setIssuerLifecyclePrepared(false);
@@ -661,6 +895,58 @@ export default function FilingExtractionScreen() {
               : "Retrieve Issuer Evidence Preview"}
           </Text>
         </Pressable>
+
+        {issuerPreview ? (
+          <Pressable
+            disabled={
+              issuerPreviewLoading
+            }
+            style={[
+              styles.secondaryButton,
+              issuerPreviewLoading && {
+                opacity:
+                  0.55
+              }
+            ]}
+            onPress={
+              addSupportingIssuerPreview
+            }
+          >
+            <Text
+              style={
+                styles.secondaryButtonText
+              }
+            >
+              Add Current URL as Supporting Document
+            </Text>
+          </Pressable>
+        ) : null}
+
+        {issuerPreview ? (
+          <Pressable
+            disabled={
+              issuerPreviewLoading
+            }
+            style={[
+              styles.secondaryButton,
+              issuerPreviewLoading && {
+                opacity:
+                  0.55
+              }
+            ]}
+            onPress={
+              addSupportingIssuerPdf
+            }
+          >
+            <Text
+              style={
+                styles.secondaryButtonText
+              }
+            >
+              Select Supporting PDF
+            </Text>
+          </Pressable>
+        ) : null}
 
         {issuerPreviewError ? (
           <View
@@ -799,6 +1085,46 @@ export default function FilingExtractionScreen() {
               and no filing has been created or
               submitted.
             </Text>
+
+            <Metric
+              label="Evidence Documents"
+              value={
+                issuerEvidencePreviews.length ||
+                (issuerPreview ? 1 : 0)
+              }
+            />
+
+            {issuerCompositionError ? (
+              <Text
+                style={
+                  styles.previewBoundaryText
+                }
+              >
+                {issuerCompositionError}
+              </Text>
+            ) : null}
+
+            {issuerEvidencePreviews.length >= 2 ? (
+              <Pressable
+                style={[
+                  styles.secondaryButtonInline,
+                  {
+                    marginTop: 14
+                  }
+                ]}
+                onPress={
+                  composeIssuerEvidenceForReview
+                }
+              >
+                <Text
+                  style={
+                    styles.secondaryButtonText
+                  }
+                >
+                  Compose Evidence for Review
+                </Text>
+              </Pressable>
+            ) : null}
 
             <Pressable
               style={[
@@ -1225,32 +1551,6 @@ export default function FilingExtractionScreen() {
                     : "No"}
                 </Text>
               </Pressable>
-
-              <Pressable
-                style={[
-                  styles.toggleButton,
-
-                  allowDuplicate &&
-                    styles.toggleButtonWarning
-                ]}
-                onPress={() =>
-                  setAllowDuplicate(
-                    (current) =>
-                      !current
-                  )
-                }
-              >
-                <Text
-                  style={
-                    styles.toggleButtonText
-                  }
-                >
-                  Duplicate Override:{" "}
-                  {allowDuplicate
-                    ? "Yes"
-                    : "No"}
-                </Text>
-              </Pressable>
             </View>
 
             <Pressable
@@ -1494,7 +1794,7 @@ function SubmissionReceipt({
       ?.filingId ||
     result
       ?.filing
-      ?.id ||
+      ?.filingId ||
     null;
 
   return (

@@ -551,8 +551,7 @@ export async function loadFilingSubmissionHistoryEntry(
 
 export async function retryFilingSubmission({
   historyId,
-  actor = null,
-  allowDuplicate = null
+  accessToken = null
 } = {}) {
   const original =
     await loadFilingSubmissionHistoryEntry(
@@ -613,7 +612,7 @@ export async function retryFilingSubmission({
           nowIso(),
 
         actor:
-          normalizeActor(actor)
+          null
       }
     ]
   };
@@ -639,20 +638,11 @@ export async function retryFilingSubmission({
     submissionMode:
       original.submissionMode,
 
-    actor:
-      actor ||
-      original.submittedBy,
+    accessToken,
 
     note:
       original.note ||
       "Retried from PC-025H submission history.",
-
-    allowDuplicate:
-      allowDuplicate === null
-        ? original.allowDuplicate
-        : Boolean(
-            allowDuplicate
-          ),
 
     historyParentId:
       original.id
@@ -753,14 +743,9 @@ export async function resolveDuplicateSubmission({
     FILING_DUPLICATE_RESOLUTIONS
       .OVERRIDE_AND_SUBMIT
   ) {
-    return retryFilingSubmission({
-      historyId,
-
-      actor,
-
-      allowDuplicate:
-        true
-    });
+    throw new Error(
+      "Exact duplicate override is not supported by the authoritative filing service."
+    );
   }
 
   return records[index];

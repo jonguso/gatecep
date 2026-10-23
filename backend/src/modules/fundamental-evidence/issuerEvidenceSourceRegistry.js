@@ -1,4 +1,5 @@
 import {
+  NSE_SECURITIES,
   getSecurityBySymbol
 } from "../../data/nseSecurityMaster.js";
 
@@ -16,10 +17,12 @@ import {
 
 const ISSUER_SOURCE_RULES = Object.freeze([
   {
-    symbol: "EQT",
-    issuerName: "Equity Group Holdings PLC",
-    host: "equitygroupholdings.com",
+    symbol: "SCOM",
+    issuerName: "Safaricom PLC",
+    host: "safaricom.co.ke",
     sourceType: "ISSUER",
+    sourcePriority: 200,
+    acquisitionRole: "FALLBACK",
     trustLevel: "OFFICIAL_ISSUER",
     authoritative: false,
     verified: false,
@@ -28,8 +31,24 @@ const ISSUER_SOURCE_RULES = Object.freeze([
   {
     symbol: "EQT",
     issuerName: "Equity Group Holdings PLC",
+    host: "equitygroupholdings.com",
+    sourceType: "ISSUER",
+    sourcePriority: 200,
+    acquisitionRole: "FALLBACK",
+    trustLevel: "OFFICIAL_ISSUER",
+    authoritative: false,
+    verified: false,
+    qualificationStatus: "QUALIFIED"
+  },
+
+]);
+
+const REGULATOR_SOURCE_RULES = Object.freeze([
+  {
     host: "annualreport.cma.or.ke",
     sourceType: "REGULATOR",
+    sourcePriority: 100,
+    acquisitionRole: "PRIMARY",
     trustLevel: "OFFICIAL_REGULATOR_REPOSITORY",
     authoritative: false,
     verified: false,
@@ -55,6 +74,22 @@ function normalizeSymbol(value) {
     .toUpperCase();
 }
 
+function isCanonicalNseSymbol(value) {
+  const canonicalSymbol =
+    normalizeSymbol(value);
+
+  if (!canonicalSymbol) {
+    return false;
+  }
+
+  return NSE_SECURITIES.some(
+    (item) =>
+      String(item?.symbol || "")
+        .trim()
+        .toUpperCase() === canonicalSymbol
+  );
+}
+
 export function listIssuerEvidenceSources(
   symbol
 ) {
@@ -65,9 +100,28 @@ export function listIssuerEvidenceSources(
     return [];
   }
 
-  return ISSUER_SOURCE_RULES.filter(
-    (item) =>
-      item.symbol === canonicalSymbol
+  const issuerSources =
+    ISSUER_SOURCE_RULES.filter(
+      (item) =>
+        item.symbol === canonicalSymbol
+    );
+
+  if (!isCanonicalNseSymbol(canonicalSymbol)) {
+    return issuerSources;
+  }
+
+  return [
+    ...REGULATOR_SOURCE_RULES.map(
+      (item) => ({
+        ...item,
+        symbol: canonicalSymbol
+      })
+    ),
+    ...issuerSources
+  ].sort(
+    (a, b) =>
+      Number(a.sourcePriority || 999) -
+      Number(b.sourcePriority || 999)
   );
 }
 
@@ -88,7 +142,7 @@ export function resolveIssuerEvidenceSource({
     return null;
   }
 
-  return (
+  const issuerSource =
     ISSUER_SOURCE_RULES.find(
       (item) =>
         item.symbol ===
@@ -100,9 +154,31 @@ export function resolveIssuerEvidenceSource({
             `.${item.host}`
           )
         )
-    ) ||
-    null
-  );
+    );
+
+  if (issuerSource) {
+    return issuerSource;
+  }
+
+  if (!isCanonicalNseSymbol(canonicalSymbol)) {
+    return null;
+  }
+
+  const regulatorSource =
+    REGULATOR_SOURCE_RULES.find(
+      (item) =>
+        normalizedHost === item.host ||
+        normalizedHost.endsWith(
+          `.${item.host}`
+        )
+    );
+
+  return regulatorSource
+    ? {
+        ...regulatorSource,
+        symbol: canonicalSymbol
+      }
+    : null;
 }
 
 export function isQualifiedIssuerHost({
@@ -118,5 +194,6 @@ export function isQualifiedIssuerHost({
 }
 
 export {
-  ISSUER_SOURCE_RULES
+  ISSUER_SOURCE_RULES,
+  REGULATOR_SOURCE_RULES
 };

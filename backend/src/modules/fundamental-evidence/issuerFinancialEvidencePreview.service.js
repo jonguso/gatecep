@@ -35,15 +35,13 @@ function normalizeUrl(value) {
     .trim();
 }
 
-export async function previewIssuerFinancialEvidence({
+export async function previewIssuerFinancialEvidenceFromBuffer({
   symbol,
-  url
+  documentBuffer,
+  retrieval
 } = {}) {
   const canonicalSymbol =
     normalizeSymbol(symbol);
-
-  const sourceUrl =
-    normalizeUrl(url);
 
   if (!canonicalSymbol) {
     throw new Error(
@@ -51,35 +49,29 @@ export async function previewIssuerFinancialEvidence({
     );
   }
 
-  if (!sourceUrl) {
-    throw new Error(
-      "An issuer or regulator document URL is required."
-    );
-  }
-
-  const retrieval =
-    await retrieveIssuerDocument({
-      symbol: canonicalSymbol,
-      url: sourceUrl
-    });
-
   if (
-    retrieval?.persistence !== "NONE" ||
-    retrieval?.verifiedFiling !== false ||
-    retrieval?.verified === true ||
-    retrieval?.authoritative === true
+    !Buffer.isBuffer(documentBuffer) &&
+    !(documentBuffer instanceof Uint8Array)
   ) {
     throw new Error(
-      "Issuer document retrieval violated the preview-only evidence contract."
+      "A PDF document buffer is required."
     );
   }
+
+  const previewRetrieval = {
+    ...(retrieval || {}),
+
+    persistence: "NONE",
+    verifiedFiling: false,
+    verified: false,
+    authoritative: false
+  };
 
   const identity =
     await inspectIssuerDocumentIdentity({
       symbol: canonicalSymbol,
-      documentBuffer:
-        retrieval.documentBuffer,
-      retrieval
+      documentBuffer,
+      retrieval: previewRetrieval
     });
 
   if (
@@ -96,10 +88,9 @@ export async function previewIssuerFinancialEvidence({
   const extraction =
     await extractIssuerFinancialStatementEvidence({
       symbol: canonicalSymbol,
-      documentBuffer:
-        retrieval.documentBuffer,
+      documentBuffer,
       identity,
-      retrieval
+      retrieval: previewRetrieval
     });
 
   if (
@@ -114,10 +105,6 @@ export async function previewIssuerFinancialEvidence({
     );
   }
 
-  /*
-   * Deliberately construct the response rather than spreading
-   * retrieval. documentBuffer must remain server-internal.
-   */
   return {
     ok: true,
 
@@ -173,6 +160,54 @@ export async function previewIssuerFinancialEvidence({
   };
 }
 
+export async function previewIssuerFinancialEvidence({
+  symbol,
+  url
+} = {}) {
+  const canonicalSymbol =
+    normalizeSymbol(symbol);
+
+  const sourceUrl =
+    normalizeUrl(url);
+
+  if (!canonicalSymbol) {
+    throw new Error(
+      "A canonical NSE security symbol is required."
+    );
+  }
+
+  if (!sourceUrl) {
+    throw new Error(
+      "An issuer or regulator document URL is required."
+    );
+  }
+
+  const retrieval =
+    await retrieveIssuerDocument({
+      symbol: canonicalSymbol,
+      url: sourceUrl
+    });
+
+  if (
+    retrieval?.persistence !== "NONE" ||
+    retrieval?.verifiedFiling !== false ||
+    retrieval?.verified === true ||
+    retrieval?.authoritative === true
+  ) {
+    throw new Error(
+      "Issuer document retrieval violated the preview-only evidence contract."
+    );
+  }
+
+  return previewIssuerFinancialEvidenceFromBuffer({
+    symbol: canonicalSymbol,
+    documentBuffer:
+      retrieval.documentBuffer,
+    retrieval
+  });
+}
+
 export default {
-  previewIssuerFinancialEvidence
+  previewIssuerFinancialEvidence,
+  previewIssuerFinancialEvidenceFromBuffer
 };

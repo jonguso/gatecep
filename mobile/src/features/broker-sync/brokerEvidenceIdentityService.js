@@ -3,6 +3,16 @@ import { userGetItem } from "../../auth/userStorage";
 const clean = (value) => String(value ?? "").trim();
 const upper = (value) => clean(value).toUpperCase();
 
+const CDSC_MEMBER_CODE_TO_BROKER_ID = Object.freeze({
+  B12: "AIB",
+  B14: "ABC"
+});
+
+export function resolveEvidenceBrokerId(value = "") {
+  const normalized = upper(value);
+  return CDSC_MEMBER_CODE_TO_BROKER_ID[normalized] || normalized || null;
+}
+
 function parseStored(value) {
   if (!value) return null;
   if (typeof value === "object") return value;
@@ -84,7 +94,7 @@ export function validateBrokerEvidenceIdentity({
   if (expectedAccountKey && brokerAccountKey && expectedAccountKey !== brokerAccountKey) {
     errors.push("This evidence belongs to a different broker trading account.");
   }
-  if (internalIdentity?.brokerId && normalizedBrokerId && upper(internalIdentity.brokerId) !== normalizedBrokerId) {
+  if (internalIdentity?.brokerId && normalizedBrokerId && resolveEvidenceBrokerId(internalIdentity.brokerId) !== normalizedBrokerId) {
     errors.push("The broker inside the file does not match the selected broker.");
   }
   if (internalIdentity?.clientCode && normalizedClientAccount && clean(internalIdentity.clientCode) !== normalizedClientAccount) {

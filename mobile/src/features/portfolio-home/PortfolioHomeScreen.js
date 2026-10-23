@@ -351,7 +351,7 @@ export default function PortfolioHomeScreen() {
               style={styles.iconButton}
               onPress={() => router.push("/menu")}
             >
-              <Text style={styles.iconText}>\u2630</Text>
+              <Text style={styles.iconText}>☰</Text>
             </Pressable>
           ) : null}
           <View style={styles.headerCopy}>
@@ -758,7 +758,7 @@ function SectorDonut({ data, total, size, onSelect }) {
     });
     if (selected) onSelect(selected);
   }
-  return <View style={styles.chart}><View style={[styles.chartCanvas, { width: size, height: size }]}><Svg accessibilityRole="button" accessibilityLabel="Sector allocation chart. Tap a colored sector to view its securities" testID="portfolio-sector-donut" width="100%" height="100%" viewBox={`0 0 ${size} ${size}`} preserveAspectRatio="xMidYMid meet" style={styles.chartSvg} onPress={handleChartPress}><G>{data.map((sector, index) => { const start = angle; const sweep = total > 0 ? sector.totalValue / total * 360 : 0; const end = start + sweep; const path = describeArc(center, center, outer, inner, start, end); const labelPoint = polar(center, center, outer + size * 0.055, start + sweep / 2); angle = end; return <G key={sector.sector}><Path pointerEvents="none" d={path} fill={COLORS[index % COLORS.length]} stroke="#020617" strokeWidth={2} /><SvgText pointerEvents="none" x={labelPoint.x} y={labelPoint.y + 3} fill="#f8fafc" fontSize="9" fontWeight="900" textAnchor="middle">{number(sector.weight).toFixed(1)}%</SvgText></G>; })}<SvgText pointerEvents="none" x={center} y={center - 13} fill="#94a3b8" fontSize="10" textAnchor="middle">Total Value</SvgText><SvgText pointerEvents="none" x={center} y={center + 2} fill="#94a3b8" fontSize="9" textAnchor="middle">KES</SvgText><SvgText pointerEvents="none" x={center} y={center + 22} fill="#f8fafc" fontSize="14" fontWeight="900" textAnchor="middle">{money(total)}</SvgText></G></Svg></View><Text style={styles.chartHint}>Tap a colored sector or its row to view securities</Text></View>;
+  return <View style={styles.chart}><View style={[styles.chartCanvas, { width: size, height: size }]}><Svg accessibilityRole="button" accessibilityLabel="Sector allocation chart. Tap a colored sector to view its securities" testID="portfolio-sector-donut" width="100%" height="100%" viewBox={`0 0 ${size} ${size}`} preserveAspectRatio="xMidYMid meet" style={styles.chartSvg} onPress={handleChartPress}><G>{data.map((sector, index) => { const start = angle; const sweep = total > 0 ? sector.totalValue / total * 360 : 0; const end = start + sweep; const path = describeArc(center, center, outer, inner, start, end); const labelPoint = polar(center, center, outer + size * 0.055, start + sweep / 2); angle = end; return <G key={sector.sector}><Path pointerEvents="none" d={path} fill={COLORS[index % COLORS.length]} stroke="#020617" strokeWidth={2} /><SvgText pointerEvents="none" x={labelPoint.x} y={labelPoint.y + 3} fill="#f8fafc" fontSize="9" fontWeight="900" textAnchor="middle">{number(sector.weight).toFixed(1)}%</SvgText></G>; })}<SvgText pointerEvents="none" x={center} y={center - 13} fill="#94a3b8" fontSize="10" textAnchor="middle">Portfolio Value</SvgText><SvgText pointerEvents="none" x={center} y={center + 2} fill="#94a3b8" fontSize="9" textAnchor="middle">KES</SvgText><SvgText pointerEvents="none" x={center} y={center + 22} fill="#f8fafc" fontSize="14" fontWeight="900" textAnchor="middle">{money(total)}</SvgText></G></Svg></View><Text style={styles.chartHint}>Tap a colored sector or its row to view securities</Text></View>;
 }
 
 function WebSectorDonut({ data, total, size, onSelect }) {
@@ -803,7 +803,7 @@ function WebSectorDonut({ data, total, size, onSelect }) {
     svgChildren.push(element("text", { key: "label-" + index, x: labelPoint.x, y: labelPoint.y + 3, fill: "#f8fafc", fontSize: 9, fontWeight: 900, textAnchor: "middle", pointerEvents: "none" }, number(sector.weight).toFixed(1) + "%"));
   });
   svgChildren.push(
-    element("text", { key: "title", x: center, y: center - 13, fill: "#94a3b8", fontSize: 10, textAnchor: "middle", pointerEvents: "none" }, "Total Value"),
+    element("text", { key: "title", x: center, y: center - 13, fill: "#94a3b8", fontSize: 10, textAnchor: "middle", pointerEvents: "none" }, "Portfolio Value"),
     element("text", { key: "currency", x: center, y: center + 2, fill: "#94a3b8", fontSize: 9, textAnchor: "middle", pointerEvents: "none" }, "KES"),
     element("text", { key: "value", x: center, y: center + 22, fill: "#f8fafc", fontSize: 14, fontWeight: 900, textAnchor: "middle", pointerEvents: "none" }, money(total))
   );

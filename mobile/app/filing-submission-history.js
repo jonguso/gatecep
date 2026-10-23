@@ -22,6 +22,10 @@ import {
 } from "expo-router";
 
 import {
+  useAuth
+} from "../src/features/auth/hooks/useAuth";
+
+import {
   FILING_DUPLICATE_RESOLUTIONS,
   FILING_SUBMISSION_HISTORY_STATUSES,
   archiveFilingSubmissionHistoryEntry,
@@ -54,9 +58,25 @@ const FILTERS = [
     .RESOLVED
 ];
 
+import {
+  AdminAccessGate
+} from "../src/features/admin/components/AdminAccessGate";
+
 // PC-030M20AV3G RESPONSIVE CALIBRATION
-export default function FilingSubmissionHistoryScreen() {
+
+export default function AdminProtectedFilingSubmissionHistoryScreen() {
+  return (
+    <AdminAccessGate
+      testID="filing-submission-history-admin"
+    >
+      <FilingSubmissionHistoryScreen />
+    </AdminAccessGate>
+  );
+}
+
+function FilingSubmissionHistoryScreen() {
   const { width: windowWidth } = useWindowDimensions();
+  const { accessToken } = useAuth();
   const [
     loading,
     setLoading
@@ -189,9 +209,7 @@ export default function FilingSubmissionHistoryScreen() {
     );
 
   async function runRetry(
-    entry,
-    allowDuplicate =
-      null
+    entry
   ) {
     try {
       setWorkingId(
@@ -203,15 +221,7 @@ export default function FilingSubmissionHistoryScreen() {
           historyId:
             entry.id,
 
-          actor: {
-            id:
-              "gatecep-history-user",
-
-            name:
-              "Gatecep History User"
-          },
-
-          allowDuplicate
+          accessToken
         });
 
       await loadData();
@@ -251,14 +261,6 @@ export default function FilingSubmissionHistoryScreen() {
           selected.id,
 
         resolution,
-
-        actor: {
-          id:
-            "gatecep-history-user",
-
-          name:
-            "Gatecep History User"
-        },
 
         note:
           resolutionNote,
@@ -778,17 +780,6 @@ export default function FilingSubmissionHistoryScreen() {
                   styles.actions
                 }
               >
-                <Action
-                  label="Override and Submit"
-                  positive
-                  onPress={() =>
-                    resolveDuplicate(
-                      FILING_DUPLICATE_RESOLUTIONS
-                        .OVERRIDE_AND_SUBMIT
-                    )
-                  }
-                />
-
                 <Action
                   label="Link Existing"
                   onPress={() =>

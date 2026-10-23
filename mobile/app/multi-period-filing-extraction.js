@@ -26,6 +26,10 @@ import {
   submitExtractionWorkspaceToFilings
 } from "../src/features/fundamentals/extraction/extractionSubmissionHandoff";
 
+import {
+  useAuth
+} from "../src/features/auth/hooks/useAuth";
+
 /*
  * ============================================================
  * PC-025E
@@ -139,9 +143,25 @@ const SAMPLE_PERIODS = [
   }
 ];
 
+import {
+  AdminAccessGate
+} from "../src/features/admin/components/AdminAccessGate";
+
 // PC-030M20AV3H RESPONSIVE CALIBRATION
-export default function MultiPeriodFilingExtractionScreen() {
+
+export default function AdminProtectedMultiPeriodFilingExtractionScreen() {
+  return (
+    <AdminAccessGate
+      testID="multi-period-filing-extraction-admin"
+    >
+      <MultiPeriodFilingExtractionScreen />
+    </AdminAccessGate>
+  );
+}
+
+function MultiPeriodFilingExtractionScreen() {
   const { width: windowWidth } = useWindowDimensions();
+  const { accessToken } = useAuth();
   const [
     symbol,
     setSymbol
@@ -210,11 +230,6 @@ export default function MultiPeriodFilingExtractionScreen() {
   const [
     submitForReview,
     setSubmitForReview
-  ] = useState(false);
-
-  const [
-    allowDuplicate,
-    setAllowDuplicate
   ] = useState(false);
 
   const [
@@ -377,17 +392,9 @@ export default function MultiPeriodFilingExtractionScreen() {
           workspaceType:
             "MULTI_PERIOD",
 
-          actor: {
-            id:
-              "gatecep-extraction-user",
-
-            name:
-              "Gatecep Extraction User"
-          },
+          accessToken,
 
           submitForReview,
-
-          allowDuplicate,
 
           note:
             "Submitted directly from the PC-025E multi-period workspace."
@@ -795,32 +802,6 @@ export default function MultiPeriodFilingExtractionScreen() {
                 >
                   Submit For Review:{" "}
                   {submitForReview
-                    ? "Yes"
-                    : "No"}
-                </Text>
-              </Pressable>
-
-              <Pressable
-                style={[
-                  styles.toggleButton,
-
-                  allowDuplicate &&
-                    styles.toggleButtonWarning
-                ]}
-                onPress={() =>
-                  setAllowDuplicate(
-                    (current) =>
-                      !current
-                  )
-                }
-              >
-                <Text
-                  style={
-                    styles.toggleButtonText
-                  }
-                >
-                  Duplicate Override:{" "}
-                  {allowDuplicate
                     ? "Yes"
                     : "No"}
                 </Text>

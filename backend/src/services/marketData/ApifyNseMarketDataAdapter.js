@@ -1,8 +1,19 @@
 import axios from "axios";
 import { normalizeApifyNseRows, resolveApifyAsOf, resolveApifySource } from "./ApifyNseNormalizer.js";
 import { assertFreshApifyNseQuote, normalizeApifyActorId } from "./ApifyNsePolicy.js";
+import { NSE_SECURITIES, getSecurityBySymbol } from "../../data/nseSecurityMaster.js";
 
 const clean = (value) => String(value ?? "").trim();
+
+export function buildApifyNseQuoteInput() {
+  return {
+    dataset: "quote",
+    exchangeCode: "NSE",
+    tickers: NSE_SECURITIES.map((security) =>
+      clean(security.apifyTicker || security.symbol)
+    ).filter(Boolean)
+  };
+}
 
 function configuration() {
   const token = clean(process.env.APIFY_API_TOKEN);
@@ -21,7 +32,8 @@ function configuration() {
 
 const adapter = {
   async getPrices() {
-    const { token, actorId, input } = configuration();
+    const { token, actorId } = configuration();
+    const input = buildApifyNseQuoteInput();
     const runTimeoutSeconds = Math.min(300, Math.max(30, Number(process.env.APIFY_RUN_TIMEOUT_SECONDS || 180)));
     const response = await axios.post(
       `https://api.apify.com/v2/acts/${encodeURIComponent(actorId)}/run-sync-get-dataset-items`,
@@ -31,7 +43,7 @@ const adapter = {
           format: "json",
           timeout: runTimeoutSeconds,
           maxItems: Number(process.env.APIFY_MAX_ITEMS || 500),
-          maxTotalChargeUsd: Number(process.env.APIFY_MAX_TOTAL_CHARGE_USD || 0.25)
+          maxTotalChargeUsd: Number(process.env.APIFY_MAX_TOTAL_CHARGE_USD || 0.40)
         },
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         timeout: (runTimeoutSeconds + 15) * 1000
@@ -47,13 +59,44 @@ const adapter = {
       ? payload.filter((row) => !row?.exchange || String(row.exchange).toUpperCase() === "NSE").length
       : 0;
     const categories = [...new Set((Array.isArray(payload) ? payload : []).map((row) => row?.category).filter(Boolean))];
+    const canonicalSymbols = new Set(
+      NSE_SECURITIES.map((item) => String(item.symbol || "").trim().toUpperCase())
+    );
+    const coveredCanonicalSymbols = new Set(
+      data
+        .map((row) => {
+          const providerSymbol = String(
+            row?.symbol ?? row?.ticker ?? ""
+          ).trim();
+
+          if (!providerSymbol) return null;
+
+          const security = getSecurityBySymbol(providerSymbol);
+          const canonicalSymbol = String(
+            security?.symbol || ""
+          ).trim().toUpperCase();
+
+          return canonicalSymbols.has(canonicalSymbol)
+            ? canonicalSymbol
+            : null;
+        })
+        .filter(Boolean)
+    );
+    const hasFullCanonicalCoverage =
+      canonicalSymbols.size > 0 &&
+      coveredCanonicalSymbols.size === canonicalSymbols.size;
     return {
       provider,
       upstreamSource: resolveApifySource(payload),
       valuationEligible: true,
       coverage: data.length < inputRows || categories.length ? "PARTIAL_RANKED_MARKET" : "FULL_MARKET",
+      canonicalCoverage:
+        hasFullCanonicalCoverage
+          ? "FULL_CANONICAL_MARKET"
+          : "PARTIAL_CANONICAL_MARKET",
+      canonicalCount: NSE_SECURITIES.length,
       pricedCount: data.length,
-      unpricedCount: Math.max(0, inputRows - data.length),
+      unpricedCount: Math.max(0, canonicalSymbols.size - coveredCanonicalSymbols.size),
       categories,
       generatedAt: asOf,
       marketDate: String(asOf).slice(0, 10),

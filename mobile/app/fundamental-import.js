@@ -107,8 +107,23 @@ const PROVIDERS = [
   "APIFY_FUNDAMENTALS"
 ];
 
+import {
+  AdminAccessGate
+} from "../src/features/admin/components/AdminAccessGate";
+
 // PC-030M20AV3G RESPONSIVE CALIBRATION
-export default function FundamentalImportScreen() {
+
+export default function AdminProtectedFundamentalImportScreen() {
+  return (
+    <AdminAccessGate
+      testID="fundamental-import-admin"
+    >
+      <FundamentalImportScreen />
+    </AdminAccessGate>
+  );
+}
+
+function FundamentalImportScreen() {
   const { width: windowWidth } = useWindowDimensions();
   const { accessToken } = useAuth();
 

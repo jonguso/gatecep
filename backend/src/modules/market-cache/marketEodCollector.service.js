@@ -5,6 +5,32 @@ import { getNairobiMarketClock, isEodCollectionDue } from "./marketEodPolicy.js"
 let lastAttemptKey = null;
 let lastAttemptAt = 0;
 
+export function assertVerifiedEodSnapshot(snapshot = {}) {
+  const minimumQuotes =
+    Number(process.env.MARKET_EOD_MINIMUM_QUOTES || 40);
+
+  if (
+    snapshot.valuationEligible !== true ||
+    snapshot.coverage !== "FULL_MARKET" ||
+    snapshot.canonicalCoverage !== "FULL_CANONICAL_MARKET"
+  ) {
+    throw new Error(
+      "The EOD collector requires a full, valuation-eligible canonical NSE market snapshot."
+    );
+  }
+
+  if (
+    Number(snapshot.count || snapshot.data?.length || 0) <
+    minimumQuotes
+  ) {
+    throw new Error(
+      `The EOD collector received fewer than ${minimumQuotes} verified NSE prices.`
+    );
+  }
+
+  return true;
+}
+
 export async function collectVerifiedEodIfDue({ force = false, now = new Date() } = {}) {
   const latest = await readLatestVerifiedEodSnapshot();
   const latestMarketDate = latest?.marketDate || null;
@@ -23,13 +49,7 @@ export async function collectVerifiedEodIfDue({ force = false, now = new Date() 
   const upstream = String(process.env.MARKET_EOD_UPSTREAM_PROVIDER || "APIFY_NSE").toUpperCase();
   if (upstream !== "APIFY_NSE") throw new Error(`Unsupported MARKET_EOD_UPSTREAM_PROVIDER: ${upstream}`);
   const snapshot = await ApifyNseMarketDataAdapter.getPrices();
-  const minimumQuotes = Number(process.env.MARKET_EOD_MINIMUM_QUOTES || 40);
-  if (snapshot.valuationEligible !== true || snapshot.coverage !== "FULL_MARKET") {
-    throw new Error("The EOD collector requires a full, valuation-eligible NSE market snapshot.");
-  }
-  if (Number(snapshot.count || snapshot.data?.length || 0) < minimumQuotes) {
-    throw new Error(`The EOD collector received fewer than ${minimumQuotes} verified NSE prices.`);
-  }
+  assertVerifiedEodSnapshot(snapshot);
   const saved = await saveVerifiedEodSnapshot(snapshot);
   return {
     ok: true,

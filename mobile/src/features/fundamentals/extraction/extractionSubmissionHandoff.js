@@ -16,10 +16,9 @@ import {
 export async function submitExtractionWorkspaceToFilings({
   filingReadyJson,
   workspaceType,
-  actor,
+  accessToken = null,
   note = null,
-  submitForReview = false,
-  allowDuplicate = false
+  submitForReview = false
 } = {}) {
   if (
     workspaceType ===
@@ -27,18 +26,16 @@ export async function submitExtractionWorkspaceToFilings({
   ) {
     return submitMultiPeriodExtraction({
       filingReadyJson,
-      actor,
+      accessToken,
       note,
-      submitForReview,
-      allowDuplicate
+      submitForReview
     });
   }
 
   return submitSinglePeriodExtraction({
     filingReadyJson,
-    actor,
+    accessToken,
     note,
-    submitForReview,
-    allowDuplicate
+    submitForReview
   });
 }

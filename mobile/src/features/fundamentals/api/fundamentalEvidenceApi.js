@@ -253,7 +253,157 @@ export async function retrieveIssuerFinancialEvidencePreview({
   };
 }
 
+export async function uploadIssuerFinancialEvidencePreview({
+  accessToken,
+  symbol,
+  file
+} = {}) {
+  if (!accessToken) {
+    throw new Error(
+      "Sign in before uploading issuer financial evidence."
+    );
+  }
+
+  const normalizedSymbol =
+    normalizeSymbol(symbol);
+
+  if (!normalizedSymbol) {
+    throw new Error(
+      "Select or enter an NSE security symbol."
+    );
+  }
+
+  if (!file) {
+    throw new Error(
+      "Select an issuer or regulator PDF."
+    );
+  }
+
+  const fileName =
+    String(
+      file.name || "issuer-document.pdf"
+    ).trim();
+
+  const fileType =
+    String(
+      file.mimeType ||
+      file.type ||
+      "application/pdf"
+    ).trim();
+
+  const formData =
+    new FormData();
+
+  formData.append(
+    "symbol",
+    normalizedSymbol
+  );
+
+  if (
+    typeof File !== "undefined" &&
+    file instanceof File
+  ) {
+    formData.append(
+      "file",
+      file,
+      fileName
+    );
+  } else if (file.file) {
+    formData.append(
+      "file",
+      file.file,
+      fileName
+    );
+  } else {
+    formData.append(
+      "file",
+      {
+        uri: file.uri,
+        name: fileName,
+        type: fileType
+      }
+    );
+  }
+
+  const response =
+    await fetch(
+      `${API_URL}/fundamental-evidence/issuer-document/upload-preview`,
+      {
+        method: "POST",
+
+        headers: {
+          Authorization:
+            `Bearer ${accessToken}`
+        },
+
+        body: formData
+      }
+    );
+
+  let payload = null;
+
+  try {
+    payload =
+      await response.json();
+  } catch {
+    payload = null;
+  }
+
+  if (!response.ok) {
+    throw new Error(
+      payload?.error ||
+      `Unable to upload issuer financial evidence (${response.status}).`
+    );
+  }
+
+  if (
+    payload?.previewOnly !== true ||
+    payload?.extractionOnly !== true ||
+    payload?.persistence !== "NONE"
+  ) {
+    throw new Error(
+      "Uploaded issuer financial evidence endpoint returned an unsafe preview contract."
+    );
+  }
+
+  if (
+    payload?.verifiedFiling !== false ||
+    payload?.verified === true ||
+    payload?.authoritative === true
+  ) {
+    throw new Error(
+      "Uploaded issuer financial evidence cannot be promoted to verified or authoritative automatically."
+    );
+  }
+
+  return {
+    ...payload,
+
+    symbol:
+      normalizedSymbol,
+
+    previewOnly:
+      true,
+
+    extractionOnly:
+      true,
+
+    persistence:
+      "NONE",
+
+    verifiedFiling:
+      false,
+
+    verified:
+      false,
+
+    authoritative:
+      false
+  };
+}
+
 export default {
   retrieveApifyFundamentalPreview,
-  retrieveIssuerFinancialEvidencePreview
+  retrieveIssuerFinancialEvidencePreview,
+  uploadIssuerFinancialEvidencePreview
 };

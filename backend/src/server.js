@@ -5,6 +5,7 @@ import cors from "cors";
 import dotenv from "dotenv";
 import authRoutes from "./modules/auth/auth.routes.js";
 import usersRoutes from "./modules/users/users.routes.js";
+import adminRoutes from "./modules/admin/admin.routes.js";
 import investorDNARoutes from "./modules/investor-dna/investorDNA.routes.js";
 import portfolioRoutes from "./modules/portfolio/portfolio.routes.js";
 import cashRoutes from "./modules/cash/cash.routes.js";
@@ -31,6 +32,7 @@ import investorProfileRoutes from "./modules/investor-profile/investorProfile.ro
 import userProfileRoutes from "./modules/user-profile/userProfile.routes.js";
 import verifiedNewsRoutes from "./modules/verified-news/verifiedNews.routes.js";
 import fundamentalEvidenceRoutes from "./modules/fundamental-evidence/fundamentalEvidence.routes.js";
+import fundamentalReadRoutes from "./modules/fundamental-evidence/fundamentalRead.routes.js";
 import { startVerifiedNewsScheduler } from "./modules/verified-news/verifiedNews.scheduler.js";
 import { startRedis } from "./cache/redisClient.js";
 import {
@@ -113,6 +115,7 @@ app.use("/investor-dna", investorDNARoutes);
 app.use("/user-profile", userProfileRoutes);
 app.use("/verified-news", verifiedNewsRoutes);
 app.use("/fundamental-evidence", fundamentalEvidenceRoutes);
+app.use("/fundamentals", fundamentalReadRoutes);
 
 app.use("/coach-g/broker-link", brokerLinkRoutes);
 app.use("/broker-reports", brokerReportRoutes);
@@ -134,6 +137,7 @@ app.use("/new-investor-plan", newInvestorPlanRoutes);
 
 app.use("/auth", authRoutes);
 app.use("/users", usersRoutes);
+app.use("/admin", adminRoutes);
 
 app.use((req, res) => {
   res.status(404).json({

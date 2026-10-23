@@ -69,7 +69,14 @@ assert.ok(selectorFunction);
 
 assert.doesNotMatch(
   selectorFunction,
-  /userSetItem|saveBrokerTransactionHistoryEvidence|saveBrokerAccounts/
+  /saveBrokerTransactionHistoryEvidence|saveBrokerAccounts/,
+  "Changing selection must not save broker evidence or broker-account records."
+);
+
+assert.match(
+  selectorFunction,
+  /userSetItem\(\s*SELECTED_EVIDENCE_ACCOUNT_KEY,\s*account\.id\s*\)/s,
+  "Changing selection must persist only the reconciliation account choice."
 );
 
 console.log(
@@ -88,5 +95,5 @@ console.log(
   "PASS — existing account evidence uses account-specific update semantics."
 );
 console.log(
-  "PASS — changing account selection does not persist or replace evidence."
+  "PASS — changing account selection persists only UI choice and does not replace evidence."
 );

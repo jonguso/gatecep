@@ -153,8 +153,23 @@ const OPERATION_ROUTES = [
   }
 ];
 
+import {
+  AdminAccessGate
+} from "../src/features/admin/components/AdminAccessGate";
+
 // PC-030M20AV3G RESPONSIVE CALIBRATION
-export default function FundamentalOperationsCenterScreen() {
+
+export default function AdminProtectedFundamentalOperationsCenterScreen() {
+  return (
+    <AdminAccessGate
+      testID="fundamental-operations-center-admin"
+    >
+      <FundamentalOperationsCenterScreen />
+    </AdminAccessGate>
+  );
+}
+
+function FundamentalOperationsCenterScreen() {
   const { width: windowWidth } = useWindowDimensions();
   const [
     loading,

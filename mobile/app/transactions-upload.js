@@ -474,7 +474,8 @@ export default function TransactionsUpload() {
   }
 
   async function saveTransactions() {
-    if (!transactions.length) {
+    try {
+      if (!transactions.length) {
       Alert.alert("No Transactions", "Upload a transaction file first.");
       return;
     }
@@ -663,6 +664,14 @@ export default function TransactionsUpload() {
     );
 
     router.replace("/portfolio-sync-center");
+    } catch (error) {
+      const message =
+        error?.message ||
+        "GateCEP could not validate or save this broker evidence.";
+
+      setStatus(`Evidence rejected: ${message}`);
+      Alert.alert("Broker Evidence Rejected", message);
+    }
   }
 
   return (

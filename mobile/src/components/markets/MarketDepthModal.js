@@ -3,7 +3,11 @@ import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from "react-nati
 import { router } from "expo-router";
 import CompanyLogo from "./CompanyLogo";
 
-const numeric = (value) => { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : null; };
+const numeric = (value) => {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
+};
 const money = (value) => Number(value || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const whole = (value) => { const parsed = numeric(value); return parsed === null ? "N/A" : parsed.toLocaleString(); };
 
@@ -31,7 +35,23 @@ export function buildVerifiedDepthView(security) {
 export default function MarketDepthModal({ security, visible, onClose }) {
   const depth = useMemo(() => buildVerifiedDepthView(security), [security]);
   if (!security) return null;
-  const changePct = numeric(security.changePct) || 0;
+
+  const verifiedPrice = numeric(security.price ?? security.lastPrice);
+  const hasVerifiedPrice =
+    security.hasVerifiedPrice === true &&
+    verifiedPrice !== null &&
+    verifiedPrice > 0;
+
+  const changePct = hasVerifiedPrice
+    ? numeric(security.changePct)
+    : null;
+
+  const hasVerifiedChange = changePct !== null;
+
+  const provider = hasVerifiedPrice
+    ? security.priceSource || security.provider || null
+    : null;
+
   return <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
     <View style={styles.overlay}>
       <Pressable style={styles.dismissArea} onPress={onClose} />
@@ -44,21 +64,65 @@ export default function MarketDepthModal({ security, visible, onClose }) {
         </View>
         <ScrollView contentContainerStyle={styles.scrollContent}>
           <View style={styles.metrics}>
-            <Metric label="Price" value={`KES ${money(security.price)}`} />
-            <Metric label="Change" value={`${changePct >= 0 ? "+" : ""}${changePct.toFixed(2)}%`} tone={changePct >= 0 ? "positive" : "negative"} />
-            <Metric label="Volume" value={whole(security.volume)} />
-            <Metric label="Turnover" value={numeric(security.turnover) > 0 ? `KES ${whole(security.turnover)}` : "N/A"} />
-            <Metric label="Best Bid" value={depth.bestBid > 0 ? `KES ${money(depth.bestBid)}` : "N/A"} />
-            <Metric label="Best Ask" value={depth.bestAsk > 0 ? `KES ${money(depth.bestAsk)}` : "N/A"} />
+            <Metric
+              label="Price"
+              value={hasVerifiedPrice ? `KES ${money(verifiedPrice)}` : "N/A"}
+            />
+            <Metric
+              label="Change"
+              value={
+                hasVerifiedChange
+                  ? `${changePct >= 0 ? "+" : ""}${changePct.toFixed(2)}%`
+                  : "N/A"
+              }
+              tone={
+                hasVerifiedChange
+                  ? changePct >= 0
+                    ? "positive"
+                    : "negative"
+                  : undefined
+              }
+            />
+            <Metric
+              label="Volume"
+              value={hasVerifiedPrice ? whole(security.volume) : "N/A"}
+            />
+            <Metric
+              label="Turnover"
+              value={
+                hasVerifiedPrice && numeric(security.turnover) > 0
+                  ? `KES ${whole(security.turnover)}`
+                  : "N/A"
+              }
+            />
+            <Metric
+              label="Best Bid"
+              value={depth.bestBid > 0 ? `KES ${money(depth.bestBid)}` : "N/A"}
+            />
+            <Metric
+              label="Best Ask"
+              value={depth.bestAsk > 0 ? `KES ${money(depth.bestAsk)}` : "N/A"}
+            />
           </View>
           {depth.available ? <><DepthTable title="ASKS (Supply)" levels={depth.asks} tone="ask" /><DepthTable title="BIDS (Demand)" levels={depth.bids} tone="bid" /></> : <View style={styles.unavailable}>
             <Text style={styles.unavailableTitle}>Verified Level 2 depth unavailable</Text>
-            <Text style={styles.unavailableText}>LOCAL_VERIFIED_EOD provides the latest verified price and volume, but not bid/ask order levels. GateCEP will show depth here when a licensed NSE or broker feed supplies genuine orders.</Text>
+            <Text style={styles.unavailableText}>
+              {hasVerifiedPrice
+                ? "The current market source provides verified quote evidence, but not bid/ask order levels. GateCEP will show depth here when a licensed NSE or broker feed supplies genuine orders."
+                : "Current verified quote and Level 2 order evidence are unavailable for this security. GateCEP will show market depth only when genuine market or broker evidence is supplied."}
+            </Text>
           </View>}
           <View style={styles.evidence}>
             <Text style={styles.evidenceTitle}>Market evidence</Text>
-            <EvidenceRow label="Provider" value={security.priceSource || security.provider || "LOCAL_VERIFIED_EOD"} />
-            <EvidenceRow label="Quoted at" value={formatTime(security.quotedAt || security.marketDate)} />
+            <EvidenceRow label="Provider" value={provider} />
+            <EvidenceRow
+              label="Quoted at"
+              value={
+                hasVerifiedPrice
+                  ? formatTime(security.quotedAt || security.marketDate)
+                  : "N/A"
+              }
+            />
             <Text style={styles.disclaimer}>Read-only market information. Opening this view does not place an order.</Text>
           </View>
           <Pressable style={styles.learnButton} onPress={() => { onClose?.(); router.push(`/security/${security.symbol}`); }}>

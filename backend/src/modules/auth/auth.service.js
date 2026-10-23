@@ -71,11 +71,31 @@ export async function login(payload = {}) {
     throw new Error("Invalid email or password");
   }
 
+  const accountStatus =
+    String(user.status || "")
+      .trim()
+      .toUpperCase();
+
+  if (accountStatus !== "ACTIVE") {
+    const error =
+      new Error(
+        "This account is disabled."
+      );
+
+    error.code =
+      "ACCOUNT_DISABLED";
+
+    error.status = 403;
+
+    throw error;
+  }
+
   const accessToken = jwt.sign(
     {
       sub: user.id,
       email: user.email,
-      username: user.username
+      username: user.username,
+      role: user.role
     },
     process.env.JWT_SECRET || "dev-access-secret",
     { expiresIn: process.env.ACCESS_TOKEN_TTL || "15m" }
@@ -86,6 +106,7 @@ export async function login(payload = {}) {
       id: user.id,
       email: user.email,
       username: user.username,
+      role: user.role,
       createdAt: user.createdAt
     },
     accessToken

@@ -7,6 +7,23 @@ const numberOrNull = (value) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+const positiveNumberOrNull = (value) => {
+  if (
+    value === null ||
+    value === undefined ||
+    String(value).trim() === ""
+  ) {
+    return null;
+  }
+
+  const parsed = Number(value);
+
+  return Number.isFinite(parsed) &&
+    parsed > 0
+    ? parsed
+    : null;
+};
+
 function normalizeRows(rows = []) {
   const bySymbol = new Map();
   rows.forEach((row) => {
@@ -60,8 +77,8 @@ export async function saveVerifiedEodSnapshot(snapshot = {}) {
       await client.query(
         `INSERT INTO public.market_eod_quotes
           (snapshot_id, symbol, name, sector, price, previous_close, change_amount, change_percent,
-           volume, turnover, bid, ask, quoted_at)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
+           volume, turnover, bid, ask, shares_outstanding, market_cap, quoted_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)`,
         [
           snapshotId,
           row.symbol,
@@ -75,6 +92,8 @@ export async function saveVerifiedEodSnapshot(snapshot = {}) {
           numberOrNull(row.turnover),
           numberOrNull(row.bid),
           numberOrNull(row.ask),
+          positiveNumberOrNull(row.sharesOutstanding),
+          positiveNumberOrNull(row.marketCapitalization),
           new Date(row.quotedAt || snapshot.generatedAt).toISOString()
         ]
       );
@@ -101,7 +120,7 @@ export async function readLatestVerifiedEodSnapshot() {
   if (!snapshot) return null;
   const quoteResult = await pool.query(
     `SELECT symbol, name, sector, price, previous_close, change_amount, change_percent,
-            volume, turnover, bid, ask, quoted_at
+            volume, turnover, bid, ask, shares_outstanding, market_cap, quoted_at
        FROM public.market_eod_quotes
       WHERE snapshot_id = $1
       ORDER BY symbol`,
@@ -120,6 +139,8 @@ export async function readLatestVerifiedEodSnapshot() {
     turnover: numberOrNull(row.turnover),
     bid: numberOrNull(row.bid),
     ask: numberOrNull(row.ask),
+    sharesOutstanding: positiveNumberOrNull(row.shares_outstanding),
+    marketCapitalization: positiveNumberOrNull(row.market_cap),
     quotedAt: row.quoted_at,
     priceSource: "LOCAL_VERIFIED_EOD",
     hasLivePrice: false

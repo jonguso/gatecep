@@ -6,6 +6,23 @@ const numeric = (value) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+const positiveNumericOrNull = (value) => {
+  if (
+    value === null ||
+    value === undefined ||
+    String(value).trim() === ""
+  ) {
+    return null;
+  }
+
+  const parsed = numeric(value);
+
+  return parsed !== null &&
+    parsed > 0
+    ? parsed
+    : null;
+};
+
 function candidateRows(payload) {
   if (!Array.isArray(payload)) return [];
   if (payload.length !== 1) return payload;
@@ -22,8 +39,41 @@ function isNseRow(row = {}) {
 }
 
 export function resolveApifyAsOf(payload) {
-  const first = Array.isArray(payload) ? payload[0] || {} : payload || {};
-  return clean(first.asOf ?? first.generatedAt ?? first.updatedAt ?? first.timestamp ?? first.quoteTime ?? first.scrapedAt ?? first.scraped_at ?? first.marketDate ?? first.market_date);
+  const rows = candidateRows(payload);
+
+  const candidates = (
+    rows.length
+      ? rows
+      : [Array.isArray(payload) ? payload[0] || {} : payload || {}]
+  )
+    .map((row) =>
+      clean(
+        row?.asOf ??
+        row?.generatedAt ??
+        row?.updatedAt ??
+        row?.last_updated ??
+        row?.timestamp ??
+        row?.quoteTime ??
+        row?.scrapedAt ??
+        row?.scraped_at ??
+        row?.marketDate ??
+        row?.market_date
+      )
+    )
+    .filter((value) =>
+      Number.isFinite(Date.parse(value))
+    );
+
+  if (!candidates.length) {
+    return "";
+  }
+
+  return candidates.reduce(
+    (latest, value) =>
+      Date.parse(value) > Date.parse(latest)
+        ? value
+        : latest
+  );
 }
 
 export function resolveApifySource(payload) {
@@ -37,7 +87,7 @@ export function normalizeApifyNseRows(payload, fallbackAsOf) {
       .toUpperCase().replace(/\.(NR|NSE)$/i, "");
     const price = numeric(row?.lastPrice ?? row?.currentPrice ?? row?.marketPrice ?? row?.price ?? row?.price_kes ?? row?.close ?? row?.lastTradedPrice);
     if (!symbol || !(price > 0)) return null;
-    const quotedAt = clean(row?.quotedAt ?? row?.asOf ?? row?.updatedAt ?? row?.timestamp ?? row?.quoteTime ?? row?.scrapedAt ?? row?.scraped_at ?? fallbackAsOf);
+    const quotedAt = clean(row?.quotedAt ?? row?.asOf ?? row?.updatedAt ?? row?.last_updated ?? row?.timestamp ?? row?.quoteTime ?? row?.scrapedAt ?? row?.scraped_at ?? fallbackAsOf);
     return applySecurityMaster({
       ...row,
       symbol,
@@ -50,6 +100,15 @@ export function normalizeApifyNseRows(payload, fallbackAsOf) {
       turnover: numeric(row?.turnover ?? row?.valueTraded),
       bid: numeric(row?.bid ?? row?.bestBid),
       ask: numeric(row?.ask ?? row?.bestAsk),
+      sharesOutstanding: positiveNumericOrNull(
+        row?.shares_outstanding ??
+        row?.sharesOutstanding
+      ),
+      marketCapitalization: positiveNumericOrNull(
+        row?.market_cap ??
+        row?.marketCapitalization ??
+        row?.marketCap
+      ),
       quotedAt,
       exchange: "NSE",
       hasLivePrice: true

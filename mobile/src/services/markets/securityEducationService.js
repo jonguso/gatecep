@@ -8,8 +8,100 @@ export function buildSecurityEducationModel(security = {}, fundamentals = null) 
   const profile = fundamentals?.profile || fundamentals?.company || {};
   const source = fundamentals?.source || fundamentals?.metadata?.source || {};
   const metric = (...values) => numeric(first(...values));
+
+  const verifiedMarketPrice =
+    security?.hasVerifiedPrice === true
+      ? metric(
+          security?.price,
+          security?.lastPrice
+        )
+      : null;
+
+  const publishedEps =
+    metric(
+      fundamentals?.earningsPerShare,
+      latest?.earningsPerShare
+    );
+
+  const publishedDps =
+    metric(
+      fundamentals?.dividendPerShare,
+      latest?.dividendPerShare
+    );
+
+  const verifiedMarketShares =
+    security?.hasVerifiedPrice === true
+      ? metric(
+          security?.sharesOutstanding
+        )
+      : null;
+
+  const verifiedMarketCap =
+    security?.hasVerifiedPrice === true
+      ? metric(
+          security?.marketCapitalization,
+          security?.marketCap
+        )
+      : null;
+
+  const publishedEquity =
+    metric(
+      fundamentals?.totalEquity,
+      latest?.totalEquity,
+      latest?.shareholdersEquity
+    );
+
+  const publishedBookValuePerShare =
+    metric(
+      fundamentals?.bookValuePerShare,
+      latest?.bookValuePerShare
+    );
+
+  const derivedBookValuePerShare =
+    publishedEquity !== null &&
+    publishedEquity > 0 &&
+    verifiedMarketShares !== null &&
+    verifiedMarketShares > 0
+      ? publishedEquity /
+        verifiedMarketShares
+      : null;
+
+  const effectiveBookValuePerShare =
+    publishedBookValuePerShare ??
+    derivedBookValuePerShare;
+
+  const derivedPriceToBook =
+    verifiedMarketPrice !== null &&
+    verifiedMarketPrice > 0 &&
+    effectiveBookValuePerShare !== null &&
+    effectiveBookValuePerShare > 0
+      ? verifiedMarketPrice /
+        effectiveBookValuePerShare
+      : null;
+
+  const derivedPe =
+    verifiedMarketPrice !== null &&
+    verifiedMarketPrice > 0 &&
+    publishedEps !== null &&
+    publishedEps > 0
+      ? verifiedMarketPrice /
+        publishedEps
+      : null;
+
+  const derivedDividendYield =
+    verifiedMarketPrice !== null &&
+    verifiedMarketPrice > 0 &&
+    publishedDps !== null &&
+    publishedDps >= 0
+      ? (
+          publishedDps /
+          verifiedMarketPrice
+        ) * 100
+      : null;
+
   const fields = {
     marketCap: metric(
+      verifiedMarketCap,
       fundamentals?.marketCapitalization,
       ratios?.marketCapitalization,
       latest?.marketCapitalization
@@ -17,20 +109,22 @@ export function buildSecurityEducationModel(security = {}, fundamentals = null) 
     pe: metric(
       fundamentals?.peRatio,
       ratios?.peRatio,
-      latest?.peRatio
+      latest?.peRatio,
+      derivedPe
     ),
     pb: metric(
       fundamentals?.priceToBookRatio,
       ratios?.priceToBookRatio,
-      latest?.priceToBookRatio
+      latest?.priceToBookRatio,
+      derivedPriceToBook
     ),
     eps: metric(
       fundamentals?.earningsPerShare,
       latest?.earningsPerShare
     ),
     bookValuePerShare: metric(
-      fundamentals?.bookValuePerShare,
-      latest?.bookValuePerShare
+      publishedBookValuePerShare,
+      derivedBookValuePerShare
     ),
     dps: metric(
       fundamentals?.dividendPerShare,
@@ -39,7 +133,8 @@ export function buildSecurityEducationModel(security = {}, fundamentals = null) 
     dividendYield: metric(
       fundamentals?.dividendYieldPercentage,
       ratios?.dividendYieldPercentage,
-      latest?.dividendYieldPercentage
+      latest?.dividendYieldPercentage,
+      derivedDividendYield
     ),
     revenue: metric(
       fundamentals?.revenue,
@@ -60,15 +155,14 @@ export function buildSecurityEducationModel(security = {}, fundamentals = null) 
       latest?.totalLiabilities
     ),
     equity: metric(
-      fundamentals?.totalEquity,
-      latest?.totalEquity,
-      latest?.shareholdersEquity
+      publishedEquity
     ),
     operatingCashFlow: metric(
       fundamentals?.operatingCashFlow,
       latest?.operatingCashFlow
     ),
     sharesOutstanding: metric(
+      verifiedMarketShares,
       fundamentals?.sharesOutstanding,
       latest?.sharesOutstanding
     ),

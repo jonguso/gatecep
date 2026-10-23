@@ -4,7 +4,7 @@ import { Modal, Pressable, StyleSheet, Text, View,
 } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 
-import { userGetItem } from "../src/auth/userStorage";
+import { userGetItem, userSetItem, userRemoveItem } from "../src/auth/userStorage";
 import { loadUnifiedPortfolio } from "../src/portfolio/unifiedPortfolioApi";
 import { loadBrokerAccountEvidence } from "../src/features/broker-sync/brokerAccountEvidenceStore";
 import { adoptVerifiedBrokerSnapshot, loadAuthoritativeBrokerSnapshotPreview } from "../src/features/broker-sync/brokerAuthoritativeSnapshotService";
@@ -27,6 +27,9 @@ import {
 
 const STEPS = ["Verify", "Confirm", "Complete"];
 
+const SELECTED_EVIDENCE_ACCOUNT_KEY =
+  "portfolioSyncSelectedBrokerAccountId";
+
 // PC-030M20AV3D RESPONSIVE CALIBRATION
 export default function PortfolioSyncCenter() {
   const { width: av3dWidth } = useWindowDimensions();
@@ -40,10 +43,16 @@ export default function PortfolioSyncCenter() {
 
   async function load() {
     try {
-      const [portfolio, cashRaw, loadedBrokerAccounts] = await Promise.all([
+      const [
+        portfolio,
+        cashRaw,
+        loadedBrokerAccounts,
+        storedSelectedBrokerAccountId
+      ] = await Promise.all([
         loadUnifiedPortfolio(),
         userGetItem("availableCash"),
-        loadBrokerAccounts()
+        loadBrokerAccounts(),
+        userGetItem(SELECTED_EVIDENCE_ACCOUNT_KEY)
       ]);
 
       const connectedAccounts = loadedBrokerAccounts.filter(
@@ -56,6 +65,10 @@ export default function PortfolioSyncCenter() {
       const selectedAccount =
         connectedAccounts.find(
           (account) => account.id === selectedBrokerAccountId
+        ) ||
+        connectedAccounts.find(
+          (account) =>
+            account.id === storedSelectedBrokerAccountId
         ) ||
         connectedAccounts.find(
           (account) => account.defaultBroker
@@ -146,6 +159,11 @@ export default function PortfolioSyncCenter() {
     });
 
     setSelectedBrokerAccountId(account.id);
+
+    await userSetItem(
+      SELECTED_EVIDENCE_ACCOUNT_KEY,
+      account.id
+    );
 
     try {
       const [mirror, preview, lotHistory] = await Promise.all([
@@ -268,6 +286,11 @@ export default function PortfolioSyncCenter() {
       await adoptVerifiedBrokerSnapshot({
         brokerAccountKey: selectedBrokerAccountKey
       });
+
+      await userRemoveItem(
+        SELECTED_EVIDENCE_ACCOUNT_KEY
+      );
+
       router.replace("/portfolio-hub?brokerSnapshot=ADOPTED");
     } catch (error) {
       setState((current) => ({ ...current, saving: false, error: error?.message || "Unable to adopt broker snapshot." }));
@@ -332,6 +355,9 @@ export default function PortfolioSyncCenter() {
           <Text style={styles.accountSelectorLabel}>
             Broker account for this evidence
           </Text>
+          <Text style={styles.accountSelectorHint}>
+            Select the broker account that owns the evidence below.
+          </Text>
 
           {brokerAccounts.length ? (
             <View style={styles.accountSelectorOptions}>
@@ -370,6 +396,9 @@ export default function PortfolioSyncCenter() {
                       {" • "}
                       {accountNumber}
                     </Text>
+                    <Text style={styles.accountOptionAction}>
+                      {selected ? "SELECTED" : "SELECT"}
+                    </Text>
                   </Pressable>
                 );
               })}
@@ -402,12 +431,13 @@ export default function PortfolioSyncCenter() {
           compact={av3dWidth < 520}
           label="Transaction / Lot History"
           ready={transactionHistoryReady}
+          requirement="OPTIONAL"
           value={
             transactionHistoryReady
               ? `${state.lotHistory.completedCount} completed executions • ${state.lotHistory.symbols.length} securities • ${selectedBrokerAccount?.nickname || selectedBrokerAccount?.brokerName || selectedBrokerAccount?.brokerId}`
               : selectedBrokerAccount
               ? "Optional supporting evidence for this broker account"
-              : "Optional � select a broker account to upload"
+              : "Optional - select a broker account to upload"
           }
           actionLabel={
             transactionHistoryReady
@@ -484,13 +514,23 @@ export default function PortfolioSyncCenter() {
   );
 }
 
-function EvidenceRow({ label, ready, value, actionLabel, onPress, disabled = false, compact = false }) {
+function EvidenceRow({ label, ready, value, actionLabel, onPress, disabled = false, compact = false, requirement = "REQUIRED" }) {
   return (
     <View style={[styles.evidenceRow, compact && { flexDirection: "column", alignItems: "stretch" }]}>
       <View style={styles.evidenceText}>
         <Text style={styles.evidenceLabel}>{label}</Text>
         {value ? <Text style={styles.evidenceValue}>{value}</Text> : null}
-        <Text style={ready ? styles.ready : styles.required}>{ready ? "READY" : "REQUIRED"}</Text>
+        <Text
+          style={
+            ready
+              ? styles.ready
+              : requirement === "OPTIONAL"
+              ? styles.optional
+              : styles.required
+          }
+        >
+          {ready ? "READY" : requirement}
+        </Text>
       </View>
       <Pressable style={[styles.smallButton, compact && { alignSelf: "stretch", alignItems: "center" }, disabled && styles.disabled]} disabled={disabled} onPress={onPress}>
         <Text style={styles.smallButtonText}>{actionLabel}</Text>
@@ -520,12 +560,14 @@ const styles = StyleSheet.create({
   panelTabTextActive: { color: "white" },
   accountSelector: { padding: 15, borderBottomColor: "#1e293b", borderBottomWidth: 1 },
   accountSelectorLabel: { color: "white", fontWeight: "900", fontSize: 14, marginBottom: 10 },
+  accountSelectorHint: { color: "#94a3b8", fontSize: 11, marginTop: 4, marginBottom: 10 },
   accountSelectorOptions: { flexDirection: "row", flexWrap: "wrap", gap: 8 },
   accountOption: { minWidth: 150, flexGrow: 1, borderWidth: 1, borderColor: "#334155", backgroundColor: "#020617", borderRadius: 12, paddingVertical: 10, paddingHorizontal: 12 },
   accountOptionSelected: { borderColor: "#9333ea", backgroundColor: "#1e1b4b" },
   accountOptionTitle: { color: "#cbd5e1", fontWeight: "900", fontSize: 12 },
   accountOptionTitleSelected: { color: "white" },
   accountOptionMeta: { color: "#94a3b8", fontSize: 11, marginTop: 3 },
+  accountOptionAction: { color: "#67e8f9", fontWeight: "900", fontSize: 10, marginTop: 7 },
   accountSelectorEmpty: { color: "#fbbf24", lineHeight: 18, fontSize: 12 },
   evidenceRow: { flexDirection: "row", alignItems: "center", gap: 12, padding: 15, borderBottomColor: "#1e293b", borderBottomWidth: 1 },
   evidenceText: { flex: 1 },
@@ -533,6 +575,7 @@ const styles = StyleSheet.create({
   evidenceValue: { color: "#94a3b8", marginTop: 4, lineHeight: 18, fontSize: 12 },
   ready: { color: "#86efac", fontWeight: "900", fontSize: 10, marginTop: 6 },
   required: { color: "#fbbf24", fontWeight: "900", fontSize: 10, marginTop: 6 },
+  optional: { color: "#94a3b8", fontWeight: "900", fontSize: 10, marginTop: 6 },
   smallButton: { backgroundColor: "#1e293b", borderRadius: 12, paddingVertical: 11, paddingHorizontal: 13 },
   smallButtonText: { color: "#67e8f9", fontWeight: "900", fontSize: 12 },
   disabled: { opacity: 0.4 },

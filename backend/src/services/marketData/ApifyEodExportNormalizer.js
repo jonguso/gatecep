@@ -8,6 +8,13 @@ const numberOrNull = (value) => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
+const positiveNumberOrNull = (value) => {
+  const parsed = numberOrNull(value);
+  return parsed !== null && parsed > 0
+    ? parsed
+    : null;
+};
+
 function parseExport(fileText, fileName) {
   const text = clean(fileText);
   if (!text) throw new Error("The selected Apify export is empty.");
@@ -44,6 +51,8 @@ function canonicalChecksum(data) {
     change: row.change,
     changePct: row.changePct,
     volume: row.volume,
+    sharesOutstanding: row.sharesOutstanding,
+    marketCapitalization: row.marketCapitalization,
     quotedAt: row.quotedAt
   }));
   return crypto.createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
@@ -59,7 +68,14 @@ export function normalizeApifyEodExport({ fileText, csvText, fileName } = {}) {
     const exchange = clean(row.exchange ?? row.market ?? row.exchangeCode).toUpperCase();
     const rawSymbol = clean(row.ticker ?? row.symbol ?? row.code).toUpperCase().replace(/\.(NR|NSE)$/i, "");
     const price = numberOrNull(row.price ?? row.price_kes ?? row.lastPrice ?? row.close);
-    const quotedAt = clean(row.scraped_at ?? row.scrapedAt ?? row.quotedAt ?? row.timestamp);
+    const quotedAt = clean(
+      row.scraped_at ??
+      row.scrapedAt ??
+      row.quotedAt ??
+      row.timestamp ??
+      row.last_updated ??
+      row.retrieved_at
+    );
     if (exchange && exchange !== "NSE" && exchange !== "NAIROBI SECURITIES EXCHANGE") {
       rejected.push({ row: index + 1, symbol: rawSymbol, reason: "NOT_NSE" });
       return;
@@ -82,6 +98,15 @@ export function normalizeApifyEodExport({ fileText, csvText, fileName } = {}) {
       change: numberOrNull(row.change),
       changePct: numberOrNull(row.change_pct ?? row.changePct),
       volume: numberOrNull(row.volume) || 0,
+      sharesOutstanding: positiveNumberOrNull(
+        row.shares_outstanding ??
+        row.sharesOutstanding
+      ),
+      marketCapitalization: positiveNumberOrNull(
+        row.market_cap ??
+        row.marketCapitalization ??
+        row.marketCap
+      ),
       quotedAt: new Date(quotedAt).toISOString(),
       exchange: "NSE",
       priceSource: "APIFY_MANUAL_EOD",

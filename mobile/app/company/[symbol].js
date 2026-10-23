@@ -10,7 +10,8 @@ import {
 } from "react-native";
 import { useFocusEffect, useLocalSearchParams, useRouter } from "expo-router";
 
-import { loadFundamentalRecord } from "../../src/features/fundamentals/fundamentalRepository";
+import { useAuth } from "../../src/features/auth/hooks/useAuth";
+import { loadPublishedFundamental } from "../../src/features/fundamentals/api/fundamentalReadApi";
 import {
   buildSecurityEducationModel,
   explainMetric
@@ -21,6 +22,9 @@ export default function CompanyDetailsScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
   const { width } = useWindowDimensions();
+  const isCompactViewport = width < 720;
+  const isNarrowViewport = width < 480;
+  const { accessToken } = useAuth();
 
   const targetSymbol = String(params?.symbol || "")
     .trim()
@@ -42,7 +46,10 @@ export default function CompanyDetailsScreen() {
 
         try {
           const fundamentalRecord =
-            await loadFundamentalRecord(targetSymbol);
+            await loadPublishedFundamental({
+              accessToken,
+              symbol: targetSymbol
+            });
 
           if (!active) return;
 
@@ -66,7 +73,7 @@ export default function CompanyDetailsScreen() {
       return () => {
         active = false;
       };
-    }, [targetSymbol])
+    }, [accessToken, targetSymbol])
   );
 
   const security = useMemo(() => {
@@ -103,10 +110,17 @@ export default function CompanyDetailsScreen() {
         style={styles.scroll}
         contentContainerStyle={[
           styles.content,
-          wideWeb && styles.contentWide
+          wideWeb && styles.contentWide,
+          isCompactViewport && styles.contentCompact,
+          isNarrowViewport && styles.contentNarrow
         ]}
       >
-        <View style={styles.headerRow}>
+        <View
+          style={[
+            styles.headerRow,
+            isCompactViewport && styles.headerRowCompact
+          ]}
+        >
           <Pressable
             style={styles.backButton}
             onPress={() => router.back()}
@@ -150,10 +164,12 @@ export default function CompanyDetailsScreen() {
                 label="Sector"
                 value={education.profile.sector || "N/A"}
               />
-              <MetricLine
-                label="Industry"
-                value={education.profile.industry || "N/A"}
-              />
+              {meaningfulText(education.profile.industry) ? (
+                <MetricLine
+                  label="Industry"
+                  value={education.profile.industry}
+                />
+              ) : null}
               <MetricLine
                 label="Fiscal period"
                 value={fiscalPeriod}
@@ -280,6 +296,22 @@ function EducationMetric({ label, value, help }) {
   );
 }
 
+function meaningfulText(value) {
+  if (value === null || value === undefined) {
+    return false;
+  }
+
+  const normalized = String(value).trim().toLowerCase();
+
+  return (
+    normalized !== "" &&
+    normalized !== "n/a" &&
+    normalized !== "na" &&
+    normalized !== "unknown" &&
+    normalized !== "unavailable"
+  );
+}
+
 function formatFiscalPeriod(value) {
   if (!value) return "N/A";
 
@@ -357,15 +389,28 @@ const styles = StyleSheet.create({
 
   contentWide: {
     width: "100%",
-    maxWidth: 1080,
+    maxWidth: 960,
     alignSelf: "center",
     paddingHorizontal: 24
+  },
+
+  contentCompact: {
+    paddingHorizontal: 16,
+    paddingBottom: 128
+  },
+
+  contentNarrow: {
+    paddingHorizontal: 12
   },
 
   headerRow: {
     flexDirection: "row",
     alignItems: "flex-start",
     gap: 14
+  },
+
+  headerRowCompact: {
+    flexWrap: "wrap"
   },
 
   backButton: {
@@ -451,7 +496,8 @@ const styles = StyleSheet.create({
   metricValue: {
     color: "#f8fafc",
     fontWeight: "800",
-    textAlign: "right"
+    textAlign: "right",
+    flexShrink: 1
   },
 
   educationMetric: {

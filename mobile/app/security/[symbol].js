@@ -19,7 +19,8 @@ import {
   loadUnifiedPortfolioRuntime
 } from "../../src/portfolio/unifiedPortfolioApi";
 import MarketDepthModal from "../../src/components/markets/MarketDepthModal";
-import { loadFundamentalRecord } from "../../src/features/fundamentals/fundamentalRepository";
+import { useAuth } from "../../src/features/auth/hooks/useAuth";
+import { loadPublishedFundamental } from "../../src/features/fundamentals/api/fundamentalReadApi";
 import { buildSecurityEducationModel } from "../../src/services/markets/securityEducationService";
 import { buildWatchlistScores } from "../../src/watchlist/watchlistScoring";
 import { generateWatchlistSignals } from "../../src/utils/watchlistSignals";
@@ -27,6 +28,9 @@ import { generateWatchlistSignals } from "../../src/utils/watchlistSignals";
 export default function SecurityDetail() {
   const { symbol } = useLocalSearchParams();
   const { width: windowWidth } = useWindowDimensions();
+  const { accessToken } = useAuth();
+  const isCompactViewport = windowWidth < 720;
+  const isNarrowViewport = windowWidth < 480;
   const wideWeb = Platform.OS === "web" && windowWidth >= 1100;
   const targetSymbol = String(symbol || "").toUpperCase();
 
@@ -38,7 +42,12 @@ export default function SecurityDetail() {
 
   useFocusEffect(
     useCallback(() => {
-      loadFundamentalRecord(targetSymbol).then(setFundamentals).catch(() => setFundamentals(null));
+      loadPublishedFundamental({
+        accessToken,
+        symbol: targetSymbol
+      })
+        .then(setFundamentals)
+        .catch(() => setFundamentals(null));
 
       loadUnifiedPortfolioRuntime({ broker: "ALL" })
         .then((runtime) => {
@@ -49,7 +58,7 @@ export default function SecurityDetail() {
           );
         })
         .catch(() => setRealHoldings([]));
-    }, [targetSymbol])
+    }, [accessToken, targetSymbol])
   );
 
   const security = useMemo(() => {
@@ -58,19 +67,39 @@ export default function SecurityDetail() {
     );
   }, [rows, targetSymbol]);
 
+  const verifiedPrice = Number(security?.price ?? security?.lastPrice);
+  const hasVerifiedPrice =
+    security?.hasVerifiedPrice === true &&
+    Number.isFinite(verifiedPrice) &&
+    verifiedPrice > 0;
+
+  const hasVerifiedChange =
+    hasVerifiedPrice &&
+    security?.changePct !== null &&
+    security?.changePct !== undefined &&
+    security?.changePct !== "" &&
+    Number.isFinite(Number(security.changePct));
+
   const scored = useMemo(() => {
-    if (!security) return null;
+    if (!security || !hasVerifiedPrice) return null;
 
     const generated = generateWatchlistSignals([
       {
         ...security,
-        currentPrice: Number(security.price || security.lastPrice || 0),
-        changePct: Number(security.changePct || 0)
+        currentPrice: verifiedPrice,
+        changePct: hasVerifiedChange
+          ? Number(security.changePct)
+          : null
       }
     ]);
 
     return buildWatchlistScores(generated)[0] || null;
-  }, [security]);
+  }, [
+    security,
+    hasVerifiedPrice,
+    verifiedPrice,
+    hasVerifiedChange
+  ]);
 
   const realHolding = useMemo(() => {
     return (
@@ -93,16 +122,26 @@ export default function SecurityDetail() {
     0
   );
 
-  const realMarketValue = Number(
+  const brokerMarketValue =
     realHolding?.marketValue ??
-    realHolding?.value ??
-    (realQuantity * Number(security?.price || security?.lastPrice || 0))
-  );
+    realHolding?.value;
+
+  const hasBrokerMarketValue =
+    brokerMarketValue !== null &&
+    brokerMarketValue !== undefined &&
+    brokerMarketValue !== "" &&
+    Number.isFinite(Number(brokerMarketValue));
+
+  const realMarketValue = hasBrokerMarketValue
+    ? Number(brokerMarketValue)
+    : hasVerifiedPrice
+      ? realQuantity * verifiedPrice
+      : null;
 
   const education = useMemo(() => buildSecurityEducationModel(security || {}, fundamentals), [security, fundamentals]);
-  const price = Number(security?.price || security?.lastPrice || 0);
-  const changePct = Number(security?.changePct || 0);
-  const positive = changePct >= 0;
+  const price = hasVerifiedPrice ? verifiedPrice : null;
+  const changePct = hasVerifiedChange ? Number(security.changePct) : null;
+  const positive = hasVerifiedChange ? changePct >= 0 : null;
 
   if (loading) {
     return (
@@ -135,10 +174,17 @@ export default function SecurityDetail() {
         style={styles.scroll}
         contentContainerStyle={[
           styles.content,
-          wideWeb && styles.contentWideWeb
+          wideWeb && styles.contentWideWeb,
+          isCompactViewport && styles.contentCompact,
+          isNarrowViewport && styles.contentNarrow
         ]}
       >
-      <View style={styles.headerRow}>
+      <View
+        style={[
+          styles.headerRow,
+          isCompactViewport && styles.headerRowCompact
+        ]}
+      >
         <Pressable style={styles.backButton} onPress={() => router.replace("/(tabs)/markets")}>
           <Text style={styles.backText}>‹ Back to Markets</Text>
         </Pressable>
@@ -164,35 +210,35 @@ export default function SecurityDetail() {
       <ActiveUserBanner />
 
       <View style={styles.priceCard}>
-        <Text style={styles.price}>KES {money(price)}</Text>
+        <Text style={styles.price}>
+          {hasVerifiedPrice ? `KES ${money(price)}` : "Price unavailable"}
+        </Text>
 
-        <Text style={positive ? styles.green : styles.red}>
-          {positive ? "▲" : "▼"} {changePct.toFixed(2)}%
+        <Text
+          style={
+            hasVerifiedChange
+              ? positive
+                ? styles.green
+                : styles.red
+              : styles.muted
+          }
+        >
+          {hasVerifiedChange
+            ? `${positive ? "▲" : "▼"} ${changePct.toFixed(2)}%`
+            : "—"}
         </Text>
 
         <Text style={styles.muted}>
-          Change: KES {money(security.change || 0)}
+          Change:{" "}
+          {hasVerifiedPrice &&
+          security.change !== null &&
+          security.change !== undefined &&
+          security.change !== "" &&
+          Number.isFinite(Number(security.change))
+            ? `KES ${money(security.change)}`
+            : "—"}
         </Text>
       </View>
-
-      <View style={styles.grid}>
-        <Metric label="Bid" value={`KES ${money(security.bid || 0)}`} />
-        <Metric label="Ask" value={`KES ${money(security.ask || 0)}`} />
-        <Metric label="Volume" value={number(security.volume || 0)} />
-        <Metric label="Turnover" value={`KES ${money(security.turnover || 0)}`} />
-        <Metric label="High" value={`KES ${money(security.high || 0)}`} />
-        <Metric label="Low" value={`KES ${money(security.low || 0)}`} />
-      </View>
-
-      <Pressable
-        style={styles.depthButton}
-        onPress={() => setMarketDepthOpen(true)}
-      >
-        <Text style={styles.depthButtonText}>View Market Depth</Text>
-        <Text style={styles.depthButtonHint}>
-          Inspect bid / ask evidence before making a decision
-        </Text>
-      </Pressable>
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Your REAL Position</Text>
@@ -215,7 +261,11 @@ export default function SecurityDetail() {
 
             <MetricLine
               label="Market value"
-              value={`KES ${money(realMarketValue)}`}
+              value={
+                realMarketValue !== null
+                  ? `KES ${money(realMarketValue)}`
+                  : "N/A"
+              }
             />
 
             <Text style={styles.positionEvidence}>
@@ -238,23 +288,71 @@ export default function SecurityDetail() {
       <View style={styles.card}>
         <Text style={styles.cardTitle}>Coach G Rating</Text>
 
-        <View style={styles.ratingRow}>
-          <View>
-            <Text style={styles.ratingAction}>
-              {scored?.action || "WATCH"}
-            </Text>
+        {hasVerifiedPrice && scored ? (
+          <>
+            <View style={styles.ratingRow}>
+              <View>
+                <Text style={styles.ratingAction}>
+                  {scored.action || "WATCH"}
+                </Text>
+                <Text style={styles.body}>
+                  Confidence: {scored.confidence || 0}%
+                </Text>
+              </View>
+
+              <Text style={styles.confidence}>
+                {scored.confidence || 0}/100
+              </Text>
+            </View>
+
             <Text style={styles.body}>
-              Confidence: {scored?.confidence || 0}%
+              {scored.reason || "Coach G is monitoring this security."}
+            </Text>
+          </>
+        ) : (
+          <Text style={styles.body}>
+            Current verified price evidence is unavailable. Coach G is not
+            assigning a price-action rating.
+          </Text>
+        )}
+      </View>
+
+      <Pressable
+        style={styles.depthButton}
+        onPress={() => setMarketDepthOpen(true)}
+      >
+        <Text style={styles.depthButtonText}>View Market Depth</Text>
+        <Text style={styles.depthButtonHint}>
+          Inspect bid / ask evidence before making a decision
+        </Text>
+      </Pressable>
+
+      {ownsSecurity ? (
+        <Pressable
+          style={styles.companyDetailsButton}
+          onPress={() =>
+            router.push({
+              pathname: "/security/[symbol]/holding-history",
+              params: {
+                symbol: targetSymbol
+              }
+            })
+          }
+        >
+          <View style={styles.companyDetailsCopy}>
+            <Text style={styles.companyDetailsTitle}>
+              Holding History
+            </Text>
+            <Text style={styles.companyDetailsHint}>
+              Review reconciled FIFO lots, acquisitions and historical sales
             </Text>
           </View>
 
-          <Text style={styles.confidence}>{scored?.confidence || 0}/100</Text>
-        </View>
-
-        <Text style={styles.body}>
-          {scored?.reason || "Coach G is monitoring this security."}
-        </Text>
-      </View>
+          <Text style={styles.companyDetailsArrow}>
+            ›
+          </Text>
+        </Pressable>
+      ) : null}
 
       <Pressable
         style={styles.companyDetailsButton}
@@ -274,7 +372,7 @@ export default function SecurityDetail() {
           </Text>
         </View>
 
-        <Text style={styles.companyDetailsArrow}>�</Text>
+        <Text style={styles.companyDetailsArrow}>›</Text>
       </Pressable>
 
       <MarketDepthModal
@@ -347,14 +445,6 @@ export default function SecurityDetail() {
   );
 }
 
-function Metric({ label, value }) {
-  return (
-    <View style={styles.metric}>
-      <Text style={styles.metricLabel}>{label}</Text>
-      <Text style={styles.metricValue}>{value}</Text>
-    </View>
-  );
-}
 
 function MetricLine({ label, value }) {
   return (
@@ -375,6 +465,19 @@ function money(value) {
 function number(value) {
   return Number(value || 0).toLocaleString();
 }
+
+function hasMarketMetric(value) {
+  return (
+    value !== null &&
+    value !== undefined &&
+    value !== "" &&
+    Number.isFinite(Number(value))
+  );
+}
+
+
+
+
 
 const styles = StyleSheet.create({
   screen: {
@@ -397,6 +500,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: 28,
     paddingTop: 24
   },
+  contentCompact: {
+    paddingHorizontal: 16,
+    paddingTop: 28,
+    paddingBottom: 128
+  },
+  contentNarrow: {
+    paddingHorizontal: 12
+  },
   center: {
     flex: 1,
     backgroundColor: "#020617",
@@ -418,6 +529,9 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center"
+  },
+  headerRowCompact: {
+    paddingLeft: 68
   },
   backButton: {
     backgroundColor: "#1e293b",
@@ -518,29 +632,6 @@ const styles = StyleSheet.create({
   muted: {
     color: "#94a3b8",
     marginTop: 6
-  },
-  grid: {
-    marginTop: 18,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10
-  },
-  metric: {
-    width: "47%",
-    backgroundColor: "#0f172a",
-    borderColor: "#1e293b",
-    borderWidth: 1,
-    borderRadius: 18,
-    padding: 14
-  },
-  metricLabel: {
-    color: "#94a3b8",
-    fontSize: 12
-  },
-  metricValue: {
-    color: "white",
-    fontWeight: "900",
-    marginTop: 7
   },
   card: {
     marginTop: 18,

@@ -8,6 +8,7 @@ import React, {
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -96,14 +97,64 @@ const DETAIL_TABS = [
   "AUDIT"
 ];
 
+function getFilingUiId(
+  filing
+) {
+  return (
+    filing?.filingId ||
+    filing?.id ||
+    null
+  );
+}
+
+import {
+  AdminAccessGate
+} from "../src/features/admin/components/AdminAccessGate";
+
+import {
+  useAuth
+} from "../src/features/auth/hooks/useAuth";
+
+import {
+  getAdminFundamentalFiling,
+  transitionAdminFundamentalFiling,
+  promoteAdminFundamentalFiling
+} from "../src/features/fundamentals/api/adminFundamentalFilingApi";
+
 // PC-030M20AV3F RESPONSIVE CALIBRATION
-export default function VerifiedFilingsScreen() {
+
+export default function AdminProtectedVerifiedFilingsScreen() {
+  return (
+    <AdminAccessGate
+      testID="verified-filings-admin"
+    >
+      <VerifiedFilingsScreen />
+    </AdminAccessGate>
+  );
+}
+
+function VerifiedFilingsScreen() {
   const { width: windowWidth } = useWindowDimensions();
+  const { accessToken } = useAuth();
   const {
     filingId:
       routeFilingId
   } =
     useLocalSearchParams();
+
+  const requestedFilingId =
+    Array.isArray(
+      routeFilingId
+    )
+      ? routeFilingId[0]
+      : routeFilingId;
+
+  const serverSingleFilingMode =
+    Boolean(
+      String(
+        requestedFilingId || ""
+      ).trim()
+    );
 
   const [
     loading,
@@ -194,6 +245,42 @@ export default function VerifiedFilingsScreen() {
 
           setError("");
 
+          if (
+            serverSingleFilingMode
+          ) {
+            const payload =
+              await getAdminFundamentalFiling({
+                accessToken,
+                filingId:
+                  requestedFilingId
+              });
+
+            const serverFiling =
+              payload?.filing;
+
+            if (
+              !serverFiling?.filingId
+            ) {
+              throw new Error(
+                "The authoritative filing could not be loaded."
+              );
+            }
+
+            setFilings([
+              serverFiling
+            ]);
+
+            setSelectedFilingId(
+              serverFiling.filingId
+            );
+
+            setSummary(null);
+            setReviewQueue(null);
+            setDuplicates([]);
+
+            return;
+          }
+
           const [
             storedFilings,
             filingSummary,
@@ -274,7 +361,10 @@ export default function VerifiedFilingsScreen() {
         }
       },
       [
-        routeFilingId
+        accessToken,
+        requestedFilingId,
+        routeFilingId,
+        serverSingleFilingMode
       ]
     );
 
@@ -317,7 +407,9 @@ export default function VerifiedFilingsScreen() {
       () =>
         filings.find(
           (filing) =>
-            filing?.id ===
+            getFilingUiId(
+              filing
+            ) ===
             selectedFilingId
         ) ||
         filings[0] ||
@@ -343,6 +435,217 @@ export default function VerifiedFilingsScreen() {
       }),
       [
         reviewerName
+      ]
+    );
+
+  const executeServerLifecycleAction =
+    useCallback(
+      async (
+        action
+      ) => {
+        if (
+          !serverSingleFilingMode ||
+          !selectedFiling
+        ) {
+          return;
+        }
+
+        const filingId =
+          getFilingUiId(
+            selectedFiling
+          );
+
+        if (!filingId) {
+          setError(
+            "The authoritative filing ID is unavailable."
+          );
+          return;
+        }
+
+        try {
+          setWorking(true);
+          setError("");
+
+          await transitionAdminFundamentalFiling({
+            accessToken,
+            filingId,
+            action,
+            note:
+              reviewNote
+          });
+
+          setReviewNote("");
+
+          await loadData();
+
+          Alert.alert(
+            "Filing Updated",
+            `${formatLabel(
+              action
+            )} completed successfully.`
+          );
+        } catch (
+          actionError
+        ) {
+          setError(
+            actionError?.message ||
+            "Unable to update the filing."
+          );
+        } finally {
+          setWorking(false);
+        }
+      },
+      [
+        accessToken,
+        loadData,
+        reviewNote,
+        selectedFiling,
+        serverSingleFilingMode
+      ]
+    );
+
+  const publishServerFiling =
+    useCallback(
+      async () => {
+        if (
+          !serverSingleFilingMode ||
+          !selectedFiling
+        ) {
+          return;
+        }
+
+        const filingId =
+          getFilingUiId(
+            selectedFiling
+          );
+
+        if (!filingId) {
+          setError(
+            "The authoritative filing ID is unavailable."
+          );
+          return;
+        }
+
+        const reason =
+          reviewNote.trim();
+
+        if (!reason) {
+          setError(
+            "Enter a publication reason before publishing this filing."
+          );
+          return;
+        }
+
+        const symbol =
+          String(
+            selectedFiling.symbol ||
+            ""
+          )
+            .trim()
+            .toUpperCase();
+
+        const fiscalYear =
+          selectedFiling.fiscalYear ??
+          selectedFiling
+            ?.filingPayload
+            ?.fiscalYear ??
+          "";
+
+        const message =
+          "Publish " +
+          (
+            symbol ||
+            "this filing"
+          ) +
+          (
+            fiscalYear
+              ? " FY" + fiscalYear
+              : ""
+          ) +
+          "?\n\n" +
+          "This will make the approved filing the canonical fundamental record consumed by the application.";
+
+        const performPublish =
+          async () => {
+            try {
+              setWorking(true);
+              setError("");
+
+              await promoteAdminFundamentalFiling({
+                accessToken,
+                filingId,
+                reason,
+                confirmed:
+                  true
+              });
+
+              setReviewNote("");
+
+              await loadData();
+
+              Alert.alert(
+                "Filing Published",
+                "The approved filing was published to the canonical fundamental repository."
+              );
+            } catch (
+              actionError
+            ) {
+              setError(
+                actionError?.message ||
+                "Unable to publish the filing."
+              );
+            } finally {
+              setWorking(false);
+            }
+          };
+
+        if (
+          Platform.OS === "web" &&
+          typeof window !==
+            "undefined" &&
+          typeof window.confirm ===
+            "function"
+        ) {
+          const confirmed =
+            window.confirm(
+              message
+            );
+
+          if (!confirmed) {
+            return;
+          }
+
+          await performPublish();
+          return;
+        }
+
+        Alert.alert(
+          "Confirm Publication",
+          message,
+          [
+            {
+              text:
+                "Cancel",
+              style:
+                "cancel"
+            },
+            {
+              text:
+                "Publish",
+              style:
+                "destructive",
+              onPress:
+                performPublish
+            }
+          ]
+        );
+      },
+      [
+        accessToken,
+        loadData,
+        reviewNote,
+        selectedFiling,
+        serverSingleFilingMode
       ]
     );
 
@@ -752,12 +1055,16 @@ export default function VerifiedFilingsScreen() {
             }
           >
             Filing{" "}
-            {selectedFiling.id}{" "}
+            {getFilingUiId(
+              selectedFiling
+            )}{" "}
             is selected for review.
           </Text>
         </View>
       ) : null}
 
+      {!serverSingleFilingMode ? (
+        <>
       <View
         style={[
           styles.hero,
@@ -1010,20 +1317,27 @@ export default function VerifiedFilingsScreen() {
             ) => (
               <FilingCard
                 key={
-                  filing?.id ||
+                  getFilingUiId(
+                    filing
+                  ) ||
                   `FILING-${index}`
                 }
                 filing={
                   filing
                 }
                 selected={
-                  selectedFiling
-                    ?.id ===
-                  filing?.id
+                  getFilingUiId(
+                    selectedFiling
+                  ) ===
+                  getFilingUiId(
+                    filing
+                  )
                 }
                 onPress={() => {
                   setSelectedFilingId(
-                    filing?.id
+                    getFilingUiId(
+                      filing
+                    )
                   );
 
                   setDetailTab(
@@ -1040,6 +1354,9 @@ export default function VerifiedFilingsScreen() {
           />
         )}
       </Section>
+
+        </>
+      ) : null}
 
       {selectedFiling ? (
         <>
@@ -1112,6 +1429,121 @@ export default function VerifiedFilingsScreen() {
             ) : null}
           </Section>
 
+          {serverSingleFilingMode ? (
+            <Section
+              title="Annual Filing Action"
+              description="Use the server-authoritative filing lifecycle for this annual filing."
+            >
+              <Text
+                style={
+                  styles.fieldLabel
+                }
+              >
+                {selectedFiling.status ===
+                VERIFIED_FILING_STATUSES.APPROVED
+                  ? "Publication Reason"
+                  : "Review Note"}
+              </Text>
+
+              <TextInput
+                style={
+                  styles.textArea
+                }
+                multiline
+                textAlignVertical="top"
+                placeholder={
+                  selectedFiling.status ===
+                  VERIFIED_FILING_STATUSES.APPROVED
+                    ? "Required reason for publishing this filing"
+                    : "Optional review note"
+                }
+                placeholderTextColor="#64748b"
+                value={
+                  reviewNote
+                }
+                onChangeText={
+                  setReviewNote
+                }
+              />
+
+              <View
+                style={
+                  styles.actionGrid
+                }
+              >
+                {selectedFiling.status ===
+                VERIFIED_FILING_STATUSES.DRAFT ? (
+                  <ActionButton
+                    label="Submit for Review"
+                    disabled={
+                      working
+                    }
+                    onPress={() =>
+                      executeServerLifecycleAction(
+                        "SUBMIT"
+                      )
+                    }
+                  />
+                ) : null}
+
+                {selectedFiling.status ===
+                VERIFIED_FILING_STATUSES.PENDING_REVIEW ? (
+                  <ActionButton
+                    label="Verify"
+                    disabled={
+                      working
+                    }
+                    onPress={() =>
+                      executeServerLifecycleAction(
+                        "VERIFY"
+                      )
+                    }
+                  />
+                ) : null}
+
+                {selectedFiling.status ===
+                VERIFIED_FILING_STATUSES.VERIFIED ? (
+                  <ActionButton
+                    label="Approve"
+                    positive
+                    disabled={
+                      working
+                    }
+                    onPress={() =>
+                      executeServerLifecycleAction(
+                        "APPROVE"
+                      )
+                    }
+                  />
+                ) : null}
+
+                {selectedFiling.status ===
+                VERIFIED_FILING_STATUSES.APPROVED ? (
+                  <ActionButton
+                    label="Publish"
+                    positive
+                    disabled={
+                      working
+                    }
+                    onPress={
+                      publishServerFiling
+                    }
+                  />
+                ) : null}
+              </View>
+
+              <Text
+                style={
+                  styles.cardText
+                }
+              >
+                Current status:{" "}
+                {formatLabel(
+                  selectedFiling.status
+                )}
+              </Text>
+            </Section>
+          ) : (
           <Section
             title="Review Controls"
             description="Apply lifecycle actions using the named reviewer and review notes below."
@@ -1290,9 +1722,12 @@ export default function VerifiedFilingsScreen() {
               />
             </View>
           </Section>
+          )}
         </>
       ) : null}
 
+      {!serverSingleFilingMode ? (
+        <>
       <Section
         title="Duplicate and Revision Alerts"
         description="Exact duplicates, possible duplicates, and controlled revisions requiring attention."
@@ -1364,6 +1799,11 @@ export default function VerifiedFilingsScreen() {
         )}
       </Section>
 
+        </>
+      ) : null}
+
+      {!serverSingleFilingMode ? (
+        <>
       <View
         style={
           styles.protectionCard
@@ -1389,6 +1829,9 @@ export default function VerifiedFilingsScreen() {
         </Text>
       </View>
 
+        </>
+      ) : null}
+
       <Pressable
         disabled={
           refreshing
@@ -1413,7 +1856,9 @@ export default function VerifiedFilingsScreen() {
               styles.primaryButtonText
             }
           >
-            Refresh Filing Register
+            {serverSingleFilingMode
+              ? "Refresh Filing"
+              : "Refresh Filing Register"}
           </Text>
         )}
       </Pressable>

@@ -29,7 +29,7 @@ import {
   analyzeAverageCostSale,
   analyzeWeightedAverageBuy
 } from "../src/features/trading/weightedAverageBuyGuardService";
-import { buildHistoricalSecurityLotLedger } from "../src/features/trading/historicalSecurityLotLedgerService";
+import { buildAccountAwareFifoLedger } from "../src/features/trading/accountAwareFifoLedgerService";
 import {
   aggregateUnifiedHoldingsBySymbol,
   loadUnifiedPortfolioRuntime
@@ -94,7 +94,7 @@ export default function Trade() {
   const averageCostMode = String(mode || "").toUpperCase() === "AVERAGE_COST";
 
   const market = useMarketData();
-  const stocks = market.rows;
+  const stocks = market.verifiedRows;
 
   const [portfolio, setPortfolio] = useState([]);
   const [realHoldings, setRealHoldings] = useState([]);
@@ -523,13 +523,10 @@ export default function Trade() {
   const fifoEvidence = useMemo(
     () =>
       existingHolding
-        ? buildHistoricalSecurityLotLedger({
+        ? buildAccountAwareFifoLedger({
+            holding: existingHolding,
             transactions: realTransactions,
-            symbol: selectedStock.symbol,
-            currentQuantity: existingHolding.quantity,
-            currentAveragePrice:
-              existingHolding.averagePrice ?? existingHolding.averageCost,
-            costBasisMethod: "FIFO"
+            symbol: selectedStock.symbol
           })
         : null,
     [realTransactions, selectedStock.symbol, existingHolding]

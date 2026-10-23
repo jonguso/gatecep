@@ -3,6 +3,7 @@ import React, {
 } from "react";
 
 import {
+  ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -19,6 +20,10 @@ import {
   FUNDAMENTAL_NAVIGATION_GROUPS
 } from "../src/features/fundamentals/navigation/fundamentalNavigationRegistry";
 
+import {
+  useAdminAuthorization
+} from "../src/features/admin/hooks/useAdminAuthorization";
+
 /*
  * ============================================================
  * PC-026D
@@ -34,6 +39,15 @@ import {
 // PC-030M20AV3F RESPONSIVE CALIBRATION
 export default function FundamentalDataHubScreen() {
   const { width: windowWidth } = useWindowDimensions();
+
+  const {
+    authLoading,
+    checking,
+    authorized,
+    error: accessError,
+    verifyAdminAccess
+  } = useAdminAuthorization();
+
   const routeCount =
     useMemo(
       () =>
@@ -49,6 +63,89 @@ export default function FundamentalDataHubScreen() {
           ),
       []
     );
+
+  if (authLoading || checking) {
+    return (
+      <View
+        testID="fundamental-hub-admin-check"
+        style={{
+          flex: 1,
+          backgroundColor: "#020617",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 24
+        }}
+      >
+        <ActivityIndicator />
+
+        <Text
+          style={{
+            color: "#94a3b8",
+            marginTop: 14
+          }}
+        >
+          Verifying administrator authorization…
+        </Text>
+      </View>
+    );
+  }
+
+  if (!authorized) {
+    return (
+      <View
+        testID="fundamental-hub-access-denied"
+        style={{
+          flex: 1,
+          backgroundColor: "#020617",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: 24
+        }}
+      >
+        <Text
+          style={{
+            color: "#f8fafc",
+            fontSize: 24,
+            fontWeight: "900",
+            marginBottom: 12
+          }}
+        >
+          Access unavailable
+        </Text>
+
+        <Text
+          style={{
+            color: "#94a3b8",
+            textAlign: "center",
+            marginBottom: 20
+          }}
+        >
+          {accessError}
+        </Text>
+
+        <Pressable
+          accessibilityRole="button"
+          onPress={verifyAdminAccess}
+          style={{
+            borderWidth: 1,
+            borderColor: "#22d3ee",
+            borderRadius: 12,
+            paddingHorizontal: 18,
+            paddingVertical: 12
+          }}
+        >
+          <Text
+            style={{
+              color: "#67e8f9",
+              fontWeight: "800"
+            }}
+          >
+            Verify Again
+          </Text>
+        </Pressable>
+      </View>
+    );
+  }
 
   return (
     <ScrollView

@@ -1,9 +1,16 @@
 import {
   VERIFIED_FILING_STATUSES,
-  createVerifiedFiling,
-  detectVerifiedFilingDuplicate,
-  loadVerifiedFiling
+  detectVerifiedFilingDuplicate
 } from "./verifiedFilingDatasetManager";
+
+import {
+  createAdminFundamentalFiling,
+  transitionAdminFundamentalFiling
+} from "../api/adminFundamentalFilingApi";
+
+import {
+  buildAdminFilingIntakePayload
+} from "./adminFilingIntakeMapper";
 
 import {
   saveFilingSubmissionHistoryEntry
@@ -390,9 +397,8 @@ async function submitFilingReadyPayloadInternal({
   submissionMode =
     FILING_BRIDGE_SUBMISSION_MODES
       .CREATE_DRAFT,
-  actor = null,
-  note = null,
-  allowDuplicate = false
+  accessToken = null,
+  note = null
 } = {}) {
   const preview =
     await previewFilingBridgeSubmission({
@@ -420,8 +426,7 @@ async function submitFilingReadyPayloadInternal({
   if (
     preview.status ===
       FILING_BRIDGE_STATUSES
-        .DUPLICATE_REVIEW_REQUIRED &&
-    !allowDuplicate
+        .DUPLICATE_REVIEW_REQUIRED
   ) {
     return {
       ...preview,
@@ -437,55 +442,46 @@ async function submitFilingReadyPayloadInternal({
   const receiptId =
     createReceiptId();
 
-  const reviewer =
-    normalizeActor(actor);
+  const intakePayload =
+    buildAdminFilingIntakePayload({
+      ...preview.filingPreview,
 
-  const created =
-    await createVerifiedFiling({
-      filing: {
-        ...preview.filingPreview,
+      metadata: {
+        ...(preview
+          .filingPreview
+          ?.metadata ||
+        {}),
 
-        status:
-          VERIFIED_FILING_STATUSES
-            .DRAFT,
-
-        metadata: {
+        bridge: {
           ...(preview
             .filingPreview
-            ?.metadata ||
+            ?.metadata
+            ?.bridge ||
           {}),
 
-          bridge: {
-            ...(preview
-              .filingPreview
-              ?.metadata
-              ?.bridge ||
-            {}),
+          receiptId,
 
-            receiptId,
+          submittedAt:
+            nowIso(),
 
-            submittedAt:
-              nowIso(),
-
-            submissionMode:
-              normalizeCode(
-                submissionMode
-              ),
-
-            submittedBy:
-              reviewer,
-
-            duplicateOverride:
-              Boolean(
-                allowDuplicate
-              )
-          }
+          submissionMode:
+            normalizeCode(
+              submissionMode
+            )
         }
-      },
-
-      actor:
-        reviewer
+      }
     });
+
+  const createdResponse =
+    await createAdminFundamentalFiling({
+      accessToken,
+
+      filing:
+        intakePayload
+    });
+
+  const created =
+    createdResponse.filing;
 
   let finalFiling =
     created;
@@ -497,38 +493,55 @@ async function submitFilingReadyPayloadInternal({
     FILING_BRIDGE_SUBMISSION_MODES
       .CREATE_AND_SUBMIT_FOR_REVIEW
   ) {
-    const {
-      submitVerifiedFilingForReview
-    } =
-      await import(
-        "./verifiedFilingDatasetManager"
-      );
+    const transitionResponse =
+      await transitionAdminFundamentalFiling({
+        accessToken,
 
-    finalFiling =
-      await submitVerifiedFilingForReview({
         filingId:
-          created.id,
+          created.filingId,
 
-        reviewer,
+        action:
+          "SUBMIT",
 
         note:
           note ||
           "Submitted directly from the filing extraction workspace."
       });
+
+    finalFiling = {
+      ...created,
+      ...(transitionResponse
+        ?.lifecycle
+        ?.filing ||
+      {}),
+      filingId:
+        transitionResponse
+          ?.lifecycle
+          ?.filing
+          ?.filingId ||
+        created.filingId
+    };
   }
 
-  const confirmed =
-    await loadVerifiedFiling(
-      finalFiling.id
-    );
+  const confirmed = {
+    ...finalFiling,
+
+    id:
+      finalFiling?.id ||
+      finalFiling?.filingId,
+
+    filingId:
+      finalFiling?.filingId ||
+      finalFiling?.id
+  };
 
   const receipt = {
     id:
       receiptId,
 
     filingId:
-      confirmed?.id ||
-      finalFiling.id,
+      confirmed?.filingId ||
+      finalFiling?.filingId,
 
     symbol:
       confirmed?.symbol ||
@@ -560,7 +573,7 @@ async function submitFilingReadyPayloadInternal({
       nowIso(),
 
     submittedBy:
-      reviewer
+      null
   };
 
   return {
@@ -596,18 +609,16 @@ export async function submitFilingReadyPayload({
   submissionMode =
     FILING_BRIDGE_SUBMISSION_MODES
       .CREATE_DRAFT,
-  actor = null,
+  accessToken = null,
   note = null,
-  allowDuplicate = false,
   historyParentId = null
 } = {}) {
   const request = {
     payload,
     sourceWorkspace,
     submissionMode,
-    actor,
-    note,
-    allowDuplicate
+    accessToken,
+    note
   };
 
   try {
@@ -682,10 +693,9 @@ export async function submitFilingReadyPayload({
 
 export async function submitSinglePeriodExtraction({
   filingReadyJson,
-  actor = null,
+  accessToken = null,
   note = null,
-  submitForReview = false,
-  allowDuplicate = false
+  submitForReview = false
 } = {}) {
   return submitFilingReadyPayload({
     payload:
@@ -702,18 +712,16 @@ export async function submitSinglePeriodExtraction({
         : FILING_BRIDGE_SUBMISSION_MODES
             .CREATE_DRAFT,
 
-    actor,
-    note,
-    allowDuplicate
+    accessToken,
+    note
   });
 }
 
 export async function submitMultiPeriodExtraction({
   filingReadyJson,
-  actor = null,
+  accessToken = null,
   note = null,
-  submitForReview = false,
-  allowDuplicate = false
+  submitForReview = false
 } = {}) {
   return submitFilingReadyPayload({
     payload:
@@ -730,8 +738,7 @@ export async function submitMultiPeriodExtraction({
         : FILING_BRIDGE_SUBMISSION_MODES
             .CREATE_DRAFT,
 
-    actor,
-    note,
-    allowDuplicate
+    accessToken,
+    note
   });
 }

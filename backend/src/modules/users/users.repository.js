@@ -16,6 +16,8 @@ export async function createUser(user) {
       id,
       email,
       username,
+      role,
+      status,
       password_hash AS "passwordHash",
       created_at AS "createdAt",
       updated_at AS "updatedAt"
@@ -33,6 +35,8 @@ export async function findUserByEmail(email) {
       id,
       email,
       username,
+      role,
+      status,
       password_hash AS "passwordHash",
       created_at AS "createdAt",
       updated_at AS "updatedAt"
@@ -53,6 +57,8 @@ export async function findUserById(id) {
       id,
       email,
       username,
+      role,
+      status,
       password_hash AS "passwordHash",
       created_at AS "createdAt",
       updated_at AS "updatedAt"
@@ -64,4 +70,22 @@ export async function findUserById(id) {
   );
 
   return result.rows[0] || null;
+}
+export async function listUsersForAdmin() {
+  const result = await pool.query(
+    `
+    SELECT
+      id,
+      email,
+      username,
+      role,
+      status,
+      created_at AS "createdAt",
+      updated_at AS "updatedAt"
+    FROM public.auth_users
+    ORDER BY created_at DESC, id ASC
+    `
+  );
+
+  return result.rows;
 }

@@ -8,12 +8,12 @@ const depth = fs.readFileSync("src/components/markets/MarketDepthModal.js", "utf
 const logo = fs.readFileSync("src/components/markets/CompanyLogo.js", "utf8");
 
 assert.match(markets, /<CompanyLogo security=\{row\}/);
-assert.match(markets, /Tap a company to explore its price, market depth and verified fundamentals/);
+assert.match(markets, /Explore verified market prices and company information\./);
 assert.match(depth, /Explore company & learn/);
 assert.match(depth, /router\.push\(`\/security\/\$\{security\.symbol\}`\)/);
-assert.match(securityPage, /loadFundamentalRecord/);
-assert.match(securityPage, /Fundamentals not yet available/);
-assert.match(securityPage, /Investor learning checklist/);
+assert.match(securityPage, /loadPublishedFundamental/);
+assert.match(securityPage, /Company Details/);
+assert.match(securityPage, /pathname:\s*"\/company\/\[symbol\]"/);
 assert.doesNotMatch(securityPage, /const DIVIDEND_YIELDS/);
 assert.match(logo, /security\?\.logoUrl/);
 assert.match(logo, /onError/);

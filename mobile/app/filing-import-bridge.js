@@ -36,9 +36,32 @@ import {
  * ============================================================
  */
 
+import {
+  AdminAccessGate
+} from "../src/features/admin/components/AdminAccessGate";
+
+import {
+  useAuth
+} from "../src/features/auth/context/AuthContext";
+
 // PC-030M20AV3G RESPONSIVE CALIBRATION
-export default function FilingImportBridgeScreen() {
+
+export default function AdminProtectedFilingImportBridgeScreen() {
+  return (
+    <AdminAccessGate
+      testID="filing-import-bridge-admin"
+    >
+      <FilingImportBridgeScreen />
+    </AdminAccessGate>
+  );
+}
+
+function FilingImportBridgeScreen() {
   const { width: windowWidth } = useWindowDimensions();
+
+  const {
+    accessToken
+  } = useAuth();
   const [
     payloadText,
     setPayloadText
@@ -59,18 +82,6 @@ export default function FilingImportBridgeScreen() {
     FILING_BRIDGE_SUBMISSION_MODES
       .CREATE_DRAFT
   );
-
-  const [
-    reviewerName,
-    setReviewerName
-  ] = useState(
-    "Gatecep Extraction User"
-  );
-
-  const [
-    allowDuplicate,
-    setAllowDuplicate
-  ] = useState(false);
 
   const [
     working,
@@ -130,15 +141,7 @@ export default function FilingImportBridgeScreen() {
           payload,
           sourceWorkspace,
           submissionMode,
-          allowDuplicate,
-
-          actor: {
-            id:
-              reviewerName,
-
-            name:
-              reviewerName
-          }
+          accessToken
         })
       );
     } catch (
@@ -289,42 +292,6 @@ export default function FilingImportBridgeScreen() {
           }
         />
 
-        <Text
-          style={
-            styles.label
-          }
-        >
-          Submitted By
-        </Text>
-
-        <TextInput
-          style={
-            styles.input
-          }
-          value={
-            reviewerName
-          }
-          onChangeText={
-            setReviewerName
-          }
-        />
-
-        <Option
-          label={`Allow Duplicate Override: ${
-            allowDuplicate
-              ? "Yes"
-              : "No"
-          }`}
-          active={
-            allowDuplicate
-          }
-          onPress={() =>
-            setAllowDuplicate(
-              (current) =>
-                !current
-            )
-          }
-        />
       </Section>
 
       <Section

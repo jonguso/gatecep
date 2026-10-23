@@ -402,7 +402,11 @@ export function buildSourceReferencesFromFinancialEvidence({
               }
             : null,
 
-        fiscalYear
+        fiscalYear:
+          nullableNumber(
+            item?.fiscalYear
+          ) ??
+          fiscalYear
       });
     });
 }
@@ -1000,21 +1004,161 @@ export function buildFilingExtractionWorkspace({
         )
     });
 
-  const errors =
-    normalizedPeriods.flatMap(
+  const primaryFiscalYear =
+    nullableNumber(
+      filing?.fiscalYear
+    );
+
+  const primaryPeriodValidation =
+    normalizedPeriods.find(
       (item) =>
-        item.errors
+        nullableNumber(
+          item?.period?.fiscalYear
+        ) === primaryFiscalYear
+    ) || null;
+
+  const historicalPeriodValidations =
+    primaryPeriodValidation
+      ? normalizedPeriods.filter(
+          (item) =>
+            item !== primaryPeriodValidation
+        )
+      : [];
+
+  const isHistoricalMissingRequiredError =
+    (check) =>
+      typeof check?.code === "string" &&
+      check.code.startsWith(
+        "REQUIRED_"
+      );
+
+  const historicalBlockingErrors =
+    historicalPeriodValidations.flatMap(
+      (item) =>
+        safeArray(
+          item.errors
+        ).filter(
+          (error) =>
+            !isHistoricalMissingRequiredError(
+              error
+            )
+        )
+    );
+
+  const historicalCoverageWarnings =
+    historicalPeriodValidations.flatMap(
+      (item) =>
+        safeArray(
+          item.errors
+        )
+          .filter(
+            isHistoricalMissingRequiredError
+          )
+          .map(
+            (error) => ({
+              ...error,
+              severity:
+                EXTRACTION_SEVERITIES
+                  .WARNING,
+              historical:
+                true,
+              nonBlocking:
+                true,
+              originalSeverity:
+                error.severity
+            })
+          )
+    );
+
+  const errors =
+    primaryPeriodValidation
+      ? [
+          ...safeArray(
+            primaryPeriodValidation.errors
+          ),
+          ...historicalBlockingErrors
+        ]
+      : normalizedPeriods.flatMap(
+          (item) =>
+            item.errors
+        );
+
+  const historicalWarnings =
+    historicalPeriodValidations.flatMap(
+      (item) =>
+        safeArray(
+          item.warnings
+        ).map(
+          (warning) => {
+            const field =
+              warning?.field || null;
+
+            const fieldValue =
+              field
+                ? item?.period?.[field]
+                : undefined;
+
+            const missingField =
+              fieldValue === null ||
+              fieldValue === undefined ||
+              fieldValue === "";
+
+            const missingOptionalHistoricalReference =
+              typeof warning?.code === "string" &&
+              warning.code.startsWith(
+                "SOURCE_REFERENCE_"
+              ) &&
+              missingField;
+
+            return missingOptionalHistoricalReference
+              ? {
+                  ...warning,
+                  historical:
+                    true,
+                  nonBlocking:
+                    true
+                }
+              : warning;
+          }
+        )
     );
 
   const warnings =
-    normalizedPeriods.flatMap(
-      (item) =>
-        item.warnings
-    );
+    primaryPeriodValidation
+      ? [
+          ...safeArray(
+            primaryPeriodValidation.warnings
+          ),
+          ...historicalWarnings,
+          ...historicalCoverageWarnings
+        ]
+      : normalizedPeriods.flatMap(
+          (item) =>
+            item.warnings
+        );
 
   const completeness =
-    normalizedPeriods.length
-      ? normalizedPeriods.reduce(
+    primaryPeriodValidation
+      ? number(
+          primaryPeriodValidation
+            .completenessPercentage
+        )
+      : normalizedPeriods.length
+        ? normalizedPeriods.reduce(
+            (total, item) =>
+              total +
+              number(
+                item
+                  .completenessPercentage
+              ),
+            0
+          ) /
+          normalizedPeriods.length
+        : 0;
+
+  const historicalCoverage =
+    historicalPeriodValidations.length
+      ? historicalPeriodValidations.reduce(
           (total, item) =>
             total +
             number(
@@ -1023,8 +1167,65 @@ export function buildFilingExtractionWorkspace({
             ),
           0
         ) /
-        normalizedPeriods.length
+        historicalPeriodValidations.length
       : 0;
+
+  const completeHistoricalPeriods =
+    historicalPeriodValidations.filter(
+      (item) =>
+        number(
+          item
+            .completenessPercentage
+        ) >= 100
+    ).length;
+
+  const historicalEvidenceConfidence =
+    completeHistoricalPeriods >= 2
+      ? "HIGH"
+      : completeHistoricalPeriods >= 1
+        ? "MODERATE"
+        : "LOW";
+
+  const missingPrimaryPeriod =
+    normalizedPeriods.length > 0 &&
+    primaryFiscalYear !== null &&
+    !primaryPeriodValidation;
+
+  const primaryMatchErrors =
+    missingPrimaryPeriod
+      ? [
+          {
+            code:
+              "PRIMARY_FISCAL_YEAR_NOT_FOUND",
+            type:
+              EXTRACTION_CHECK_TYPES
+                .REQUIRED_FIELD,
+            severity:
+              EXTRACTION_SEVERITIES
+                .ERROR,
+            passed:
+              false,
+            field:
+              "fiscalYear",
+            fiscalYear:
+              primaryFiscalYear,
+            message:
+              "No extracted period matches the filing fiscal year."
+          }
+        ]
+      : [];
+
+  if (primaryMatchErrors.length) {
+    errors.push(
+      ...primaryMatchErrors
+    );
+  }
+
+  const blockingWarnings =
+    warnings.filter(
+      (warning) =>
+        warning?.nonBlocking !== true
+    );
 
   const status =
     !normalizedPeriods.length
@@ -1033,7 +1234,7 @@ export function buildFilingExtractionWorkspace({
       : errors.length
         ? EXTRACTION_STATUSES
             .INVALID
-        : warnings.length
+        : blockingWarnings.length
           ? EXTRACTION_STATUSES
               .PARTIAL
           : EXTRACTION_STATUSES
@@ -1096,6 +1297,24 @@ export function buildFilingExtractionWorkspace({
       Number(
         completeness.toFixed(2)
       ),
+
+    primaryFiscalYear,
+
+    historicalEvidence: {
+      confidence:
+        historicalEvidenceConfidence,
+
+      coveragePercentage:
+        Number(
+          historicalCoverage.toFixed(2)
+        ),
+
+      completePeriods:
+        completeHistoricalPeriods,
+
+      availablePeriods:
+        historicalPeriodValidations.length
+    },
 
     errors,
 
