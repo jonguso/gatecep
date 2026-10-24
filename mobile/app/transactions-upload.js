@@ -31,11 +31,17 @@ import {
   requireValidBrokerEvidenceIdentity
 } from "../src/features/broker-sync/brokerEvidenceIdentityService";
 import {
+  loadBrokerTransactionHistoryEvidence,
   saveBrokerTransactionHistoryEvidence
 } from "../src/features/trading/brokerTransactionHistoryEvidenceStore";
+import {
+  reviewBrokerTransactionUpload
+} from "../src/features/trading/brokerTransactionUploadReviewService";
 import { buildSyncStatus } from "../src/portfolio/syncStatus";
 import { rebuildCanonicalPortfolioLedger } from "../src/features/trading/canonicalPortfolioLedgerService";
-import { partitionBrokerExecutionEvidence } from "../src/features/broker-sync/brokerExecutionEvidencePolicy";
+import {
+  partitionHistoricalBrokerExecutionEvidence
+} from "../src/features/trading/historicalBrokerExecutionEvidencePolicy";
 import { ContainedPanel } from "../src/components/mobile/MobileUI";
 import { extractBrokerPdf } from "../src/services/brokers/brokerPdfExtractionApi";
 import { reconcileUncertainRealOrderFromVerifiedEvidence } from "../src/features/broker-sync/realOrderExecutionEvidenceReconciliationService";
@@ -64,7 +70,8 @@ export default function TransactionsUpload() {
   const [selectedFile, setSelectedFile] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [rawEvidenceRows, setRawEvidenceRows] = useState([]);
-  const [evidenceInternalIdentity, setEvidenceInternalIdentity] = useState(null);
+  const [uploadReview, setUploadReview] = useState(null);
+const [evidenceInternalIdentity, setEvidenceInternalIdentity] = useState(null);
   const [selectedBrokerAccount, setSelectedBrokerAccount] = useState(null);
   const [accountResolutionReady, setAccountResolutionReady] = useState(false);
   const [status, setStatus] = useState("");
@@ -96,7 +103,8 @@ export default function TransactionsUpload() {
               account.tradingAccount
           });
 
-          return (
+        
+  return (
             String(accountKey || "")
               .trim()
               .toUpperCase() ===
@@ -166,25 +174,69 @@ export default function TransactionsUpload() {
 
       const parsed = await parseFile(file);
       const rows = parsed.rows;
-      const normalized = normalizeTransactions(rows);
 
-      if (!normalized.length) {
+      if (!rows.length) {
         throw new Error(
-          "Could not detect transaction columns. Expected broker history columns such as Order Date, Security Code, Buy or Sell, Order Quantity, Order Price, and Order Status."
+          "The selected broker transaction file contains no readable rows."
         );
       }
 
+      if (!requestedBrokerAccountKey) {
+        throw new Error(
+          "Choose the connected broker account before reviewing transaction history."
+        );
+      }
+
+      const existingEvidence =
+        await loadBrokerTransactionHistoryEvidence(
+          requestedBrokerAccountKey
+        );
+
+      const review =
+        reviewBrokerTransactionUpload({
+          rawRows: rows,
+          brokerAccountKey: requestedBrokerAccountKey,
+          existingVerified:
+            existingEvidence?.verified || [],
+          existingUnverified:
+            existingEvidence?.unverified || []
+        });
+
       setRawEvidenceRows(rows);
+
       setEvidenceInternalIdentity(
         parsed.internalIdentity ||
-        extractOrderHistoryIdentity(rows)
+          extractOrderHistoryIdentity(rows)
       );
-      setTransactions(normalized);
-      setStatus(`${normalized.length} transactions detected.`);
+
+      setUploadReview(review);
+
+      /*
+       * Only NEW completed executions become save candidates.
+       *
+       * EXISTING:
+       *   immutable and skipped.
+       *
+       * NEEDS_REVIEW:
+       *   blocks upload.
+       *
+       * IGNORED:
+       *   does not enter historical execution evidence.
+       */
+      setTransactions(review.newRows);
+
+      setStatus(
+        `${review.summary.uploadedCount} rows reviewed: ` +
+        `${review.summary.newCount} new, ` +
+        `${review.summary.existingCount} existing, ` +
+        `${review.summary.reviewRequiredCount} need review, ` +
+        `${review.summary.ignoredCount} ignored.`
+      );
     } catch (error) {
       setRawEvidenceRows([]);
       setEvidenceInternalIdentity(null);
       setTransactions([]);
+      setUploadReview(null);
       setStatus(`Upload failed: ${error.message}`);
       Alert.alert("Upload Failed", error.message);
     }
@@ -299,148 +351,6 @@ export default function TransactionsUpload() {
     });
   }
 
-  function normalizeTransactions(rows = []) {
-    return rows
-      .map((row, index) => {
-        const date =
-          readColumn(row, [
-            "Date",
-            "Trade Date",
-            "Transaction Date",
-            "Order Date",
-            "date"
-          ]);
-
-        const symbol = String(
-          readColumn(row, [
-            "Symbol",
-            "Security",
-            "Ticker",
-            "Code",
-            "Counter",
-            "Scrip",
-            "Stock",
-            "Security Code",
-            "Instrument"
-          ]) || ""
-        )
-          .trim()
-          .toUpperCase();
-
-        const sideRaw = String(
-          readColumn(row, [
-            "Side",
-            "Type",
-            "Action",
-            "Transaction Type",
-            "Transaction",
-            "Buy/Sell",
-            "Buy Sell",
-            "Buy or Sell",
-            "B/S",
-            "Order Side",
-            "Trade Type"
-          ]) || ""
-        )
-          .trim()
-          .toUpperCase();
-
-        const side =
-          sideRaw === "B" || sideRaw.includes("BUY")
-            ? "BUY"
-            : sideRaw === "S" || sideRaw.includes("SELL")
-            ? "SELL"
-            : "";
-
-        const quantity = cleanNumber(
-          readColumn(row, [
-            "Quantity",
-            "Qty",
-            "Shares",
-            "Units",
-            "No. of Shares",
-            "No of Shares",
-            "Volume",
-            "Trade Quantity",
-            "Order Quantity",
-            "Traded Quantity",
-            "Total Traded Quantity"
-          ])
-        );
-
-        const price = cleanNumber(
-          readColumn(row, [
-            "Price",
-            "Unit Price",
-            "Trade Price",
-            "Rate",
-            "Average Price",
-            "Avg Price",
-            "Execution Price",
-            "Order Price"
-          ])
-        );
-
-        const valueFromFile = cleanNumber(
-          readColumn(row, [
-            "Value",
-            "Amount",
-            "Consideration",
-            "Gross Amount",
-            "Net Amount",
-            "Total",
-            "Trade Value",
-            "Transaction Value"
-          ])
-        );
-
-        const value =
-          Number.isFinite(valueFromFile) && valueFromFile > 0
-            ? valueFromFile
-            : quantity * price;
-
-        const finalPrice =
-          price > 0
-            ? price
-            : quantity > 0 && value > 0
-            ? value / quantity
-            : 0;
-
-        if (!symbol || !side || quantity <= 0 || finalPrice <= 0) {
-          return null;
-        }
-
-        return {
-          id: `TX-${Date.now()}-${index}`,
-          date,
-          symbol,
-          name: readColumn(row, ["Security Name", "Company", "Name"]) || symbol,
-          side,
-          quantity,
-          price: finalPrice,
-          value,
-          status: readColumn(row, ["Order Status", "Status"]) || "UNKNOWN",
-          brokerReference: readColumn(row, ["Broker Reference", "Contract Note", "Contract Note Number", "Trade Reference", "Order Reference"]),
-          fillReference: readColumn(row, [
-            "Fill Reference",
-            "Fill ID",
-            "Execution Reference",
-            "Execution ID",
-            "Trade ID",
-            "Transaction ID",
-            "Deal Number"
-          ]),
-          broker: readColumn(row, ["Broker", "Broker Name", "Dealer"]),
-          fees: cleanNumber(readColumn(row, ["Total Fees", "Fees", "Brokerage and Fees", "Charges"])),
-          settlementStatus: readColumn(row, ["Settlement Status"]),
-          settlementDate: readColumn(row, ["Settlement Date"]),
-          source: "TRANSACTION_UPLOAD",
-          uploadedAt: new Date().toISOString()
-        };
-      })
-      .filter(Boolean);
-  }
-
   function readColumn(row, names = []) {
     for (const name of names) {
       if (row[name] !== undefined && row[name] !== "") {
@@ -475,10 +385,33 @@ export default function TransactionsUpload() {
 
   async function saveTransactions() {
     try {
+      if (!uploadReview) {
+        Alert.alert(
+          "No Review",
+          "Select and review a broker transaction file first."
+        );
+        return;
+      }
+
+      if (uploadReview.summary.reviewRequiredCount > 0) {
+        Alert.alert(
+          "Review Required",
+          `${uploadReview.summary.reviewRequiredCount} transaction ` +
+          `row${uploadReview.summary.reviewRequiredCount === 1 ? "" : "s"} ` +
+          `must be corrected before this file can be added to history.`
+        );
+        return;
+      }
+
       if (!transactions.length) {
-      Alert.alert("No Transactions", "Upload a transaction file first.");
-      return;
-    }
+        Alert.alert(
+          "No New Transactions",
+          uploadReview.summary.existingCount > 0
+            ? "All valid executions in this file already exist in transaction history. Existing records were not changed."
+            : "This file contains no new completed broker executions to add."
+        );
+        return;
+      }
 
     if (!requestedBrokerAccountKey) {
       Alert.alert(
@@ -514,8 +447,44 @@ export default function TransactionsUpload() {
         expectedAccountKey: requestedBrokerAccountKey
       });
 
-    const { verified, unverified } =
-      partitionBrokerExecutionEvidence(transactions);
+    /*
+     * Historical broker transaction history is intentionally
+     * separate from GateCEP-originated REAL trade evidence.
+     *
+     * verified:
+     *   execution confirmed and FIFO-ready.
+     *
+     * needsReview:
+     *   execution confirmed, but human correction/evidence is
+     *   still required before FIFO may consume it.
+     *
+     * ignored:
+     *   no Total Traded Quantity, therefore no historical
+     *   execution. These rows are NOT persisted as transaction
+     *   execution evidence.
+     */
+    const historicalPartition =
+      partitionHistoricalBrokerExecutionEvidence(
+        transactions,
+        {
+          brokerAccountKey:
+            requestedBrokerAccountKey,
+          brokerId:
+            selectedBrokerAccount?.brokerId || ""
+        }
+      );
+
+    const verified =
+      historicalPartition.verified;
+
+    const unverified =
+      historicalPartition.needsReview;
+
+    const ignoredHistoricalRows =
+      historicalPartition.ignored;
+
+    const needsPriceReview =
+      historicalPartition.needsPrice;
 
     const savedEvidence =
       await saveBrokerTransactionHistoryEvidence({
@@ -526,12 +495,58 @@ export default function TransactionsUpload() {
         source: "TRANSACTION_UPLOAD"
       });
 
-    await userSetItem("transactionsUploaded", verified.length ? "true" : "false");
+    const mergeSummary =
+      savedEvidence?.mergeSummary || {};
+
+    const newVerifiedCount =
+      Number(mergeSummary.insertedVerifiedCount || 0);
+
+    const newUnverifiedCount =
+      Number(mergeSummary.insertedUnverifiedCount || 0);
+
+    const newAddedCount =
+      newVerifiedCount + newUnverifiedCount;
+
+    const existingSkippedCount =
+      Number(mergeSummary.skippedExistingCount || 0);
+
+    const ignoredCount =
+      Number(mergeSummary.skippedInvalidCount || 0);
+
+    await userSetItem(
+      "transactionsUploaded",
+      savedEvidence.verified.length ? "true" : "false"
+    );
+
     await userSetItem(
       "transactionUploadSummary",
       JSON.stringify({
-        count: verified.length,
+        count: newVerifiedCount,
+        newAddedCount,
+        newVerifiedCount,
+        newUnverifiedCount,
+        existingSkippedCount,
+        ignoredCount,
+        updatedExistingCount:
+          Number(mergeSummary.updatedExistingCount || 0),
+        deletedCount:
+          Number(mergeSummary.deletedCount || 0),
+        submittedVerifiedCount: verified.length,
+        submittedUnverifiedCount: unverified.length,
+
+        /*
+         * Historical execution review metadata.
+         */
+        needsReviewCount: unverified.length,
+        needsPriceReviewCount: needsPriceReview.length,
+        ignoredNoExecutionCount:
+          ignoredHistoricalRows.length,
+
+        /*
+         * Kept for compatibility with existing summary readers.
+         */
         rejectedCount: unverified.length,
+
         fileName: selectedFile?.name || null,
         brokerAccountKey: identityResult.brokerAccountKey,
         brokerId: selectedBrokerAccount.brokerId,
@@ -563,8 +578,8 @@ export default function TransactionsUpload() {
       "AMBIGUOUS_VERIFIED_MATCH"
     ) {
       Alert.alert(
-        "Evidence Saved � Match Ambiguous",
-        `${verified.length} verified broker executions were saved, but ${recoveryResult.matchCount} records could match the uncertain REAL order. GateCEP did not guess. The order remains locked for reconciliation.`,
+        "Evidence Saved — Match Ambiguous",
+        `${newAddedCount} new broker executions were added; ${existingSkippedCount} existing executions were skipped. ${recoveryResult.matchCount} records could match the uncertain REAL order. GateCEP did not guess. The order remains locked for reconciliation.`,
         [
           {
             text: "Review Recovery",
@@ -582,8 +597,8 @@ export default function TransactionsUpload() {
       "NO_VERIFIED_MATCH"
     ) {
       Alert.alert(
-        "Evidence Saved � No Unique Match",
-        `${verified.length} verified broker executions were saved, but none uniquely matched the uncertain REAL order${recoverySymbol ? ` ${recoverySymbol}` : ""}${recoveryBrokerId ? ` at ${recoveryBrokerId}` : ""}. The order remains locked.`,
+        "Evidence Saved — No Unique Match",
+        `${newAddedCount} new broker executions were added; ${existingSkippedCount} existing executions were skipped, but none uniquely matched the uncertain REAL order${recoverySymbol ? ` ${recoverySymbol}` : ""}${recoveryBrokerId ? ` at ${recoveryBrokerId}` : ""}. The order remains locked.`,
         [
           {
             text: "Review Recovery",
@@ -620,7 +635,7 @@ export default function TransactionsUpload() {
       "RECONCILIATION_PERSISTENCE_FAILED"
     ) {
       Alert.alert(
-        "Evidence Saved � Recovery Not Persisted",
+        "Evidence Saved — Recovery Not Persisted",
         "The verified broker execution evidence was saved and uniquely matched the uncertain REAL order, but GateCEP could not persist the OMS recovery state. The order remains locked. Do not resubmit the order; review recovery before taking further action.",
         [
           {
@@ -660,7 +675,7 @@ export default function TransactionsUpload() {
 
     Alert.alert(
       "Evidence Reviewed",
-      `${verified.length} verified broker executions saved; ${unverified.length} incomplete records remain UNVERIFIED.`
+      `${newAddedCount} new broker execution${newAddedCount === 1 ? "" : "s"} added; ${existingSkippedCount} existing execution${existingSkippedCount === 1 ? "" : "s"} skipped; ${ignoredCount} invalid execution${ignoredCount === 1 ? "" : "s"} ignored. Existing records modified: 0. Existing records deleted: 0.`
     );
 
     router.replace("/portfolio-sync-center");
@@ -673,6 +688,7 @@ export default function TransactionsUpload() {
       Alert.alert("Broker Evidence Rejected", message);
     }
   }
+
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={[
@@ -704,8 +720,10 @@ export default function TransactionsUpload() {
         <Text style={styles.cardTitle}>Upload File</Text>
 
         <Text style={styles.help}>
-          Supported examples: Order Date, Security Code, Buy or Sell, Order
-          Quantity, Traded Quantity, Order Price, Order Status.
+          Historical execution authority: Exchange Order No, Total Traded
+          Quantity, execution date, security, Buy or Sell, and explicit broker
+          execution price. Order Status is descriptive only. Order Quantity and
+          Traded Quantity do not prove execution.
         </Text>
 
         <Pressable style={styles.secondary} onPress={pickFile}>
@@ -723,40 +741,159 @@ export default function TransactionsUpload() {
         ) : null}
       </View>
 
-      <ContainedPanel title="Evidence Preview" subtitle={`${transactions.length} imported record${transactions.length === 1 ? "" : "s"}`} emptyMessage="No transactions loaded yet." testID="broker-execution-preview-panel">
+      <ContainedPanel
+        title="Transaction History Review"
+        subtitle={
+          uploadReview
+            ? `${uploadReview.summary.uploadedCount} broker rows reviewed`
+            : "Select a broker transaction file to review"
+        }
+        emptyMessage="No transactions loaded yet."
+        testID="broker-execution-preview-panel"
+      >
+        {uploadReview ? (
+          <>
+            <Text style={styles.body}>
+              New executions: {uploadReview.summary.newCount}
+            </Text>
 
-        {transactions.length === 0 ? (
-          null
-        ) : (
-          transactions.slice(0, 10).map((tx) => (
-            <View key={tx.id} style={[styles.row, av3dWidth < 520 && { flexDirection: "column" }]}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.symbol}>{tx.symbol}</Text>
-                <Text style={styles.small}>
-                  {tx.date} • {tx.side} • Qty {tx.quantity}
+            <Text style={styles.body}>
+              Already in history: {uploadReview.summary.existingCount}
+            </Text>
+
+            <Text style={styles.body}>
+              Needs review: {uploadReview.summary.reviewRequiredCount}
+            </Text>
+
+            <Text style={styles.body}>
+              Ignored / no execution: {uploadReview.summary.ignoredCount}
+            </Text>
+
+            <Text style={styles.body}>
+              Existing transactions modified: 0
+            </Text>
+
+            <Text style={styles.body}>
+              Existing transactions deleted: 0
+            </Text>
+
+            {uploadReview.reviewRows.length > 0 ? (
+              <View style={styles.reviewWarning}>
+                <Text style={styles.reviewWarningTitle}>
+                  Review Required
                 </Text>
-                <Text style={styles.small}>
-                  {tx.name} • {tx.status}
+
+                {uploadReview.reviewRows.slice(0, 10).map((tx) => (
+                  <View
+                    key={`REVIEW-${tx.sourceIndex}`}
+                    style={styles.reviewItem}
+                  >
+                    <Text style={styles.symbol}>
+                      {tx.symbol || "Unknown security"}
+                    </Text>
+
+                    <Text style={styles.small}>
+                      Exchange Order: {tx.exchangeOrderNo || "Missing"}
+                    </Text>
+
+                    <Text style={styles.small}>
+                      {tx.status || "UNKNOWN"} • Traded Qty {tx.totalTradedQuantity || 0}
+                    </Text>
+
+                    <Text style={styles.reviewReason}>
+                      {tx.reviewReasons.join(", ")}
+                    </Text>
+                  </View>
+                ))}
+
+                {uploadReview.reviewRows.length > 10 ? (
+                  <Text style={styles.more}>
+                    + {uploadReview.reviewRows.length - 10} more rows requiring review
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
+
+            {transactions.length > 0 ? (
+              <View style={styles.newSection}>
+                <Text style={styles.reviewSectionTitle}>
+                  New Executions to Add
                 </Text>
-              </View>
 
-              <View style={{ alignItems: av3dWidth < 520 ? "flex-start" : "flex-end" }}>
-                <Text style={styles.value}>KES {money(tx.value)}</Text>
-                <Text style={styles.small}>@ {money(tx.price)}</Text>
-              </View>
-            </View>
-          ))
-        )}
+                {transactions.slice(0, 10).map((tx) => (
+                  <View
+                    key={tx.id}
+                    style={[
+                      styles.row,
+                      av3dWidth < 520 && {
+                        flexDirection: "column"
+                      }
+                    ]}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.symbol}>
+                        {tx.symbol}
+                      </Text>
 
-        {transactions.length > 10 ? (
-          <Text style={styles.more}>
-            + {transactions.length - 10} more transactions
-          </Text>
+                      <Text style={styles.small}>
+                        {tx.date} • {tx.side} • Traded Qty {tx.totalTradedQuantity}
+                      </Text>
+
+                      <Text style={styles.small}>
+                        {tx.status} • Exchange Order {tx.exchangeOrderNo}
+                      </Text>
+                    </View>
+
+                    <View
+                      style={{
+                        alignItems:
+                          av3dWidth < 520
+                            ? "flex-start"
+                            : "flex-end"
+                      }}
+                    >
+                      <Text style={styles.value}>
+                        KES {money(tx.value)}
+                      </Text>
+
+                      <Text style={styles.small}>
+                        @ {money(tx.price)}
+                      </Text>
+                    </View>
+                  </View>
+                ))}
+
+                {transactions.length > 10 ? (
+                  <Text style={styles.more}>
+                    + {transactions.length - 10} more new executions
+                  </Text>
+                ) : null}
+              </View>
+            ) : null}
+          </>
         ) : null}
       </ContainedPanel>
 
-      <Pressable style={styles.primary} onPress={saveTransactions}>
-        <Text style={styles.primaryText}>Validate Broker Evidence</Text>
+      <Pressable
+        style={[
+          styles.primary,
+          uploadReview?.summary?.reviewRequiredCount > 0 &&
+            styles.primaryDisabled
+        ]}
+        disabled={
+          !uploadReview ||
+          uploadReview.summary.reviewRequiredCount > 0 ||
+          transactions.length === 0
+        }
+        onPress={saveTransactions}
+      >
+        <Text style={styles.primaryText}>
+          {uploadReview?.summary?.reviewRequiredCount > 0
+            ? "Resolve Review Items Before Upload"
+            : transactions.length > 0
+            ? `Add ${transactions.length} New Transaction${transactions.length === 1 ? "" : "s"}`
+            : "No New Transactions to Add"}
+        </Text>
       </Pressable>
 
       <Pressable
@@ -765,6 +902,11 @@ export default function TransactionsUpload() {
       >
         <Text style={styles.backText}>Back to Sync Center</Text>
       </Pressable>
+
+
+
+
+
     </ScrollView>
   );
 }
@@ -842,6 +984,47 @@ const styles = StyleSheet.create({
     color: "#cbd5e1",
     lineHeight: 21,
     marginTop: 8
+  },
+
+  reviewWarning: {
+    marginTop: 18,
+    padding: 14,
+    borderWidth: 1,
+    borderColor: "#92400e",
+    borderRadius: 14,
+    backgroundColor: "#451a03"
+  },
+
+  reviewWarningTitle: {
+    color: "#fbbf24",
+    fontWeight: "900",
+    marginBottom: 8
+  },
+
+  reviewItem: {
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: "#78350f"
+  },
+
+  reviewReason: {
+    color: "#fbbf24",
+    fontSize: 12,
+    marginTop: 4
+  },
+
+  reviewSectionTitle: {
+    color: "#67e8f9",
+    fontWeight: "900",
+    marginBottom: 8
+  },
+
+  newSection: {
+    marginTop: 20
+  },
+
+  primaryDisabled: {
+    opacity: 0.45
   },
   secondary: {
     marginTop: 16,

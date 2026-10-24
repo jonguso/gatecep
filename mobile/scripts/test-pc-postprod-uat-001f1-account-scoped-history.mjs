@@ -57,7 +57,7 @@ console.log(
 );
 
 console.log(
-  "PASS — save contract replaces one broker-account bucket."
+  "PASS — save contract preserves one broker-account history and appends only new executions."
 );
 
 console.log(

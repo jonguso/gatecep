@@ -214,60 +214,89 @@ assert(
 );
 
 console.log();
-console.log("----- AUTHORITATIVE REPLACEMENT SEMANTICS -----");
+console.log("----- APPEND-ONLY TRANSACTION HISTORY SEMANTICS -----");
 
-for (const [name, source] of transactionFiles) {
-  const replacementWrites = occurrences(
-    source,
-    'userSetItem("transactionHistory", JSON.stringify(verified))'
-  );
+const transactionStore = read(
+  "src/features/trading/brokerTransactionHistoryEvidenceStore.js"
+);
 
-  assert(
-    replacementWrites === 1,
-    `${name}: verified transactionHistory is replaced exactly once`
-  );
+assert(
+  transactionStore.includes(
+    "Historical transaction evidence is append-only during upload."
+  ),
+  "Canonical transaction-history store declares append-only upload semantics"
+);
 
-  const unverifiedWrites = occurrences(
-    source,
-    'userSetItem("unverifiedTransactionHistory", JSON.stringify(unverified))'
-  );
+assert(
+  transactionStore.includes(
+    "Once an Exchange Order No exists for this broker account"
+  ),
+  "Canonical transaction-history store preserves immutable Exchange Order identity"
+);
 
-  assert(
-    unverifiedWrites === 1,
-    `${name}: unverified transaction set is replaced exactly once`
-  );
+assert(
+  transactionStore.includes(
+    "updatedExistingCount: 0"
+  ),
+  "Transaction-history upload reports zero existing-row updates"
+);
 
-  assert(
-    !source.includes(
-      'userGetItem("transactionHistory"'
-    ),
-    `${name}: upload path does not read old transactionHistory for append/merge`
-  );
+assert(
+  transactionStore.includes(
+    "deletedCount: 0"
+  ),
+  "Transaction-history upload reports zero historical deletions"
+);
 
-  assert(
-    !source.includes(
-      'JSON.parse(await userGetItem("transactionHistory"'
-    ),
-    `${name}: old imported evidence is not merged into the new upload`
-  );
+assert(
+  transactionsUpload.includes(
+    "saveBrokerTransactionHistoryEvidence"
+  ),
+  "Transactions Upload: REAL broker upload delegates persistence to canonical transaction-history store"
+);
 
-  const rebuildInvocations = occurrences(
-    source,
+assert(
+  transactionsUpload.includes(
+    "partitionHistoricalBrokerExecutionEvidence"
+  ),
+  "Transactions Upload: REAL broker evidence is classified before canonical append"
+);
+
+assert(
+  occurrences(
+    transactionsUpload,
     "await rebuildCanonicalPortfolioLedger()"
-  );
+  ) === 1,
+  "Transactions Upload: canonical portfolio ledger rebuild executes exactly once"
+);
 
-  assert(
-    rebuildInvocations === 1,
-    `${name}: canonical portfolio ledger rebuild executes exactly once`
-  );
+assert(
+  transactionImport.includes(
+    "Broker transaction files must be uploaded from Portfolio Sync Center after selecting the exact broker account."
+  ),
+  "Transaction Import: broker files are redirected to the canonical broker-evidence flow"
+);
 
-  assert(
-    source.includes(
-      "partitionBrokerExecutionEvidence"
-    ),
-    `${name}: broker evidence is classified before replacement`
-  );
-}
+assert(
+  transactionImport.includes(
+    '"manualTransactionNotes"'
+  ),
+  "Transaction Import: manual entries persist only as manualTransactionNotes"
+);
+
+assert(
+  transactionImport.includes(
+    "canAffectRealPortfolio: false"
+  ),
+  "Transaction Import: manual notes cannot affect the REAL portfolio"
+);
+
+assert(
+  !transactionImport.includes(
+    "saveBrokerTransactionHistoryEvidence"
+  ),
+  "Transaction Import: manual-note screen cannot persist canonical REAL broker evidence"
+);
 
 console.log();
 console.log("----- ACCOUNTING BOUNDARY SOURCE CONTRACT -----");
@@ -302,11 +331,11 @@ console.log("----- RESULT -----");
 
 if (process.exitCode) {
   console.error(
-    "PC-031A21 AUTHORITATIVE REPLACEMENT + CROSS-PLATFORM CONTRACT FAILED"
+    "PC-031A21 APPEND-ONLY HISTORY + CROSS-PLATFORM CONTRACT FAILED"
   );
   process.exit(process.exitCode);
 }
 
 console.log(
-  "PASS: PC-031A21 authoritative replacement + cross-platform upload contract."
+  "PASS: PC-031A21 append-only transaction history + cross-platform upload contract."
 );

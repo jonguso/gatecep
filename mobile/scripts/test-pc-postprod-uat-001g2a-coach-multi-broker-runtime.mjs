@@ -46,6 +46,8 @@ function execution({
   return {
     fillReference: reference,
     brokerReference: reference,
+    exchangeOrderNo: reference,
+    totalTradedQuantity: quantity,
     brokerAccountKey: accountKey,
     broker: "ABC",
     symbol,
@@ -114,7 +116,11 @@ try {
 
   let coachHistory = loadCoachTradeHistory();
 
-  assert.equal(coachHistory.length, 2);
+  assert.equal(
+    coachHistory.length,
+    2,
+    "initial Coach G history must contain A-old and B exactly once"
+  );
 
   assert.deepEqual(
     new Set(
@@ -129,7 +135,7 @@ try {
     "PASS — Coach G sees verified executions from A and B with account provenance."
   );
 
-  console.log("TEST 2 — replace A without double-learning A-old");
+  console.log("TEST 2 — append new A execution without double-learning A-old");
 
   await saveBrokerTransactionHistoryEvidence({
     brokerAccountKey: ACCOUNT_A,
@@ -152,8 +158,8 @@ try {
     coachHistory.filter(
       (row) => row.brokerReference === "A-OLD"
     ).length,
-    0,
-    "A-old must disappear after account-scoped replacement"
+    1,
+    "A-old must remain after append-only account upload"
   );
 
   assert.equal(
@@ -169,13 +175,17 @@ try {
       (row) => row.brokerReference === "B-001"
     ).length,
     1,
-    "B must survive replacement of A"
+    "B must survive append to A"
   );
 
-  assert.equal(coachHistory.length, 2);
+  assert.equal(
+    coachHistory.length,
+    3,
+    "append-only Coach G history must contain A-old, A-new, and B"
+  );
 
   console.log(
-    "PASS — replacing A removes A-old, retains A-new exactly once, and preserves B."
+    "PASS — appending A preserves A-old, adds A-new exactly once, and preserves B."
   );
 
   console.log("TEST 3 — rejected execution cannot enter Coach G");
@@ -272,7 +282,11 @@ try {
     false
   );
 
-  assert.equal(coachHistory.length, 2);
+  assert.equal(
+    coachHistory.length,
+    3,
+    "unverified evidence must not alter the three verified append-only executions"
+  );
 
   console.log(
     "PASS — unverified/manual evidence is absent from Coach G REAL behavior."

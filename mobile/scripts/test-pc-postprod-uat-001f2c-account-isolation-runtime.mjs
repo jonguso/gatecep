@@ -31,6 +31,7 @@ const ACCOUNT_B = "ABC|ACC-B";
 
 function fill({
   fillReference,
+  exchangeOrderNo = fillReference,
   symbol = "PORT",
   quantity = 1,
   price = 120,
@@ -38,6 +39,8 @@ function fill({
 }) {
   return {
     fillReference,
+    exchangeOrderNo,
+    totalTradedQuantity: quantity,
     symbol,
     side: "BUY",
     quantity,
@@ -97,7 +100,11 @@ try {
     await loadBrokerTransactionHistoryEvidence(ACCOUNT_A);
 
   assert.equal(accountA.ready, true);
-  assert.equal(accountA.verified.length, 2);
+  assert.equal(
+    accountA.verified.length,
+    1,
+    "same Exchange Order identity must be stored only once"
+  );
 
   let combined =
     await loadCombinedBrokerTransactionHistoryEvidence();
@@ -144,8 +151,8 @@ try {
 
   assert.equal(
     accountA.verified.length,
-    2,
-    "saving B must preserve raw A bucket"
+    1,
+    "saving B must preserve deduplicated A history"
   );
 
   assert.equal(accountB.verified.length, 1);
@@ -180,8 +187,8 @@ try {
   );
 
   // ----------------------------------------------------------
-  // Replace only A.
-  // B must remain exactly intact.
+  // Append one new execution to A.
+  // Existing A history and B must remain exactly intact.
   // ----------------------------------------------------------
 
   await saveBrokerTransactionHistoryEvidence({
@@ -193,7 +200,7 @@ try {
         price: 122.00
       })
     ],
-    fileName: "account-a-replacement.csv",
+    fileName: "account-a-append.csv",
     source: "001F2C_TEST"
   });
 
@@ -203,16 +210,28 @@ try {
   accountB =
     await loadBrokerTransactionHistoryEvidence(ACCOUNT_B);
 
-  assert.equal(accountA.verified.length, 1);
   assert.equal(
-    accountA.verified[0].fillReference,
-    "FILL-002"
+    accountA.verified.length,
+    2,
+    "append to A must preserve FILL-001 and add FILL-002"
+  );
+  assert.deepEqual(
+    new Set(
+      accountA.verified.map(
+        (row) => row.fillReference
+      )
+    ),
+    new Set([
+      "FILL-001",
+      "FILL-002"
+    ]),
+    "append-only A history must preserve FILL-001 and add FILL-002"
   );
 
   assert.equal(
     accountB.verified.length,
     1,
-    "replacing A must not remove B"
+    "appending A must not remove B"
   );
 
   assert.equal(
@@ -249,8 +268,8 @@ try {
         row.brokerAccountKey === ACCOUNT_A &&
         row.fillReference === "FILL-001"
     ).length,
-    0,
-    "old A evidence must be replaced"
+    1,
+    "old A evidence must remain after append-only upload"
   );
 
   const legacy =
@@ -270,14 +289,14 @@ try {
   );
 
   // ----------------------------------------------------------
-  // Compatibility projection must contain A2 + B1 + legacy.
+  // Compatibility projection must contain A1 + A2 + B1 + legacy.
   // ----------------------------------------------------------
 
   const projected = JSON.parse(
     storage.get("transactionHistory")
   );
 
-  assert.equal(projected.length, 3);
+  assert.equal(projected.length, 4);
 
   assert.equal(
     projected.filter(
@@ -286,6 +305,16 @@ try {
         row.fillReference === "FILL-002"
     ).length,
     1
+  );
+
+  assert.equal(
+    projected.filter(
+      (row) =>
+        row.brokerAccountKey === ACCOUNT_A &&
+        row.fillReference === "FILL-001"
+    ).length,
+    1,
+    "compatibility projection must preserve prior A execution"
   );
 
   assert.equal(
@@ -316,13 +345,13 @@ try {
     "PASS — same-account duplicate collapses in combined evidence."
   );
   console.log(
-    "PASS — replacing A preserves B and removes only prior A evidence."
+    "PASS — appending A preserves both prior A evidence and B."
   );
   console.log(
     "PASS — legacy evidence remains explicitly unscoped."
   );
   console.log(
-    "PASS — compatibility projection contains A replacement + B + legacy."
+    "PASS — compatibility projection contains A history + B + legacy."
   );
 } finally {
   __resetBrokerTransactionHistoryStorageLoaderForTests();

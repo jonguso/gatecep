@@ -318,7 +318,7 @@ export default function PortfolioSyncCenter() {
       <DeveloperIdentifier>PC-030M3A</DeveloperIdentifier>
       <MobileHeader
         title="Sync & Reconcile"
-        subtitle="Verify the broker account, preview its current records, then confirm one authoritative replacement."
+        subtitle="Verify the broker account and review each evidence type before reconciling REAL portfolio data."
         onBack={() => router.replace("/portfolio-hub")}
         actionLabel="History"
         onAction={() => router.push("/broker-sync-history")}
@@ -338,7 +338,7 @@ export default function PortfolioSyncCenter() {
         tone={evidenceReady ? "success" : "warning"}
         title={evidenceReady ? "Broker evidence complete" : "Broker evidence required"}
         message={evidenceReady
-          ? "Portfolio valuation and cash statement are available. Confirm once to replace the REAL snapshot. Transaction history is optional supporting evidence."
+          ? "Portfolio valuation and cash statement are available. Confirm once to replace the REAL snapshot. Transaction History is optional append-only supporting evidence."
           : "Current portfolio valuation and cash/ledger statement are required. Transaction history is optional supporting evidence."}
       />
 

@@ -9,14 +9,91 @@ function parseArray(raw) {
   try { const value = JSON.parse(raw); return Array.isArray(value) ? value : []; } catch { return []; }
 }
 
+function hasExplicitHistoricalExecutionClassification(
+  row = {}
+) {
+  return (
+    typeof row.historicalExecutionState === "string" &&
+    row.historicalExecutionState.trim().length > 0 &&
+    typeof row.executionConfirmed === "boolean" &&
+    typeof row.fifoEligible === "boolean" &&
+    typeof row.canAffectFifo === "boolean"
+  );
+}
+
 export function isCompletedLotExecution(row = {}) {
-  const status = String(row.status || row.orderStatus || "").trim().toUpperCase();
-  return ["FULLY TRADED", "FILLED", "COMPLETED", "SETTLED"].some((accepted) => status.includes(accepted))
+  /*
+   * Classified historical broker evidence has already passed
+   * the authoritative historical execution policy:
+   *
+   *   Total Traded Quantity proves execution.
+   *   fifoEligible / canAffectFifo prove FIFO readiness.
+   *
+   * Order Status is descriptive for this evidence and must not
+   * re-gate an execution that the historical policy classified
+   * as FIFO-ready.
+   */
+  if (
+    hasExplicitHistoricalExecutionClassification(row)
+  ) {
+    return (
+      row.executionConfirmed === true &&
+      row.historicalExecutionState === "EXECUTED_READY" &&
+      row.fifoEligible === true &&
+      row.canAffectFifo === true
+    );
+  }
+
+  /*
+   * Legacy/live compatibility:
+   *
+   * Evidence without the explicit historical classification
+   * shape retains the pre-existing status-driven completion
+   * predicate.
+   */
+  const status =
+    String(
+      row.status ||
+      row.orderStatus ||
+      ""
+    )
+      .trim()
+      .toUpperCase();
+
+  return [
+    "FULLY TRADED",
+    "PARTIALLY TRADED",
+    "FILLED",
+    "COMPLETED",
+    "SETTLED"
+  ].some(
+    (accepted) =>
+      status.includes(accepted)
+  )
     && String(row.symbol || "").trim()
-    && ["BUY", "SELL", "B", "S"].includes(String(row.side || row.type || "").toUpperCase())
-    && Number(row.quantity || row.filledQuantity || row.tradedQuantity) > 0
-    && Number(row.price || row.averagePrice || row.executionPrice) > 0
-    && String(row.executionDate || row.date || row.createdAt || "").trim();
+    && ["BUY", "SELL", "B", "S"].includes(
+      String(
+        row.side ||
+        row.type ||
+        ""
+      ).toUpperCase()
+    )
+    && Number(
+      row.quantity ||
+      row.filledQuantity ||
+      row.tradedQuantity
+    ) > 0
+    && Number(
+      row.price ||
+      row.averagePrice ||
+      row.executionPrice
+    ) > 0
+    && String(
+      row.executionDate ||
+      row.date ||
+      row.createdAt ||
+      ""
+    ).trim();
 }
 
 export async function loadBrokerLotHistoryEvidence({
@@ -45,7 +122,12 @@ export async function loadBrokerLotHistoryEvidence({
 
   const records =
     combined
-      .filter(isCompletedLotExecution)
+      .filter(
+      (row) =>
+        row?.canAffectFifo !== false &&
+        row?.fifoEligible !== false
+    )
+    .filter(isCompletedLotExecution)
       .filter((row) => {
         const accountKey = String(
           row?.brokerAccountKey ||
