@@ -137,9 +137,15 @@ check(
 );
 
 check(
-  "derives broker account key server-side",
+  "derives canonical Transaction History account key server-side",
   source.includes(
-    "`${brokerId}|${clientNumber}`"
+    "canonicalTransactionHistoryBroker"
+  ) &&
+  source.includes(
+    "`${canonicalTransactionHistoryBroker("
+  ) &&
+  source.includes(
+    ")}|${clientNumber}`"
   )
 );
 

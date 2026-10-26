@@ -52,7 +52,7 @@ function analyticalExclusionReasons(row = {}) {
   if (!(quantity > 0)) reasons.push("EXECUTED_QUANTITY_REQUIRED");
   if (!(price > 0)) reasons.push("EXECUTED_PRICE_REQUIRED");
   if (!date) reasons.push("EXECUTION_DATE_REQUIRED");
-  if (!["FULLY TRADED", "FILLED", "COMPLETED", "SETTLED"].some((accepted) => status.includes(accepted))) {
+  if (!["FULLY TRADED", "PARTIALLY TRADED", "FILLED", "COMPLETED", "SETTLED"].some((accepted) => status.includes(accepted))) {
     reasons.push(["REJECTED", "REFUSED", "CANCELLED", "CANCELED", "EXPIRED"].some((blocked) => status.includes(blocked))
       ? "TRADE_NOT_EXECUTED"
       : "COMPLETED_EXECUTION_STATUS_REQUIRED");

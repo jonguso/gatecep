@@ -108,6 +108,64 @@ function spreadsheetIdentity(
   const embedded =
     extractEmbeddedStatementIdentity(rows);
 
+  /*
+   * Transaction / order-history identity must follow the
+   * same field semantics as the proven investor upload path.
+   *
+   * For transaction evidence:
+   *   broker       = MEMBERCODE / BROKERCODE
+   *   client       = CLIENTCODE / CLIENTNUMBER
+   *   CDS account  = TRADINGACCOUNT / ACCOUNTNUMBER
+   *
+   * Do not reinterpret generic CDSNUMBER / CDSACCOUNT
+   * columns as the transaction trading-account field.
+   */
+  if (reportType === "transactions") {
+    const firstRow =
+      rows.find(
+        (row) =>
+          row &&
+          typeof row === "object" &&
+          Object.keys(row).length
+      ) || {};
+
+    const entries =
+      Object.entries(firstRow).reduce(
+        (result, [key, value]) => {
+          result[normalizeKey(key)] =
+            clean(value);
+
+          return result;
+        },
+        {}
+      );
+
+    return {
+      brokerId:
+        entries.MEMBERCODE ||
+        entries.BROKERCODE ||
+        null,
+
+      clientCode:
+        entries.CLIENTCODE ||
+        entries.CLIENTNUMBER ||
+        null,
+
+      tradingAccount:
+        entries.TRADINGACCOUNT ||
+        entries.ACCOUNTNUMBER ||
+        null,
+
+      clientName:
+        entries.CLIENTNAME ||
+        entries.ACCOUNTHOLDER ||
+        null,
+
+      source:
+        "TRANSACTION_COLUMNS"
+    };
+  }
+
   return {
     brokerId:
       first.brokerId || null,
@@ -126,9 +184,7 @@ function spreadsheetIdentity(
       first.clientName || null,
 
     source:
-      reportType === "transactions"
-        ? "TRANSACTION_COLUMNS"
-        : "SPREADSHEET_CONTENT"
+      "SPREADSHEET_CONTENT"
   };
 }
 

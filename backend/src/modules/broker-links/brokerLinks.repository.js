@@ -43,8 +43,49 @@
 import { v4 as uuid } from "uuid";
 import { pool } from "../../database/db.js";
 
-function normalizeBroker(value) {
-  return String(value || "GATECEP-DEMO").trim().toUpperCase();
+export function normalizeBroker(value) {
+  const raw =
+    String(value || "GATECEP-DEMO")
+      .trim()
+      .toUpperCase();
+
+  if (
+    raw === "ABC" ||
+    raw === "ABC CAPITAL"
+  ) {
+    return "ABC";
+  }
+
+  /*
+   * Preserve the existing server-side AIB identity.
+   * The current authoritative row is AIB-AXYS and
+   * must not be rewritten by this repair.
+   */
+  if (
+    raw === "AIB" ||
+    raw === "AIB AXYS" ||
+    raw === "AIB-AXYS"
+  ) {
+    return "AIB-AXYS";
+  }
+
+  return raw;
+}
+
+function requireIdentityText(
+  value,
+  label
+) {
+  const result =
+    String(value ?? "").trim();
+
+  if (!result) {
+    throw new Error(
+      `${label} is required.`
+    );
+  }
+
+  return result;
 }
 
 export async function getUserBrokerLinks(userId) {
@@ -83,10 +124,13 @@ export async function createBrokerLink(userId, payload = {}) {
       updated_at
     )
     VALUES ($1,$2,$3,$4,$5,'ACTIVE',NOW(),NOW())
-    ON CONFLICT (user_id, broker)
+    ON CONFLICT (
+      user_id,
+      broker,
+      client_number,
+      cds_number
+    )
     DO UPDATE SET
-      client_number = EXCLUDED.client_number,
-      cds_number = EXCLUDED.cds_number,
       status = 'ACTIVE',
       updated_at = NOW()
     RETURNING
@@ -102,9 +146,18 @@ export async function createBrokerLink(userId, payload = {}) {
     [
       uuid(),
       userId,
-      normalizeBroker(payload.broker || "GATECEP-DEMO"),
-      payload.clientNumber || "",
-      payload.cdsNumber || ""
+      normalizeBroker(
+        payload.broker ||
+        "GATECEP-DEMO"
+      ),
+      requireIdentityText(
+        payload.clientNumber,
+        "clientNumber"
+      ),
+      requireIdentityText(
+        payload.cdsNumber,
+        "cdsNumber"
+      )
     ]
   );
 

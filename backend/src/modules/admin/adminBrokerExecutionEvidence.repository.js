@@ -436,3 +436,88 @@ export async function createAdminBrokerExecutionEvidenceIfAbsent(
     result.rows[0]
   );
 }
+
+/*
+ * ADMIN-TXHIST scoped maintenance boundary.
+ *
+ * This operation is intentionally account-scoped.
+ * There is no unrestricted delete-all execution-evidence API.
+ *
+ * Required scope:
+ *   target user
+ *   broker link
+ *   canonical broker account key
+ *
+ * The caller is responsible for transaction-bound ownership
+ * validation before invoking this destructive operation.
+ */
+export async function deleteAdminBrokerExecutionEvidenceForAccount(
+  {
+    targetUserId,
+    brokerLinkId,
+    brokerAccountKey
+  },
+  queryable = pool
+) {
+  const db =
+    requireQueryable(queryable);
+
+  const target =
+    String(targetUserId || "").trim();
+
+  const brokerLink =
+    String(brokerLinkId || "").trim();
+
+  const accountKey =
+    String(brokerAccountKey || "").trim();
+
+  if (
+    !target ||
+    !brokerLink ||
+    !accountKey
+  ) {
+    throw new Error(
+      "Target user, broker link, and broker account key are required for scoped execution-history reset."
+    );
+  }
+
+  const result =
+    await db.query(
+      `
+        DELETE FROM
+          public.admin_broker_execution_evidence
+        WHERE
+          target_user_id = $1
+          AND broker_link_id = $2
+          AND broker_account_key = $3
+        RETURNING
+          id,
+          execution_identity,
+          source_file_sha256
+      `,
+      [
+        target,
+        brokerLink,
+        accountKey
+      ]
+    );
+
+  return {
+    deletedCount:
+      result.rowCount ?? result.rows.length,
+
+    deletedEvidence:
+      result.rows.map(
+        (row) => ({
+          id:
+            row.id,
+
+          executionIdentity:
+            row.execution_identity,
+
+          sourceFileSha256:
+            row.source_file_sha256
+        })
+      )
+  };
+}

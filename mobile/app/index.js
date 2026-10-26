@@ -13,6 +13,10 @@ import {
 } from "../src/features/auth/hooks/useAuth";
 
 import {
+  loadAdminOverview
+} from "../src/features/admin/api/adminApi";
+
+import {
   loadInvestorContext
 } from "../src/features/investor/investorContextStore";
 
@@ -26,11 +30,62 @@ import {
   restoreInvestorProfileFromCloud
 } from "../src/features/profile/api/investorProfileApi";
 
+import {
+  hydrateAuthenticatedInvestorTransactionHistory
+} from "../src/features/transactions/canonicalInvestorTransactionHistoryHydrationService";
+
 
 function delay(milliseconds) {
   return new Promise((resolve) => {
     setTimeout(resolve, milliseconds);
   });
+}
+
+async function hydrateInvestorHistoryBeforeDashboard() {
+  try {
+    const result =
+      await hydrateAuthenticatedInvestorTransactionHistory();
+
+    console.log(
+      "STARTUP CANONICAL TRANSACTION HISTORY HYDRATION:",
+      {
+        ok: result?.ok === true,
+        brokerLinkCount:
+          Number(result?.brokerLinkCount || 0),
+        hydratedCount:
+          Number(result?.hydratedCount || 0),
+        unavailableCount:
+          Number(result?.unavailableCount || 0),
+        failedCount:
+          Number(result?.failedCount || 0)
+      }
+    );
+
+    return result;
+  } catch (error) {
+    /*
+     * Canonical transaction history is server authority,
+     * while the investor's local history is a derived cache.
+     *
+     * A temporary hydration/network failure must not turn
+     * authenticated investor startup into a login failure.
+     * R44I/R44E also do not clear local history when canonical
+     * authority is unavailable.
+     */
+    console.warn(
+      "Canonical transaction history hydration deferred:",
+      error
+    );
+
+    return {
+      ok: false,
+      deferred: true,
+      error:
+        error instanceof Error
+          ? error.message
+          : String(error || "Unknown hydration error")
+    };
+  }
 }
 
 /*
@@ -65,7 +120,8 @@ export default function Index() {
   const {
     loading,
     isAuthenticated,
-    user
+    user,
+    accessToken
   } = useAuth();
 
   useEffect(() => {
@@ -82,6 +138,56 @@ export default function Index() {
         }
 
         return;
+      }
+
+      /*
+       * ADMIN-NAV-001B
+       *
+       * Administrative landing is determined only by
+       * the protected server Admin overview.
+       *
+       * Local/cached role data is never authoritative.
+       */
+      if (accessToken) {
+        try {
+          const adminOverview =
+            await loadAdminOverview(accessToken);
+
+          const serverVerifiedAdmin =
+            adminOverview?.admin === true &&
+            String(
+              adminOverview?.user?.role || ""
+            )
+              .trim()
+              .toUpperCase() === "ADMIN";
+
+          if (serverVerifiedAdmin) {
+            if (!cancelled) {
+              router.replace("/admin");
+            }
+
+            return;
+          }
+        } catch (adminAccessError) {
+          /*
+           * 401 means the authenticated server session
+           * is no longer valid.
+           *
+           * 403 is an authenticated non-Admin account
+           * and therefore continues through the normal
+           * investor restoration flow.
+           *
+           * Network/5xx failures never promote a user
+           * from local or cached role information.
+           */
+          if (adminAccessError?.status === 401) {
+            if (!cancelled) {
+              router.replace("/login");
+            }
+
+            return;
+          }
+        }
       }
 
       try {
@@ -171,6 +277,12 @@ export default function Index() {
           context?.profile?.onboardingCompleted === true;
 
         if (hasCompletedProfile) {
+          await hydrateInvestorHistoryBeforeDashboard();
+
+          if (cancelled) {
+            return;
+          }
+
           router.replace("/(tabs)/dashboard");
           return;
         }
@@ -185,6 +297,12 @@ export default function Index() {
             "Investor profile verification deferred:",
             cloudProfileState?.error
           );
+          await hydrateInvestorHistoryBeforeDashboard();
+
+          if (cancelled) {
+            return;
+          }
+
           router.replace("/(tabs)/dashboard");
           return;
         }
@@ -271,7 +389,13 @@ if (!hasName && cloudProfileState?.status === "MISSING") {
           return;
         }
 
-        router.replace("/(tabs)/dashboard");
+        await hydrateInvestorHistoryBeforeDashboard();
+
+          if (cancelled) {
+            return;
+          }
+
+          router.replace("/(tabs)/dashboard");
       } catch (error) {
         console.error(
           "Unable to restore GateCEP investor journey:",
@@ -296,7 +420,8 @@ if (!hasName && cloudProfileState?.status === "MISSING") {
   }, [
     loading,
     isAuthenticated,
-    user?.id
+    user?.id,
+    accessToken
   ]);
 
   return (

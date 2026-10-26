@@ -9,6 +9,27 @@ function normalizeIdentifier(value) {
     .toUpperCase();
 }
 
+const CDSC_MEMBER_CODE_TO_BROKER_ID =
+  Object.freeze({
+    B12: "AIB",
+    B14: "ABC"
+  });
+
+function normalizeEvidenceBroker(value) {
+  const normalized =
+    normalizeIdentifier(value);
+
+  const resolved =
+    CDSC_MEMBER_CODE_TO_BROKER_ID[
+      normalized
+    ] ||
+    normalized;
+
+  return resolved
+    ? normalizeBroker(resolved)
+    : "";
+}
+
 function comparison({
   expected,
   actual
@@ -98,7 +119,7 @@ export function verifyAdminReconciliationEvidenceIdentity({
           : "",
       actual:
         extractedBroker
-          ? normalizeBroker(
+          ? normalizeEvidenceBroker(
               extractedBroker
             )
           : ""
@@ -178,6 +199,13 @@ export function verifyAdminReconciliationEvidenceIdentity({
     missing.push("clientNumber");
   }
 
+  /*
+   * The selected server-side broker link is the account authority.
+   *
+   * Document CDS / trading-account identity is preferred corroborating
+   * evidence. The filename identifier is fallback evidence only when
+   * the document itself does not expose that identity.
+   */
   if (
     !persistedCdsNumber ||
     (
@@ -211,7 +239,15 @@ export function verifyAdminReconciliationEvidenceIdentity({
     mismatches.push("cdsNumber");
   }
 
+  /*
+   * Filename identity is fallback-only.
+   *
+   * If the document itself contains CDS / trading-account identity,
+   * that document identity is authoritative corroborating evidence
+   * and a filename mismatch must not independently reject it.
+   */
   if (
+    !cdsCheck.present &&
     fileCdsCheck.present &&
     !fileCdsCheck.matches
   ) {

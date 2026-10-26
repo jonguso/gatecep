@@ -32,11 +32,24 @@ import {
 } from "../src/features/broker-sync/brokerEvidenceIdentityService";
 import {
   loadBrokerTransactionHistoryEvidence,
+  resetBrokerTransactionHistoryEvidence,
   saveBrokerTransactionHistoryEvidence
 } from "../src/features/trading/brokerTransactionHistoryEvidenceStore";
 import {
   reviewBrokerTransactionUpload
 } from "../src/features/trading/brokerTransactionUploadReviewService";
+import {
+  appendCanonicalBrokerTransactionHistory,
+  resolveAndLoadCanonicalBrokerTransactionHistory
+} from "../src/features/transactions/api/transactionHistoryApi";
+import {
+  mapVerifiedHistoryBatchForServer
+} from "../src/features/transactions/api/transactionHistoryCanonicalMapper";
+import {
+  classifyCanonicalHistoryAuthority,
+  requireCanonicalAppendAuthority,
+  requireVerifiedAppendBatch
+} from "../src/features/transactions/transactionHistoryCanonicalPersistencePolicy";
 import { buildSyncStatus } from "../src/portfolio/syncStatus";
 import { rebuildCanonicalPortfolioLedger } from "../src/features/trading/canonicalPortfolioLedgerService";
 import {
@@ -187,19 +200,87 @@ const [evidenceInternalIdentity, setEvidenceInternalIdentity] = useState(null);
         );
       }
 
-      const existingEvidence =
-        await loadBrokerTransactionHistoryEvidence(
-          requestedBrokerAccountKey
+      /*
+       * R7O-R4E7R21A
+       *
+       * Canonical server Transaction History is the duplicate
+       * authority. Local Transaction History is only a cache.
+       *
+       * An established-but-empty canonical authority represents
+       * physical history deletion, including Admin Clear. In that
+       * state only the selected broker account's stale local cache
+       * is invalidated before duplicate review.
+       *
+       * A never-established authority is NOT proof of deletion and
+       * therefore must fail closed without erasing local evidence.
+       */
+
+      if (!selectedBrokerAccount) {
+        throw new Error(
+          "The selected broker account is not ready for canonical Transaction History review."
         );
+      }
+
+      const canonicalReviewResolution =
+        await resolveAndLoadCanonicalBrokerTransactionHistory({
+          brokerAccount:
+            selectedBrokerAccount,
+          brokerAccountKey:
+            requestedBrokerAccountKey
+        });
+
+      const canonicalReviewAuthority =
+        classifyCanonicalHistoryAuthority(
+          canonicalReviewResolution.canonical
+        );
+
+      if (
+        canonicalReviewAuthority.state ===
+        "AUTHORITY_NOT_ESTABLISHED"
+      ) {
+        throw new Error(
+          "Canonical Transaction History authority is not established for this broker account."
+        );
+      }
+
+      if (
+        canonicalReviewAuthority.state ===
+        "AUTHORITY_ESTABLISHED_EMPTY"
+      ) {
+        await resetBrokerTransactionHistoryEvidence({
+          brokerAccountKey:
+            requestedBrokerAccountKey
+        });
+      }
+
+      const canonicalExistingHistory =
+        Array.isArray(
+          canonicalReviewResolution
+            ?.canonical
+            ?.history
+        )
+          ? canonicalReviewResolution
+              .canonical
+              .history
+          : [];
 
       const review =
         reviewBrokerTransactionUpload({
           rawRows: rows,
-          brokerAccountKey: requestedBrokerAccountKey,
+          brokerAccountKey:
+            requestedBrokerAccountKey,
+
+          /*
+           * Canonical history is authoritative for immutable
+           * Exchange Order duplicate identity.
+           *
+           * Do not mix stale local cache rows back into this
+           * decision.
+           */
           existingVerified:
-            existingEvidence?.verified || [],
+            canonicalExistingHistory,
           existingUnverified:
-            existingEvidence?.unverified || []
+            []
         });
 
       setRawEvidenceRows(rows);
@@ -485,6 +566,86 @@ const [evidenceInternalIdentity, setEvidenceInternalIdentity] = useState(null);
 
     const needsPriceReview =
       historicalPartition.needsPrice;
+
+    /*
+     * R7O-R4E7R20
+     *
+     * Canonical Transaction History is authoritative.
+     *
+     * Persistence order:
+     *   1. Resolve authenticated server broker link.
+     *   2. Read canonical authority.
+     *   3. Require established append authority.
+     *   4. Map VERIFIED/FIFO-ready executions only.
+     *   5. Append to canonical server history.
+     *   6. Only after canonical success update local cache.
+     *
+     * Admin-clear local invalidation is intentionally NOT
+     * enabled in R20.
+     */
+
+    if (unverified.length > 0) {
+      throw new Error(
+        "Transaction History contains execution evidence that still requires review."
+      );
+    }
+
+    if (verified.length === 0) {
+      throw new Error(
+        "No verified completed broker executions are available for canonical Transaction History."
+      );
+    }
+
+    const canonicalResolution =
+      await resolveAndLoadCanonicalBrokerTransactionHistory({
+        account: selectedBrokerAccount,
+        brokerAccountKey:
+          identityResult.brokerAccountKey
+      });
+
+    const canonicalAuthority =
+      requireCanonicalAppendAuthority(
+        canonicalResolution.canonical
+      );
+
+    const canonicalExecutions =
+      mapVerifiedHistoryBatchForServer(
+        verified,
+        {
+          brokerAccountKey:
+            identityResult.brokerAccountKey,
+          sourceFileName:
+            selectedFile?.name || null
+        }
+      );
+
+    requireVerifiedAppendBatch(
+      canonicalExecutions
+    );
+
+    const canonicalAppendResult =
+      await appendCanonicalBrokerTransactionHistory({
+        brokerLinkId:
+          canonicalResolution.brokerLink.brokerLinkId,
+        observedGeneration:
+          canonicalAuthority.observedGeneration,
+        executions:
+          canonicalExecutions
+      });
+
+    if (
+      Number(
+        canonicalAppendResult.insertedCount
+      ) +
+        Number(
+          canonicalAppendResult.existingCount
+        ) !==
+      canonicalExecutions.length
+    ) {
+      throw new Error(
+        "Canonical Transaction History append did not account for every submitted execution."
+      );
+    }
 
     const savedEvidence =
       await saveBrokerTransactionHistoryEvidence({

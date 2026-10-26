@@ -7,6 +7,10 @@ import {
   getUserBrokerLinks
 } from "../broker-links/brokerLinks.repository.js";
 
+import {
+  canonicalTransactionHistoryBroker
+} from "../transaction-history/investorBrokerTransactionHistory.service.js";
+
 function serviceError(
   code,
   message,
@@ -171,7 +175,9 @@ export async function getAdminReconciliationBroker({
       clientNumber
     },
     brokerAccountKey:
-      `${brokerId}|${clientNumber}`
+      `${canonicalTransactionHistoryBroker(
+        brokerId
+      )}|${clientNumber}`
   };
 }
 
@@ -387,6 +393,8 @@ export async function lockAdminReconciliationBrokerContext(
       clientNumber
     },
     brokerAccountKey:
-      `${brokerId}|${clientNumber}`
+      `${canonicalTransactionHistoryBroker(
+        brokerId
+      )}|${clientNumber}`
   };
 }

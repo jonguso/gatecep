@@ -30,6 +30,7 @@ import {
   loadAdminTargetBrokerLinks,
   previewAdminReconciliationEvidence,
   previewAdminReconciliationExecutionEvidence,
+  appendAdminReconciliationTransactionHistory,
   commitAdminBrokerReconciliation
 } from "../src/features/admin/api/adminApi";
 
@@ -167,6 +168,21 @@ export default function AdminBrokerReconciliation() {
     previewingReportType,
     setPreviewingReportType
   ] = useState("");
+
+  const [
+    appendingTransactionHistory,
+    setAppendingTransactionHistory
+  ] = useState(false);
+
+  const [
+    transactionAppendError,
+    setTransactionAppendError
+  ] = useState("");
+
+  const [
+    transactionAppendResult,
+    setTransactionAppendResult
+  ] = useState(null);
 
   const [
     evidenceError,
@@ -324,6 +340,9 @@ export default function AdminBrokerReconciliation() {
         setCashPreview(null);
         setTransactionEvidenceFile(null);
         setTransactionPreview(null);
+        setAppendingTransactionHistory(false);
+        setTransactionAppendError("");
+        setTransactionAppendResult(null);
         setPreviewingReportType("");
         setEvidenceError("");
         setReconciliationReason("");
@@ -582,6 +601,8 @@ export default function AdminBrokerReconciliation() {
 
           setTransactionEvidenceFile(file);
           setTransactionPreview(null);
+          setTransactionAppendError("");
+          setTransactionAppendResult(null);
           setPreviewingReportType(
             "transactions"
           );
@@ -612,6 +633,112 @@ export default function AdminBrokerReconciliation() {
         accessToken,
         selectedTarget,
         selectedBroker
+      ]
+    );
+
+
+  const appendTransactionHistory =
+    useCallback(
+      async () => {
+        if (
+          !accessToken ||
+          !selectedTarget?.id ||
+          !selectedBroker?.id ||
+          !transactionEvidenceFile
+        ) {
+          setTransactionAppendError(
+            "Select an investor, broker, and transaction history file first."
+          );
+          return;
+        }
+
+        const reviewSummary =
+          transactionPreview
+            ?.transactionHistory
+            ?.reviewSummary;
+
+        const newCount =
+          Number(
+            reviewSummary?.newCount || 0
+          );
+
+        const reviewRequiredCount =
+          Number(
+            reviewSummary
+              ?.reviewRequiredCount || 0
+          );
+
+        if (reviewRequiredCount > 0) {
+          setTransactionAppendError(
+            "Transaction history contains executions that require review. No transactions were added."
+          );
+          return;
+        }
+
+        if (newCount < 1) {
+          setTransactionAppendError(
+            "There are no new verified transactions to add."
+          );
+          return;
+        }
+
+        if (appendingTransactionHistory) {
+          return;
+        }
+
+        setAppendingTransactionHistory(true);
+        setTransactionAppendError("");
+        setTransactionAppendResult(null);
+
+        try {
+          const result =
+            await appendAdminReconciliationTransactionHistory({
+              accessToken,
+              targetUserId:
+                selectedTarget.id,
+              brokerLinkId:
+                selectedBroker.id,
+              file:
+                transactionEvidenceFile
+            });
+
+          setTransactionAppendResult(result);
+
+          /*
+           * Re-preview the SAME file after append.
+           * The server reloads canonical history, so the
+           * newly-added rows must now classify EXISTING.
+           */
+          const refreshedPreview =
+            await previewAdminReconciliationExecutionEvidence({
+              accessToken,
+              targetUserId:
+                selectedTarget.id,
+              brokerLinkId:
+                selectedBroker.id,
+              file:
+                transactionEvidenceFile
+            });
+
+          setTransactionPreview(
+            refreshedPreview
+          );
+        } catch (appendError) {
+          setTransactionAppendError(
+            appendError?.message ||
+              "Transaction history could not be added for the investor."
+          );
+        } finally {
+          setAppendingTransactionHistory(false);
+        }
+      },
+      [
+        accessToken,
+        selectedTarget,
+        selectedBroker,
+        transactionEvidenceFile,
+        transactionPreview,
+        appendingTransactionHistory
       ]
     );
 
@@ -1253,117 +1380,7 @@ export default function AdminBrokerReconciliation() {
                 ) : null}
               </View>
 
-              <View style={styles.evidenceSlot}>
-                <Text style={styles.previewTitle}>
-                  Transaction / Lot History
-                </Text>
 
-                <Pressable
-                  accessibilityRole="button"
-                  testID="admin-reconciliation-preview-transactions"
-                  disabled={
-                    Boolean(previewingReportType)
-                  }
-                  onPress={
-                    pickAndPreviewTransactionHistory
-                  }
-                  style={[
-                    styles.secondaryButton,
-                    Boolean(
-                      previewingReportType
-                    ) &&
-                      styles.buttonDisabled
-                  ]}
-                >
-                  <Text style={styles.secondaryButtonText}>
-                    {previewingReportType ===
-                    "transactions"
-                      ? "Checking transaction history…"
-                      : "Choose transaction history"}
-                  </Text>
-                </Pressable>
-
-                {transactionEvidenceFile ? (
-                  <Text style={styles.fileText}>
-                    File:{" "}
-                    {transactionEvidenceFile.name ||
-                      "transaction-history"}
-                  </Text>
-                ) : null}
-
-                {transactionPreview ? (
-                  <View style={styles.previewCard}>
-                    <Text style={styles.previewText}>
-                      Report: Transaction / Lot History
-                    </Text>
-
-                    <Text style={styles.previewText}>
-                      Pages:{" "}
-                      {transactionPreview
-                        ?.transactionHistory
-                        ?.pageCount ?? 0}
-                    </Text>
-
-                    <Text style={styles.previewText}>
-                      Extracted rows:{" "}
-                      {transactionPreview
-                        ?.transactionHistory
-                        ?.rowCount ?? 0}
-                    </Text>
-
-                    <Text style={styles.previewText}>
-                      Broker identity:{" "}
-                      {normalize(
-                        transactionPreview
-                          ?.transactionHistory
-                          ?.identity
-                          ?.brokerId
-                      ) || "Unknown"}
-                    </Text>
-
-                    <Text style={styles.previewText}>
-                      Client:{" "}
-                      {normalize(
-                        transactionPreview
-                          ?.transactionHistory
-                          ?.identity
-                          ?.clientCode
-                      ) || "Unknown"}
-                    </Text>
-
-                    <Text style={styles.previewText}>
-                      Trading account:{" "}
-                      {normalize(
-                        transactionPreview
-                          ?.transactionHistory
-                          ?.identity
-                          ?.tradingAccount
-                      ) || "Unknown"}
-                    </Text>
-
-                    <Text
-                      style={
-                        transactionPreview
-                          ?.transactionHistory
-                          ?.portfolioReadyRows === 0
-                          ? styles.verifiedText
-                          : styles.identityBlockedText
-                      }
-                    >
-                      Portfolio-ready rows:{" "}
-                      {transactionPreview
-                        ?.transactionHistory
-                        ?.portfolioReadyRows ?? 0}
-                    </Text>
-
-                    <Text style={styles.previewDetail}>
-                      Preview only. Transaction history
-                      evidence does not change the real
-                      portfolio.
-                    </Text>
-                  </View>
-                ) : null}
-              </View>
 
               {previewingReportType ? (
                 <View style={styles.loadingRow}>
@@ -1394,10 +1411,11 @@ export default function AdminBrokerReconciliation() {
                 </Text>
 
                 <Text style={styles.commitDetail}>
-                  Only verified valuation and cash evidence
-                  will update this investor's real portfolio.
-                  Transaction / Lot History remains
-                  preview-only.
+                  Verified valuation and cash evidence
+                  update authoritative holdings and cash
+                  through this reconciliation. Transaction /
+                  Lot History is handled separately below
+                  and only appends server-verified executions.
                 </Text>
 
                 <Text style={styles.commitLabel}>
@@ -1544,6 +1562,273 @@ export default function AdminBrokerReconciliation() {
                 ) : null}
               </View>
 
+              <View style={styles.evidenceSlot}>
+                <Text style={styles.previewTitle}>
+                  Transaction / Lot History
+                </Text>
+
+                <Pressable
+                  accessibilityRole="button"
+                  testID="admin-reconciliation-preview-transactions"
+                  disabled={
+                    Boolean(previewingReportType)
+                  }
+                  onPress={
+                    pickAndPreviewTransactionHistory
+                  }
+                  style={[
+                    styles.secondaryButton,
+                    Boolean(
+                      previewingReportType
+                    ) &&
+                      styles.buttonDisabled
+                  ]}
+                >
+                  <Text style={styles.secondaryButtonText}>
+                    {previewingReportType ===
+                    "transactions"
+                      ? "Checking transaction history…"
+                      : "Choose transaction history"}
+                  </Text>
+                </Pressable>
+
+                {transactionEvidenceFile ? (
+                  <Text style={styles.fileText}>
+                    File:{" "}
+                    {transactionEvidenceFile.name ||
+                      "transaction-history"}
+                  </Text>
+                ) : null}
+
+                {transactionPreview ? (
+                  <View style={styles.previewCard}>
+                    <Text style={styles.previewText}>
+                      Report: Transaction / Lot History
+                    </Text>
+
+                    <Text style={styles.previewText}>
+                      Pages:{" "}
+                      {transactionPreview
+                        ?.transactionHistory
+                        ?.pageCount ?? 0}
+                    </Text>
+
+                    <Text style={styles.previewText}>
+                      Extracted rows:{" "}
+                      {transactionPreview
+                        ?.transactionHistory
+                        ?.rowCount ?? 0}
+                    </Text>
+
+                    <Text style={styles.previewText}>
+                      Broker identity:{" "}
+                      {normalize(
+                        transactionPreview
+                          ?.transactionHistory
+                          ?.identity
+                          ?.brokerId
+                      ) || "Unknown"}
+                    </Text>
+
+                    <Text style={styles.previewText}>
+                      Client:{" "}
+                      {normalize(
+                        transactionPreview
+                          ?.transactionHistory
+                          ?.identity
+                          ?.clientCode
+                      ) || "Unknown"}
+                    </Text>
+
+                    <Text style={styles.previewText}>
+                      Trading account:{" "}
+                      {normalize(
+                        transactionPreview
+                          ?.transactionHistory
+                          ?.identity
+                          ?.tradingAccount
+                      ) || "Unknown"}
+                    </Text>
+
+                    <Text
+                      style={
+                        transactionPreview
+                          ?.transactionHistory
+                          ?.portfolioReadyRows === 0
+                          ? styles.verifiedText
+                          : styles.identityBlockedText
+                      }
+                    >
+                      Portfolio-ready rows:{" "}
+                      {transactionPreview
+                        ?.transactionHistory
+                        ?.portfolioReadyRows ?? 0}
+                    </Text>
+
+                    <Text style={styles.previewText}>
+                      New executions:{" "}
+                      {transactionPreview
+                        ?.transactionHistory
+                        ?.reviewSummary
+                        ?.newCount ?? 0}
+                    </Text>
+
+                    <Text style={styles.previewText}>
+                      Already in history:{" "}
+                      {transactionPreview
+                        ?.transactionHistory
+                        ?.reviewSummary
+                        ?.existingCount ?? 0}
+                    </Text>
+
+                    <Text style={styles.previewText}>
+                      Needs review:{" "}
+                      {transactionPreview
+                        ?.transactionHistory
+                        ?.reviewSummary
+                        ?.reviewRequiredCount ?? 0}
+                    </Text>
+
+                    <Text style={styles.previewText}>
+                      Ignored / no execution:{" "}
+                      {transactionPreview
+                        ?.transactionHistory
+                        ?.reviewSummary
+                        ?.ignoredCount ?? 0}
+                    </Text>
+
+                    <Text style={styles.previewDetail}>
+                      Only server-verified NEW executions
+                      can be added. Existing and ignored
+                      rows are never modified or appended.
+                    </Text>
+
+                    {Number(
+                      transactionPreview
+                        ?.transactionHistory
+                        ?.reviewSummary
+                        ?.newCount || 0
+                    ) === 0 &&
+                    Number(
+                      transactionPreview
+                        ?.transactionHistory
+                        ?.reviewSummary
+                        ?.existingCount || 0
+                    ) > 0 &&
+                    Number(
+                      transactionPreview
+                        ?.transactionHistory
+                        ?.reviewSummary
+                        ?.reviewRequiredCount || 0
+                    ) === 0 ? (
+                      <Text
+                        style={styles.verifiedText}
+                        testID="admin-reconciliation-transactions-current"
+                      >
+                        All{" "}
+                        {transactionPreview
+                          ?.transactionHistory
+                          ?.reviewSummary
+                          ?.existingCount ?? 0}{" "}
+                        verified transactions are already in history.
+                      </Text>
+                    ) : (
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityState={{
+                        disabled:
+                          appendingTransactionHistory ||
+                          Number(
+                            transactionPreview
+                              ?.transactionHistory
+                              ?.reviewSummary
+                              ?.newCount || 0
+                          ) < 1 ||
+                          Number(
+                            transactionPreview
+                              ?.transactionHistory
+                              ?.reviewSummary
+                              ?.reviewRequiredCount || 0
+                          ) > 0
+                      }}
+                      testID="admin-reconciliation-add-transactions"
+                      disabled={
+                        appendingTransactionHistory ||
+                        Number(
+                          transactionPreview
+                            ?.transactionHistory
+                            ?.reviewSummary
+                            ?.newCount || 0
+                        ) < 1 ||
+                        Number(
+                          transactionPreview
+                            ?.transactionHistory
+                            ?.reviewSummary
+                            ?.reviewRequiredCount || 0
+                        ) > 0
+                      }
+                      onPress={
+                        appendTransactionHistory
+                      }
+                      style={[
+                        styles.commitButton,
+                        (
+                          appendingTransactionHistory ||
+                          Number(
+                            transactionPreview
+                              ?.transactionHistory
+                              ?.reviewSummary
+                              ?.newCount || 0
+                          ) < 1 ||
+                          Number(
+                            transactionPreview
+                              ?.transactionHistory
+                              ?.reviewSummary
+                              ?.reviewRequiredCount || 0
+                          ) > 0
+                        ) &&
+                          styles.buttonDisabled
+                      ]}
+                    >
+                      {appendingTransactionHistory ? (
+                        <ActivityIndicator />
+                      ) : (
+                        <Text style={styles.commitButtonText}>
+                          Add{" "}
+                          {transactionPreview
+                            ?.transactionHistory
+                            ?.reviewSummary
+                            ?.newCount ?? 0}{" "}
+                          Verified Transactions
+                        </Text>
+                      )}
+                    </Pressable>
+                    )}
+
+                    {transactionAppendError ? (
+                      <View style={styles.evidenceErrorCard}>
+                        <Text style={styles.evidenceErrorTitle}>
+                          Transaction history not added
+                        </Text>
+
+                        <Text style={styles.errorText}>
+                          {transactionAppendError}
+                        </Text>
+                      </View>
+                    ) : null}
+
+                    {transactionAppendResult ? (
+                      <Text style={styles.verifiedText}>
+                        Transaction history processed for
+                        the selected investor. The preview
+                        above has been refreshed against
+                        canonical history.
+                      </Text>
+                    ) : null}
+                  </View>
+                ) : null}
+              </View>
+
               <Text style={styles.readOnlyText}>
                 Until Confirm reconciliation succeeds,
                 evidence shown on this screen remains a
@@ -1560,7 +1845,74 @@ export default function AdminBrokerReconciliation() {
           )}
         </View>
       </ScrollView>
-    </MobileScreen>
+    
+      <View
+        style={{
+          marginTop: 14,
+          marginBottom: 14,
+          padding: 16,
+          borderRadius: 16,
+          borderWidth: 1,
+          borderColor: "rgba(245,158,11,.35)",
+          backgroundColor: "rgba(245,158,11,.08)"
+        }}
+        testID="admin-txhist-maintenance-entry"
+      >
+        <Text
+          style={{
+            color: "#fcd34d",
+            fontSize: 16,
+            fontWeight: "900"
+          }}
+        >
+          Transaction History Maintenance
+        </Text>
+
+        <Text
+          style={{
+            color: "#fde68a",
+            fontSize: 12,
+            lineHeight: 18,
+            marginTop: 7
+          }}
+        >
+          Generate and review a server-side broker
+          Transaction History backup before controlled
+          administrative recovery.
+        </Text>
+
+        <Pressable
+          accessibilityRole="button"
+          onPress={() =>
+            router.push(
+              "/admin-transaction-history-maintenance"
+            )
+          }
+          style={({ pressed }) => ({
+            minHeight: 46,
+            alignSelf: "flex-start",
+            justifyContent: "center",
+            marginTop: 13,
+            paddingHorizontal: 16,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: "#f59e0b",
+            opacity: pressed ? 0.75 : 1
+          })}
+          testID="open-admin-txhist-maintenance"
+        >
+          <Text
+            style={{
+              color: "#fcd34d",
+              fontWeight: "900"
+            }}
+          >
+            Open Maintenance
+          </Text>
+        </Pressable>
+      </View>
+
+</MobileScreen>
   );
 }
 

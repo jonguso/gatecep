@@ -50,6 +50,19 @@ import {
   commitAdminBrokerReconciliation
 } from "./adminReconciliationCommit.service.js";
 
+import {
+  appendAdminAssistedTransactionHistory
+} from "./adminAssistedTransactionHistoryAppend.service.js";
+
+import {
+  reviewAdminTransactionHistoryUpload,
+  mapAdminReviewedNewExecutionsForCanonicalAppend
+} from "./adminTransactionHistoryReview.service.js";
+
+import {
+  loadAuthenticatedInvestorTransactionHistory
+} from "../transaction-history/investorBrokerTransactionHistory.service.js";
+
 
 import fundamentalDocumentRetentionAdminRoutes from "../fundamental-evidence/fundamentalDocumentRetentionAdmin.route.js";
 
@@ -116,6 +129,14 @@ function reconciliationEvidenceUploadSingle(
     }
   );
 }
+
+import {
+  getAdminBrokerTransactionHistoryBackup
+} from "./adminBrokerTransactionHistoryBackup.service.js";
+
+import {
+  resetAdminBrokerTransactionHistory
+} from "./adminBrokerTransactionHistoryReset.service.js";
 
 router.get(
   "/overview",
@@ -343,6 +364,354 @@ router.post(
 );
 
 router.post(
+  "/reconciliation-targets/:userId/broker-links/:brokerLinkId/transaction-history-append",
+  authRequired,
+  requireAdmin,
+  reconciliationEvidenceUploadSingle,
+  async (req, res, next) => {
+    try {
+      /*
+       * Security boundary:
+       * the browser supplies the evidence file only.
+       *
+       * It does NOT supply:
+       * - target authority
+       * - broker account authority
+       * - canonical executions
+       * - NEW/EXISTING classification
+       * - observed generation
+       *
+       * All of those are resolved again by the server.
+       */
+      const context =
+        await getAdminReconciliationBroker({
+          targetUserId:
+            req.params.userId,
+
+          brokerLinkId:
+            req.params.brokerLinkId
+        });
+
+      if (!req.file) {
+        return res.status(400).json({
+          ok: false,
+          error:
+            "RECONCILIATION_EXECUTION_EVIDENCE_REQUIRED",
+          message:
+            "Transaction / Lot History evidence file is required."
+        });
+      }
+
+      const originalName =
+        String(
+          req.file.originalname || ""
+        );
+
+      const extension =
+        originalName
+          .toLowerCase()
+          .match(/\.[^.]+$/)?.[0] || "";
+
+      if (
+        extension !== ".pdf" &&
+        extension !== ".csv"
+      ) {
+        return res.status(415).json({
+          ok: false,
+          error:
+            "RECONCILIATION_HISTORY_FORMAT_UNSUPPORTED",
+          message:
+            "Transaction / Lot History must be PDF or CSV."
+        });
+      }
+
+      const extraction =
+        await extractAdminReconciliationEvidence({
+          buffer:
+            req.file.buffer,
+
+          fileName:
+            originalName,
+
+          mimeType:
+            req.file.mimetype,
+
+          reportType:
+            "transactions"
+        });
+
+      if (
+        !Array.isArray(extraction?.rows) ||
+        extraction.rows.length === 0
+      ) {
+        const error =
+          new Error(
+            "Transaction / Lot History contains no rows."
+          );
+
+        error.status = 422;
+        error.code =
+          "RECONCILIATION_HISTORY_EMPTY";
+
+        throw error;
+      }
+
+      const identityVerification =
+        verifyAdminReconciliationEvidenceIdentity({
+          broker:
+            context.broker,
+
+          extraction,
+
+          fileName:
+            originalName
+        });
+
+      if (
+        identityVerification
+          ?.identityVerified !== true
+      ) {
+        return res.status(409).json({
+          ok: false,
+          error:
+            "RECONCILIATION_EXECUTION_IDENTITY_MISMATCH",
+          message:
+            "Transaction / Lot History does not match the selected investor broker account."
+        });
+      }
+
+      const portfolioReadyRows =
+        extraction.rows.filter(
+          row =>
+            row[
+              "Can Affect Real Portfolio"
+            ] === true
+        ).length;
+
+      if (portfolioReadyRows !== 0) {
+        const error =
+          new Error(
+            "Transaction / Lot History unexpectedly contains portfolio-ready execution evidence."
+          );
+
+        error.status = 409;
+        error.code =
+          "RECONCILIATION_HISTORY_PORTFOLIO_READY_FORBIDDEN";
+
+        throw error;
+      }
+
+      /*
+       * Reload canonical history at append time.
+       *
+       * This deliberately does not trust the earlier
+       * preview. If another operation changed history
+       * after preview, this review sees the latest state.
+       */
+      const canonicalHistory =
+        await loadAuthenticatedInvestorTransactionHistory({
+          authenticatedUserId:
+            context.target.id,
+
+          brokerLinkId:
+            context.broker.id
+        });
+
+      if (
+        canonicalHistory
+          ?.authorityEstablished !== true
+      ) {
+        const error =
+          new Error(
+            "Canonical Transaction History authority has not been established for the selected investor broker account."
+          );
+
+        error.status = 409;
+        error.code =
+          "ADMIN_TRANSACTION_HISTORY_AUTHORITY_NOT_ESTABLISHED";
+
+        throw error;
+      }
+
+      const observedGeneration =
+        Number(
+          canonicalHistory
+            .currentGeneration
+        );
+
+      if (
+        !Number.isInteger(
+          observedGeneration
+        ) ||
+        observedGeneration < 1
+      ) {
+        const error =
+          new Error(
+            "Canonical Transaction History authority is invalid for the selected investor broker account."
+          );
+
+        error.status = 409;
+        error.code =
+          "ADMIN_TRANSACTION_HISTORY_AUTHORITY_INVALID";
+
+        throw error;
+      }
+
+      const review =
+        reviewAdminTransactionHistoryUpload({
+          rawRows:
+            extraction.rows,
+
+          brokerAccountKey:
+            context.brokerAccountKey,
+
+          existingCanonicalHistory:
+            canonicalHistory.history
+        });
+
+      if (
+        review.summary
+          .reviewRequiredCount > 0
+      ) {
+        const error =
+          new Error(
+            "Transaction / Lot History contains executions that require review. No transactions were added."
+          );
+
+        error.status = 409;
+        error.code =
+          "ADMIN_TRANSACTION_HISTORY_REVIEW_REQUIRED";
+
+        throw error;
+      }
+
+      /*
+       * A repeat upload is a successful no-op:
+       * all previously appended executions classify as
+       * EXISTING and nothing is sent to canonical append.
+       */
+      if (
+        review.summary.newCount === 0
+      ) {
+        return res.json({
+          ok: true,
+
+          noChange: true,
+
+          target:
+            context.target,
+
+          broker:
+            context.broker,
+
+          brokerAccountKey:
+            context.brokerAccountKey,
+
+          transactionHistory: {
+            fileName:
+              originalName,
+
+            rowCount:
+              extraction.rows.length,
+
+            canonicalCount:
+              canonicalHistory.count,
+
+            reviewSummary:
+              review.summary
+          },
+
+          assistedTransactionHistoryAppend:
+            null
+        });
+      }
+
+      const newExecutions =
+        mapAdminReviewedNewExecutionsForCanonicalAppend(
+          review.newRows,
+          {
+            brokerAccountKey:
+              context.brokerAccountKey,
+
+            sourceFileName:
+              originalName
+          }
+        );
+
+      /*
+       * R32 remains the canonical append/audit service.
+       * It independently reloads canonical authority and
+       * verifies observedGeneration before writing.
+       */
+      const result =
+        await appendAdminAssistedTransactionHistory({
+          actorUserId:
+            req.user.id,
+
+          targetUserId:
+            context.target.id,
+
+          brokerLinkId:
+            context.broker.id,
+
+          observedGeneration,
+
+          executions:
+            newExecutions,
+
+          sourceFileName:
+            originalName,
+
+          ticketReference:
+            req.body?.ticketReference
+        });
+
+      return res.json({
+        ok: true,
+        noChange: false,
+
+        transactionHistory: {
+          fileName:
+            originalName,
+
+          rowCount:
+            extraction.rows.length,
+
+          canonicalCountBefore:
+            canonicalHistory.count,
+
+          reviewSummary:
+            review.summary
+        },
+
+        assistedTransactionHistoryAppend:
+          result
+      });
+    } catch (error) {
+      const status =
+        Number.isInteger(error?.status)
+          ? error.status
+          : error?.code ===
+              "STALE_TRANSACTION_HISTORY_GENERATION"
+            ? 409
+            : 400;
+
+      return res
+        .status(status)
+        .json({
+          ok: false,
+          error:
+            error?.code ||
+            "ADMIN_ASSISTED_TRANSACTION_HISTORY_APPEND_REJECTED",
+          message:
+            error?.message ||
+            "Admin-assisted Transaction History upload was rejected."
+        });
+    }
+  }
+);
+
+router.post(
   "/reconciliation-targets/:userId/broker-links/:brokerLinkId/execution-evidence-preview",
   authRequired,
   requireAdmin,
@@ -418,52 +787,18 @@ router.post(
         throw error;
       }
 
-      const brokerIdentity =
-        extraction.identity || {};
-
-      const evidenceBroker =
-        normalizeBroker(
-          brokerIdentity.brokerId ||
-          brokerIdentity.broker
-        );
-
-      const selectedBroker =
-        normalizeBroker(
-          context.broker.broker
-        );
-
-      const evidenceClientNumber =
-        String(
-          brokerIdentity.clientCode || ""
-        ).trim();
-
-      const selectedClientNumber =
-        String(
-          context.broker.clientNumber || ""
-        ).trim();
-
-      const evidenceCdsNumber =
-        String(
-          brokerIdentity.tradingAccount || ""
-        ).trim();
-
-      const selectedCdsNumber =
-        String(
-          context.broker.cdsNumber || ""
-        ).trim();
+      const identityVerification =
+        verifyAdminReconciliationEvidenceIdentity({
+          broker:
+            context.broker,
+          extraction,
+          fileName:
+            originalName
+        });
 
       if (
-        !evidenceBroker ||
-        !selectedBroker ||
-        evidenceBroker !== selectedBroker ||
-        !evidenceClientNumber ||
-        !selectedClientNumber ||
-        evidenceClientNumber !==
-          selectedClientNumber ||
-        !evidenceCdsNumber ||
-        !selectedCdsNumber ||
-        evidenceCdsNumber !==
-          selectedCdsNumber
+        identityVerification
+          ?.identityVerified !== true
       ) {
         return res.status(409).json({
           ok: false,
@@ -500,6 +835,88 @@ router.post(
         throw error;
       }
 
+      /*
+       * The selected investor and broker link were resolved
+       * above by the server. Use that validated investor
+       * identity to read the same canonical Transaction
+       * History authority used by the investor upload path.
+       *
+       * Admin identity is the actor only; it must never
+       * become the owner of the investor's history.
+       */
+      const canonicalHistory =
+        await loadAuthenticatedInvestorTransactionHistory({
+          authenticatedUserId:
+            context.target.id,
+
+          brokerLinkId:
+            context.broker.id
+        });
+
+      if (
+        canonicalHistory
+          ?.authorityEstablished !== true
+      ) {
+        const error =
+          new Error(
+            "Canonical Transaction History authority has not been established for the selected investor broker account."
+          );
+
+        error.status = 409;
+        error.code =
+          "ADMIN_TRANSACTION_HISTORY_AUTHORITY_NOT_ESTABLISHED";
+
+        throw error;
+      }
+
+      const observedGeneration =
+        Number(
+          canonicalHistory
+            .currentGeneration
+        );
+
+      if (
+        !Number.isInteger(
+          observedGeneration
+        ) ||
+        observedGeneration < 1
+      ) {
+        const error =
+          new Error(
+            "Canonical Transaction History authority is invalid for the selected investor broker account."
+          );
+
+        error.status = 409;
+        error.code =
+          "ADMIN_TRANSACTION_HISTORY_AUTHORITY_INVALID";
+
+        throw error;
+      }
+
+      const review =
+        reviewAdminTransactionHistoryUpload({
+          rawRows:
+            extraction.rows,
+
+          brokerAccountKey:
+            context.brokerAccountKey,
+
+          existingCanonicalHistory:
+            canonicalHistory.history
+        });
+
+      const newExecutions =
+        mapAdminReviewedNewExecutionsForCanonicalAppend(
+          review.newRows,
+          {
+            brokerAccountKey:
+              context.brokerAccountKey,
+
+            sourceFileName:
+              originalName
+          }
+        );
+
       return res.json({
         ok: true,
         previewOnly: true,
@@ -530,11 +947,32 @@ router.post(
           identity:
             extraction.identity,
 
-          portfolioReadyRows
+          portfolioReadyRows,
+
+          canonicalCount:
+            canonicalHistory.count,
+
+          observedGeneration,
+
+          reviewSummary:
+            review.summary
         },
 
-        rows:
-          extraction.rows
+        review: {
+          summary:
+            review.summary,
+
+          newExecutions,
+
+          existingCount:
+            review.existingRows.length,
+
+          reviewRequiredCount:
+            review.reviewRows.length,
+
+          ignoredCount:
+            review.ignoredRows.length
+        }
       });
     } catch (error) {
       const status =
@@ -1126,6 +1564,125 @@ router.post(
  */
 router.use(
   fundamentalDocumentRetentionAdminRoutes
+);
+
+
+/*
+ * ADMIN-TXHIST permanent maintenance boundary.
+ *
+ * Authentication and Admin authorization are enforced explicitly
+ * on each maintenance route. Actor identity always comes from
+ * req.user and never from browser input.
+ */
+router.get(
+  "/reconciliation-targets/:userId/broker-links/:brokerLinkId/transaction-history/backup",
+  authRequired,
+  requireAdmin,
+  async (req, res, next) => {
+    try {
+      const result =
+        await getAdminBrokerTransactionHistoryBackup({
+          actorUserId:
+            req.user?.id,
+
+          targetUserId:
+            req.params.userId,
+
+          brokerLinkId:
+            req.params.brokerLinkId
+        });
+
+      return res.status(200).json({
+        ok: true,
+        backup: result
+      });
+    } catch (error) {
+      return next(error);
+    }
+  }
+);
+
+router.post(
+  "/reconciliation-targets/:userId/broker-links/:brokerLinkId/transaction-history/reset",
+  authRequired,
+  requireAdmin,
+  async (req, res, next) => {
+    try {
+      const result =
+        await resetAdminBrokerTransactionHistory({
+          actorUserId:
+            req.user?.id,
+
+          targetUserId:
+            req.params.userId,
+
+          brokerLinkId:
+            req.params.brokerLinkId,
+
+          observedGeneration:
+            req.body?.observedGeneration,
+
+          physicalExecutionCount:
+            req.body?.physicalExecutionCount,
+
+          historyStateSha256:
+            req.body?.historyStateSha256,
+
+          reason:
+            req.body?.reason,
+
+          confirmed:
+            req.body?.confirmed
+        });
+
+      return res.status(200).json({
+        ok: true,
+
+        reset: {
+          targetUserId:
+            result.targetUserId,
+
+          brokerLinkId:
+            result.brokerLinkId,
+
+          brokerAccountKey:
+            result.brokerAccountKey,
+
+          resetModel:
+            result.resetModel,
+
+          validationOnly:
+            result.validationOnly,
+
+          currentGeneration:
+            result.currentGeneration,
+
+          physicalExecutionCount:
+            result.physicalExecutionCount,
+
+          historyStateSha256:
+            result.historyStateSha256,
+
+          deletedCount:
+            result.deletedCount,
+
+          physicalExecutionCountAfter:
+            result.physicalExecutionCountAfter,
+
+          physicalDelete:
+            result.physicalDelete,
+
+          generationsDeleted:
+            result.generationsDeleted,
+
+          auditEventId:
+            result.auditEventId
+        }
+      });
+    } catch (error) {
+      return next(error);
+    }
+  }
 );
 
 export default router;

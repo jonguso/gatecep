@@ -444,6 +444,123 @@ export async function previewAdminReconciliationExecutionEvidence({
 }
 
 
+
+export async function appendAdminReconciliationTransactionHistory({
+  accessToken,
+  targetUserId,
+  brokerLinkId,
+  file,
+  ticketReference = ""
+}) {
+  if (!accessToken) {
+    throw new Error(
+      "Authentication is required."
+    );
+  }
+
+  const normalizedTargetUserId =
+    String(targetUserId || "").trim();
+
+  const normalizedBrokerLinkId =
+    String(brokerLinkId || "").trim();
+
+  if (!normalizedTargetUserId) {
+    throw new Error(
+      "Reconciliation target user is required."
+    );
+  }
+
+  if (!normalizedBrokerLinkId) {
+    throw new Error(
+      "Target broker account is required."
+    );
+  }
+
+  if (!file) {
+    throw new Error(
+      "Transaction history file is required."
+    );
+  }
+
+  const formData =
+    new FormData();
+
+  if (
+    Platform.OS === "web" &&
+    file.file
+  ) {
+    formData.append(
+      "file",
+      file.file,
+      file.name ||
+        "transaction-history"
+    );
+  } else {
+    formData.append(
+      "file",
+      {
+        uri: file.uri,
+        name:
+          file.name ||
+          "transaction-history",
+        type:
+          file.mimeType ||
+          "application/octet-stream"
+      }
+    );
+  }
+
+  const normalizedTicketReference =
+    String(ticketReference || "").trim();
+
+  if (normalizedTicketReference) {
+    formData.append(
+      "ticketReference",
+      normalizedTicketReference
+    );
+  }
+
+  const response =
+    await fetch(
+      `${API_URL}/admin/reconciliation-targets/${encodeURIComponent(
+        normalizedTargetUserId
+      )}/broker-links/${encodeURIComponent(
+        normalizedBrokerLinkId
+      )}/transaction-history-append`,
+      {
+        method: "POST",
+        headers: {
+          Authorization:
+            `Bearer ${accessToken}`
+        },
+        body: formData
+      }
+    );
+
+  const data =
+    await readJsonResponse(response);
+
+  if (!response.ok || !data.ok) {
+    const error =
+      new Error(
+        data.message ||
+        data.error ||
+        "Transaction history could not be added for the investor."
+      );
+
+    error.status =
+      response.status;
+
+    error.code =
+      data.error || null;
+
+    throw error;
+  }
+
+  return data;
+}
+
+
 export async function previewAdminReconciliationEvidence({
   accessToken,
   targetUserId,
@@ -738,4 +855,238 @@ export async function commitAdminBrokerReconciliation({
   }
 
   return data.reconciliation || null;
+}
+
+
+/*
+ * ============================================================
+ * ADMIN-TXHIST-004C2A
+ * ADMIN TRANSACTION HISTORY MAINTENANCE — READ-ONLY BACKUP
+ * ============================================================
+ *
+ * This API is deliberately non-destructive.
+ *
+ * targetUserId and brokerLinkId identify the selected Admin
+ * reconciliation context. The backend derives brokerAccountKey.
+ * ============================================================
+ */
+
+export async function resetAdminBrokerTransactionHistory({
+  accessToken,
+  targetUserId,
+  brokerLinkId,
+  observedGeneration,
+  physicalExecutionCount,
+  historyStateSha256,
+  reason,
+  confirmed
+}) {
+  if (!accessToken) {
+    throw new Error(
+      "Authentication is required."
+    );
+  }
+
+  const targetId =
+    String(targetUserId || "").trim();
+
+  const brokerId =
+    String(brokerLinkId || "").trim();
+
+  const generation =
+    Number(observedGeneration);
+
+  const expectedPhysicalExecutionCount =
+    Number(physicalExecutionCount);
+
+  const expectedHistoryStateSha256 =
+    String(historyStateSha256 || "")
+      .trim()
+      .toLowerCase();
+
+  const normalizedReason =
+    String(reason || "").trim();
+
+  if (!targetId) {
+    throw new Error(
+      "Reconciliation target user is required."
+    );
+  }
+
+  if (!brokerId) {
+    throw new Error(
+      "Target broker account is required."
+    );
+  }
+
+  if (
+    !Number.isInteger(generation) ||
+    generation < 1
+  ) {
+    throw new Error(
+      "Observed Transaction History generation is required."
+    );
+  }
+
+  if (
+    !Number.isInteger(
+      expectedPhysicalExecutionCount
+    ) ||
+    expectedPhysicalExecutionCount < 0
+  ) {
+    throw new Error(
+      "Physical Transaction History execution count is required."
+    );
+  }
+
+  if (
+    !/^[a-f0-9]{64}$/.test(
+      expectedHistoryStateSha256
+    )
+  ) {
+    throw new Error(
+      "Transaction History state SHA-256 is required."
+    );
+  }
+
+  if (normalizedReason.length < 3) {
+    throw new Error(
+      "A reset reason is required."
+    );
+  }
+
+  if (confirmed !== true) {
+    throw new Error(
+      "Explicit reset confirmation is required."
+    );
+  }
+
+  const response =
+    await fetch(
+      `${API_URL}/admin/reconciliation-targets/${encodeURIComponent(
+        targetId
+      )}/broker-links/${encodeURIComponent(
+        brokerId
+      )}/transaction-history/reset`,
+      {
+        method:
+          "POST",
+
+        headers: {
+          Authorization:
+            `Bearer ${accessToken}`,
+
+          "Content-Type":
+            "application/json"
+        },
+
+        body:
+          JSON.stringify({
+            observedGeneration:
+              generation,
+
+            physicalExecutionCount:
+              expectedPhysicalExecutionCount,
+
+            historyStateSha256:
+              expectedHistoryStateSha256,
+
+            reason:
+              normalizedReason,
+
+            confirmed:
+              true
+          })
+      }
+    );
+
+  const data =
+    await readJsonResponse(response);
+
+  if (!response.ok || !data.ok) {
+    const error =
+      new Error(
+        data.message ||
+        data.error ||
+        "Transaction History reset could not be completed."
+      );
+
+    error.status =
+      response.status;
+
+    error.code =
+      data.error || null;
+
+    throw error;
+  }
+
+  return data.reset || null;
+}
+
+
+export async function loadAdminBrokerTransactionHistoryBackup({
+  accessToken,
+  targetUserId,
+  brokerLinkId
+}) {
+  if (!accessToken) {
+    throw new Error(
+      "Authentication is required."
+    );
+  }
+
+  const targetId =
+    String(targetUserId || "").trim();
+
+  const brokerId =
+    String(brokerLinkId || "").trim();
+
+  if (!targetId) {
+    throw new Error(
+      "Reconciliation target user is required."
+    );
+  }
+
+  if (!brokerId) {
+    throw new Error(
+      "Target broker account is required."
+    );
+  }
+
+  const response =
+    await fetch(
+      `${API_URL}/admin/reconciliation-targets/${encodeURIComponent(
+        targetId
+      )}/broker-links/${encodeURIComponent(
+        brokerId
+      )}/transaction-history/backup`,
+      {
+        headers: {
+          Authorization:
+            `Bearer ${accessToken}`
+        }
+      }
+    );
+
+  const data =
+    await readJsonResponse(response);
+
+  if (!response.ok || !data.ok) {
+    const error =
+      new Error(
+        data.message ||
+        data.error ||
+        "Transaction History backup could not be generated."
+      );
+
+    error.status =
+      response.status;
+
+    error.code =
+      data.error || null;
+
+    throw error;
+  }
+
+  return data.backup || null;
 }

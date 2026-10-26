@@ -94,7 +94,7 @@ export function reconstructFifoAcquisitionLots({ transactions = [], symbol, curr
   const rows = (Array.isArray(transactions) ? transactions : [])
     .filter((row) => {
       const status = String(row.status || row.orderStatus || "").toUpperCase();
-      return String(row.symbol || "").toUpperCase() === target && ["FULLY TRADED", "FILLED", "COMPLETED", "SETTLED"].some((accepted) => status.includes(accepted));
+      return String(row.symbol || "").toUpperCase() === target && ["FULLY TRADED", "PARTIALLY TRADED", "FILLED", "COMPLETED", "SETTLED"].some((accepted) => status.includes(accepted));
     })
     .sort((a, b) => dateKey(a.executionDate || a.date || a.createdAt) - dateKey(b.executionDate || b.date || b.createdAt));
   const lots = [];

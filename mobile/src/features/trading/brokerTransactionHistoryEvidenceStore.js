@@ -881,6 +881,188 @@ export async function resetBrokerTransactionHistoryEvidence({
 
 
 
+/*
+ * R7O-R4E7R44C
+ *
+ * Replace one broker account's DERIVED local transaction-history
+ * cache from authenticated canonical server history.
+ *
+ * Canonical server history is authoritative.
+ *
+ * Unlike normal file upload, hydration is intentionally replacement
+ * semantics for the selected broker account. This is required so an
+ * Admin physical clear, or another-device canonical change, removes
+ * stale local evidence on the investor device.
+ *
+ * Other broker-account buckets and genuinely unscoped legacy evidence
+ * remain untouched.
+ */
+export async function replaceBrokerTransactionHistoryEvidenceFromCanonical({
+  brokerAccountKey,
+  verified = [],
+  source = "CANONICAL_SERVER_HISTORY"
+} = {}) {
+  const {
+    userGetItem,
+    userSetItem
+  } = await loadUserStorage();
+
+  const normalizedAccountKey =
+    upper(brokerAccountKey);
+
+  if (!normalizedAccountKey) {
+    throw new Error(
+      "Broker account is required before canonical transaction history can be hydrated."
+    );
+  }
+
+  const incoming =
+    Array.isArray(verified)
+      ? verified
+      : [];
+
+  const canonicalVerified = [];
+  const identities = new Set();
+
+  for (const rawRow of incoming) {
+    const row = {
+      ...rawRow,
+      brokerAccountKey:
+        normalizedAccountKey
+    };
+
+    if (!isImportableExecution(row)) {
+      throw new Error(
+        "Canonical transaction history contains an invalid execution."
+      );
+    }
+
+    const identity =
+      immutableTransactionIdentity(
+        row,
+        normalizedAccountKey
+      );
+
+    if (!identity) {
+      throw new Error(
+        "Canonical transaction history contains an execution without immutable identity."
+      );
+    }
+
+    if (identities.has(identity)) {
+      throw new Error(
+        "Canonical transaction history contains a duplicate immutable execution identity."
+      );
+    }
+
+    identities.add(identity);
+    canonicalVerified.push(row);
+  }
+
+  const registry =
+    await loadBrokerTransactionHistoryRegistry();
+
+  const existingBucket =
+    registry[normalizedAccountKey] || null;
+
+  const nextRegistry = {
+    ...registry
+  };
+
+  if (canonicalVerified.length > 0) {
+    nextRegistry[normalizedAccountKey] = {
+      brokerAccountKey:
+        normalizedAccountKey,
+      verified:
+        canonicalVerified,
+      unverified: [],
+      updatedAt:
+        new Date().toISOString(),
+      fileName: null,
+      source
+    };
+  } else {
+    delete nextRegistry[normalizedAccountKey];
+  }
+
+  const legacyVerified =
+    parseArray(
+      await userGetItem(
+        LEGACY_VERIFIED_KEY
+      )
+    ).filter(
+      (row) =>
+        !clean(row?.brokerAccountKey)
+    );
+
+  const legacyUnverified =
+    parseArray(
+      await userGetItem(
+        LEGACY_UNVERIFIED_KEY
+      )
+    ).filter(
+      (row) =>
+        !clean(row?.brokerAccountKey)
+    );
+
+  const scopedBuckets =
+    Object.values(nextRegistry);
+
+  const combinedVerified =
+    dedupeRows([
+      ...scopedBuckets.flatMap(
+        (bucket) =>
+          Array.isArray(bucket?.verified)
+            ? bucket.verified
+            : []
+      ),
+      ...legacyVerified
+    ]);
+
+  const combinedUnverified =
+    dedupeRows([
+      ...scopedBuckets.flatMap(
+        (bucket) =>
+          Array.isArray(bucket?.unverified)
+            ? bucket.unverified
+            : []
+      ),
+      ...legacyUnverified
+    ]);
+
+  await userSetItem(
+    REGISTRY_KEY,
+    JSON.stringify(nextRegistry)
+  );
+
+  await userSetItem(
+    LEGACY_VERIFIED_KEY,
+    JSON.stringify(combinedVerified)
+  );
+
+  await userSetItem(
+    LEGACY_UNVERIFIED_KEY,
+    JSON.stringify(combinedUnverified)
+  );
+
+  return {
+    brokerAccountKey:
+      normalizedAccountKey,
+    previousVerifiedCount:
+      Array.isArray(existingBucket?.verified)
+        ? existingBucket.verified.length
+        : 0,
+    canonicalVerifiedCount:
+      canonicalVerified.length,
+    removedAccountBucket:
+      canonicalVerified.length === 0,
+    verified:
+      canonicalVerified,
+    source
+  };
+}
+
+
 export async function saveBrokerTransactionHistoryEvidence({
   brokerAccountKey,
   verified = [],
