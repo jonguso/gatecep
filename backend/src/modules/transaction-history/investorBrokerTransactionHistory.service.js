@@ -334,6 +334,116 @@ function normalizeHistoricalExecution(
 }
 
 export async function
+initializeAuthenticatedInvestorTransactionHistoryAuthority(
+  input = {},
+  deps = {}
+) {
+  const authenticatedUserId =
+    requireText(
+      input.authenticatedUserId,
+      "authenticatedUserId"
+    );
+
+  const brokerLinkId =
+    requireText(
+      input.brokerLinkId,
+      "brokerLinkId"
+    );
+
+  const database =
+    deps.pool || pool;
+
+  const getOrCreateAuthority =
+    deps.getOrCreateAuthority ||
+    getOrCreateInvestorBrokerTransactionHistoryAuthority;
+
+  const client =
+    await database.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    /*
+     * Security boundary:
+     *
+     * The authenticated investor is authoritative.
+     * brokerLinkId is accepted only as a selector for an
+     * account owned by that authenticated investor.
+     *
+     * brokerAccountKey is never accepted from the client
+     * as canonical identity.
+     */
+    const brokerLink =
+      await loadOwnedBrokerLink(
+        {
+          authenticatedUserId,
+          brokerLinkId
+        },
+        client
+      );
+
+    /*
+     * This repository primitive is intentionally idempotent:
+     *
+     * - no authority -> establish generation 1
+     * - existing authority -> return existing generation
+     *
+     * It must not append history and must not advance an
+     * already-established generation.
+     */
+    const authority =
+      await getOrCreateAuthority(
+        {
+          userId:
+            authenticatedUserId,
+          brokerLinkId:
+            brokerLink.id,
+          brokerAccountKey:
+            brokerLink.brokerAccountKey
+        },
+        client
+      );
+
+    const currentGeneration =
+      Number(
+        authority?.currentGeneration
+      );
+
+    if (
+      !Number.isInteger(currentGeneration) ||
+      currentGeneration < 1
+    ) {
+      throw new Error(
+        "Transaction History authority generation is invalid."
+      );
+    }
+
+    await client.query("COMMIT");
+
+    return {
+      brokerLinkId:
+        brokerLink.id,
+
+      brokerAccountKey:
+        brokerLink.brokerAccountKey,
+
+      authorityEstablished:
+        true,
+
+      currentGeneration
+    };
+  } catch (error) {
+    try {
+      await client.query("ROLLBACK");
+    } catch {}
+
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
+export async function
 appendAuthenticatedInvestorTransactionHistory(
   input = {},
   deps = {}

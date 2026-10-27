@@ -374,6 +374,131 @@ function cleanAppendValue(value) {
  * transactionHistoryCanonicalMapper.js
  */
 
+export async function initializeCanonicalBrokerTransactionHistoryAuthority({
+  brokerLinkId
+} = {}) {
+  const resolvedBrokerLinkId =
+    cleanAppendValue(
+      brokerLinkId
+    );
+
+  if (!resolvedBrokerLinkId) {
+    throw new Error(
+      "brokerLinkId is required."
+    );
+  }
+
+  const accessToken =
+    await getStoredAccessToken();
+
+  if (!accessToken) {
+    throw new Error(
+      "Authentication is required to initialize Transaction History authority."
+    );
+  }
+
+  const response =
+    await fetch(
+      `${API_URL}/transactions/history/authority`,
+      {
+        method:
+          "POST",
+
+        headers: {
+          Authorization:
+            `Bearer ${accessToken}`,
+
+          "Content-Type":
+            "application/json"
+        },
+
+        body:
+          JSON.stringify({
+            brokerLinkId:
+              resolvedBrokerLinkId
+          })
+      }
+    );
+
+  let payload = null;
+
+  try {
+    payload =
+      await response.json();
+  } catch {
+    payload = null;
+  }
+
+  if (
+    !response.ok ||
+    payload?.ok !== true
+  ) {
+    const error =
+      new Error(
+        payload?.error ||
+        "Canonical Transaction History authority initialization failed."
+      );
+
+    error.code =
+      payload?.code ||
+      "TRANSACTION_HISTORY_AUTHORITY_INITIALIZATION_FAILED";
+
+    error.status =
+      response.status;
+
+    throw error;
+  }
+
+  if (
+    cleanAppendValue(
+      payload?.brokerLinkId
+    ) !==
+    resolvedBrokerLinkId
+  ) {
+    throw new Error(
+      "Transaction History authority returned a different brokerLinkId."
+    );
+  }
+
+  if (
+    payload?.authorityEstablished !==
+    true
+  ) {
+    throw new Error(
+      "Transaction History authority was not established."
+    );
+  }
+
+  const currentGeneration =
+    Number(
+      payload?.currentGeneration
+    );
+
+  if (
+    !Number.isInteger(currentGeneration) ||
+    currentGeneration < 1
+  ) {
+    throw new Error(
+      "Transaction History authority returned an invalid generation."
+    );
+  }
+
+  return {
+    brokerLinkId:
+      resolvedBrokerLinkId,
+
+    brokerAccountKey:
+      upper(
+        payload?.brokerAccountKey
+      ) || null,
+
+    authorityEstablished:
+      true,
+
+    currentGeneration
+  };
+}
+
 export async function appendCanonicalBrokerTransactionHistory({
   brokerLinkId,
   observedGeneration,

@@ -12,6 +12,12 @@ import { loadBrokerAccounts } from "../src/services/brokers/brokerAccountStore";
 import { buildBrokerAccountKey } from "../src/features/broker-sync/brokerEvidenceIdentityService";
 import { hasConnectedRealBrokerAccount } from "../src/features/broker-sync/brokerCashEvidencePolicy";
 import { loadBrokerLotHistoryEvidence } from "../src/features/trading/brokerLotHistoryEvidenceService";
+import {
+  resolveAndLoadCanonicalBrokerTransactionHistory
+} from "../src/features/transactions/api/transactionHistoryApi";
+import {
+  hydrateCanonicalBrokerTransactionHistory
+} from "../src/features/transactions/canonicalTransactionHistoryHydrationService";
 import ActiveUserBanner from "../src/components/ActiveUserBanner";
 import {
   CollapsibleSection,
@@ -33,13 +39,132 @@ const SELECTED_EVIDENCE_ACCOUNT_KEY =
 // PC-030M20AV3D RESPONSIVE CALIBRATION
 export default function PortfolioSyncCenter() {
   const { width: av3dWidth } = useWindowDimensions();
-  const [state, setState] = useState({ loading: true, saving: false, error: "", holdingsCount: 0, portfolioValue: 0, cash: 0, source: "", mirror: null, preview: null, connectedRealBroker: false, lotHistory: null });
+  const [state, setState] = useState({
+    loading: true,
+    saving: false,
+    error: "",
+    holdingsCount: 0,
+    portfolioValue: 0,
+    cash: 0,
+    source: "",
+    mirror: null,
+    preview: null,
+    connectedRealBroker: false,
+    lotHistory: null,
+    canonicalTransactionHistory: null
+  });
   const [brokerAccounts, setBrokerAccounts] = useState([]);
   const [selectedBrokerAccountId, setSelectedBrokerAccountId] = useState(null);
   const [confirmVisible, setConfirmVisible] = useState(false);
   const [activePanel, setActivePanel] = useState("evidence");
 
   useFocusEffect(useCallback(() => { load(); }, []));
+
+  async function loadCanonicalTransactionHistoryState({
+    account,
+    brokerAccountKey
+  } = {}) {
+    if (
+      !account ||
+      !brokerAccountKey
+    ) {
+      return {
+        lotHistory: null,
+        canonicalTransactionHistory: {
+          checked: false,
+          authorityEstablished: false,
+          canonicalCount: 0,
+          error: ""
+        }
+      };
+    }
+
+    let localLotHistory =
+      await loadBrokerLotHistoryEvidence({
+        brokerAccountKey
+      });
+
+    try {
+      const resolution =
+        await resolveAndLoadCanonicalBrokerTransactionHistory({
+          brokerAccount: account,
+          brokerAccountKey
+        });
+
+      const canonical =
+        resolution?.canonical || null;
+
+      if (
+        canonical?.authorityEstablished !== true
+      ) {
+        /*
+         * Legacy/device-local evidence may remain physically present,
+         * but it is not canonical READY evidence.
+         */
+        return {
+          lotHistory:
+            localLotHistory,
+          canonicalTransactionHistory: {
+            checked: true,
+            authorityEstablished: false,
+            canonicalCount: 0,
+            currentGeneration: null,
+            error: ""
+          }
+        };
+      }
+
+      await hydrateCanonicalBrokerTransactionHistory({
+        brokerLinkId:
+          resolution.brokerLink.brokerLinkId
+      });
+
+      /*
+       * Re-read the derived local view only AFTER canonical hydration.
+       * Established-empty authority therefore removes stale local
+       * history through the existing canonical replacement primitive.
+       */
+      localLotHistory =
+        await loadBrokerLotHistoryEvidence({
+          brokerAccountKey
+        });
+
+      return {
+        lotHistory:
+          localLotHistory,
+        canonicalTransactionHistory: {
+          checked: true,
+          authorityEstablished: true,
+          canonicalCount:
+            Number(canonical.count) || 0,
+          currentGeneration:
+            canonical.currentGeneration ?? null,
+          error: ""
+        }
+      };
+    } catch (error) {
+      /*
+       * Network/canonical-read failure must never promote local
+       * transaction evidence to canonical READY.
+       *
+       * Preserve the local cache so temporary connectivity problems
+       * do not destroy evidence.
+       */
+      return {
+        lotHistory:
+          localLotHistory,
+        canonicalTransactionHistory: {
+          checked: false,
+          authorityEstablished: false,
+          canonicalCount: 0,
+          currentGeneration: null,
+          error:
+            error?.message ||
+            "Unable to verify canonical Transaction History."
+        }
+      };
+    }
+  }
 
   async function load() {
     try {
@@ -87,17 +212,43 @@ export default function PortfolioSyncCenter() {
           })
         : null;
 
-      const [mirror, preview, lotHistory] = selectedAccountKey
+      const [
+        mirror,
+        preview,
+        transactionHistoryState
+      ] = selectedAccountKey
         ? await Promise.all([
-            loadBrokerAccountEvidence(selectedAccountKey),
+            loadBrokerAccountEvidence(
+              selectedAccountKey
+            ),
             loadAuthoritativeBrokerSnapshotPreview({
-              brokerAccountKey: selectedAccountKey
+              brokerAccountKey:
+                selectedAccountKey
             }),
-            loadBrokerLotHistoryEvidence({
-              brokerAccountKey: selectedAccountKey
+            loadCanonicalTransactionHistoryState({
+              account:
+                selectedAccount,
+              brokerAccountKey:
+                selectedAccountKey
             })
           ])
-        : [null, null, null];
+        : [
+            null,
+            null,
+            {
+              lotHistory: null,
+              canonicalTransactionHistory: null
+            }
+          ];
+
+      const lotHistory =
+        transactionHistoryState?.lotHistory ||
+        null;
+
+      const canonicalTransactionHistory =
+        transactionHistoryState
+          ?.canonicalTransactionHistory ||
+        null;
 
       const holdings = portfolio?.holdings || [];
 
@@ -116,7 +267,8 @@ export default function PortfolioSyncCenter() {
         mirror,
         preview,
         connectedRealBroker: hasConnectedRealBrokerAccount(loadedBrokerAccounts),
-        lotHistory
+        lotHistory,
+        canonicalTransactionHistory
       });
     } catch (error) {
       setState((current) => ({ ...current, loading: false, error: error?.message || "Unable to load the REAL synchronization state." }));
@@ -143,6 +295,14 @@ export default function PortfolioSyncCenter() {
   const cashEvidenceReady = state.mirror?.cashEvidenceAvailable === true;
   const transactionHistoryReady =
     Boolean(selectedBrokerAccountKey) &&
+    state.canonicalTransactionHistory
+      ?.checked === true &&
+    state.canonicalTransactionHistory
+      ?.authorityEstablished === true &&
+    Number(
+      state.canonicalTransactionHistory
+        ?.canonicalCount || 0
+    ) > 0 &&
     state.lotHistory?.ready === true;
   const evidenceReady =
     valuationReady &&
@@ -166,13 +326,22 @@ export default function PortfolioSyncCenter() {
     );
 
     try {
-      const [mirror, preview, lotHistory] = await Promise.all([
-        loadBrokerAccountEvidence(accountKey),
+      const [
+        mirror,
+        preview,
+        transactionHistoryState
+      ] = await Promise.all([
+        loadBrokerAccountEvidence(
+          accountKey
+        ),
         loadAuthoritativeBrokerSnapshotPreview({
-          brokerAccountKey: accountKey
+          brokerAccountKey:
+            accountKey
         }),
-        loadBrokerLotHistoryEvidence({
-          brokerAccountKey: accountKey
+        loadCanonicalTransactionHistoryState({
+          account,
+          brokerAccountKey:
+            accountKey
         })
       ]);
 
@@ -180,7 +349,13 @@ export default function PortfolioSyncCenter() {
         ...current,
         mirror,
         preview,
-        lotHistory,
+        lotHistory:
+          transactionHistoryState?.lotHistory ||
+          null,
+        canonicalTransactionHistory:
+          transactionHistoryState
+            ?.canonicalTransactionHistory ||
+          null,
         error: ""
       }));
     } catch (error) {
@@ -189,6 +364,7 @@ export default function PortfolioSyncCenter() {
         mirror: null,
         preview: null,
         lotHistory: null,
+        canonicalTransactionHistory: null,
         error:
           error?.message ||
           "Unable to load evidence for the selected broker account."

@@ -40,6 +40,7 @@ import {
 } from "../src/features/trading/brokerTransactionUploadReviewService";
 import {
   appendCanonicalBrokerTransactionHistory,
+  initializeCanonicalBrokerTransactionHistoryAuthority,
   resolveAndLoadCanonicalBrokerTransactionHistory
 } from "../src/features/transactions/api/transactionHistoryApi";
 import {
@@ -596,12 +597,45 @@ const [evidenceInternalIdentity, setEvidenceInternalIdentity] = useState(null);
       );
     }
 
-    const canonicalResolution =
+    let canonicalResolution =
       await resolveAndLoadCanonicalBrokerTransactionHistory({
         account: selectedBrokerAccount,
         brokerAccountKey:
           identityResult.brokerAccountKey
       });
+
+    /*
+     * POSTPROD-SYNC-002F2D2
+     *
+     * First-use canonical authority handshake.
+     *
+     * A normal canonical read remains non-mutating.
+     * If this authenticated broker account has never established
+     * Transaction History authority, explicitly initialize it.
+     *
+     * The initializer response is NOT trusted as append authority.
+     * Canonical authority is re-read from the server and then passed
+     * through the existing requireCanonicalAppendAuthority guard.
+     *
+     * Existing established authority skips initialization entirely.
+     */
+    if (
+      canonicalResolution.canonical
+        ?.authorityEstablished !== true
+    ) {
+      await initializeCanonicalBrokerTransactionHistoryAuthority({
+        brokerLinkId:
+          canonicalResolution.brokerLink.brokerLinkId
+      });
+
+      canonicalResolution =
+        await resolveAndLoadCanonicalBrokerTransactionHistory({
+          account:
+            selectedBrokerAccount,
+          brokerAccountKey:
+            identityResult.brokerAccountKey
+        });
+    }
 
     const canonicalAuthority =
       requireCanonicalAppendAuthority(

@@ -1,6 +1,9 @@
 import express from "express";
 import { authRequired } from "../../middleware/authRequired.js";
 import {
+  investorTransactionHistoryAuthorityHandler
+} from "../transaction-history/investorBrokerTransactionHistoryAuthority.controller.js";
+import {
   investorTransactionHistoryBootstrapHandler
 } from "../transaction-history/investorBrokerTransactionHistoryBootstrap.controller.js";
 import {
@@ -78,6 +81,12 @@ router.post(
   "/history",
   authRequired,
   investorTransactionHistoryAppendHandler
+);
+
+router.post(
+  "/history/authority",
+  authRequired,
+  investorTransactionHistoryAuthorityHandler
 );
 
 router.post(
