@@ -222,7 +222,7 @@ const [evidenceInternalIdentity, setEvidenceInternalIdentity] = useState(null);
         );
       }
 
-      const canonicalReviewResolution =
+      let canonicalReviewResolution =
         await resolveAndLoadCanonicalBrokerTransactionHistory({
           brokerAccount:
             selectedBrokerAccount,
@@ -230,18 +230,54 @@ const [evidenceInternalIdentity, setEvidenceInternalIdentity] = useState(null);
             requestedBrokerAccountKey
         });
 
-      const canonicalReviewAuthority =
+      let canonicalReviewAuthority =
         classifyCanonicalHistoryAuthority(
           canonicalReviewResolution.canonical
         );
 
+      /*
+       * POSTPROD-SYNC-002F2D6D
+       *
+       * First-use review handshake.
+       *
+       * File review occurs before the explicit append action.
+       * Therefore a never-established canonical authority must be
+       * initialized here before duplicate review can proceed.
+       *
+       * Authority initialization does NOT append transaction history.
+       * The canonical state is re-read and reclassified before any
+       * local cache invalidation or broker execution review.
+       */
       if (
         canonicalReviewAuthority.state ===
         "AUTHORITY_NOT_ESTABLISHED"
       ) {
-        throw new Error(
-          "Canonical Transaction History authority is not established for this broker account."
-        );
+        await initializeCanonicalBrokerTransactionHistoryAuthority({
+          brokerLinkId:
+            canonicalReviewResolution.brokerLink.brokerLinkId
+        });
+
+        canonicalReviewResolution =
+          await resolveAndLoadCanonicalBrokerTransactionHistory({
+            brokerAccount:
+              selectedBrokerAccount,
+            brokerAccountKey:
+              requestedBrokerAccountKey
+          });
+
+        canonicalReviewAuthority =
+          classifyCanonicalHistoryAuthority(
+            canonicalReviewResolution.canonical
+          );
+
+        if (
+          canonicalReviewAuthority.state ===
+          "AUTHORITY_NOT_ESTABLISHED"
+        ) {
+          throw new Error(
+            "Canonical Transaction History authority is not established after first-use initialization."
+          );
+        }
       }
 
       if (
