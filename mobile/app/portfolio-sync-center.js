@@ -4,6 +4,7 @@ import { Modal, Pressable, StyleSheet, Text, View,
 } from "react-native";
 import { router, useFocusEffect } from "expo-router";
 
+import { getUserBrokers } from "../src/features/brokers/api/userBrokerApi";
 import { userGetItem, userSetItem, userRemoveItem } from "../src/auth/userStorage";
 import { loadUnifiedPortfolio } from "../src/portfolio/unifiedPortfolioApi";
 import { loadBrokerAccountEvidence } from "../src/features/broker-sync/brokerAccountEvidenceStore";
@@ -180,12 +181,137 @@ export default function PortfolioSyncCenter() {
         userGetItem(SELECTED_EVIDENCE_ACCOUNT_KEY)
       ]);
 
-      const connectedAccounts = loadedBrokerAccounts.filter(
-        (account) =>
-          account?.connected === true &&
-          account?.status !== "INACTIVE" &&
-          account?.brokerId !== "GATECEP_PRACTICE"
-      );
+      const localConnectedAccounts =
+        loadedBrokerAccounts.filter(
+          (account) =>
+            account?.connected === true &&
+            account?.status !== "INACTIVE" &&
+            account?.brokerId !== "GATECEP_PRACTICE"
+        );
+
+      let connectedAccounts =
+        localConnectedAccounts;
+
+      /*
+       * POSTPROD-MOBILE-003C2
+       *
+       * A previously established investor may sign in on a
+       * new device before that device has a local brokerAccounts
+       * profile.
+       *
+       * Prefer the normal local profile when it exists.
+       * Otherwise expose authenticated ACTIVE CLOUD broker links
+       * to Sync Center in memory only.
+       *
+       * This does not create/save a broker account and does not
+       * modify canonical server history.
+       */
+      if (connectedAccounts.length === 0) {
+        try {
+          const cloudResult =
+            await getUserBrokers();
+
+          if (
+            cloudResult?.source === "CLOUD" &&
+            Array.isArray(cloudResult?.brokers)
+          ) {
+            connectedAccounts =
+              cloudResult.brokers
+                .filter(
+                  (item) =>
+                    String(
+                      item?.status || ""
+                    )
+                      .trim()
+                      .toUpperCase() === "ACTIVE"
+                )
+                .map((item, index) => {
+                  const rawBroker =
+                    String(
+                      item?.broker ||
+                      item?.brokerName ||
+                      item?.name ||
+                      ""
+                    ).trim();
+
+                  const normalizedBroker =
+                    rawBroker
+                      .trim()
+                      .toUpperCase();
+
+                  const brokerId =
+                    normalizedBroker === "AIB" ||
+                    normalizedBroker === "AIB-AXYS" ||
+                    normalizedBroker === "AIB AXYS"
+                      ? "AIB"
+                      : normalizedBroker === "ABC" ||
+                        normalizedBroker === "ABC CAPITAL"
+                      ? "ABC"
+                      : normalizedBroker.replace(
+                          /[^A-Z0-9]+/g,
+                          "_"
+                        );
+
+                  const clientNumber =
+                    String(
+                      item?.clientNumber ||
+                      item?.accountNumber ||
+                      item?.tradingAccount ||
+                      ""
+                    ).trim();
+
+                  return {
+                    id:
+                      `cloud:${brokerId}:${
+                        clientNumber || index
+                      }`,
+                    brokerId,
+                    brokerName:
+                      rawBroker || brokerId,
+                    broker:
+                      rawBroker || brokerId,
+                    name:
+                      rawBroker || brokerId,
+                    nickname:
+                      rawBroker || brokerId,
+                    clientNumber,
+                    accountNumber:
+                      clientNumber,
+                    cdsNumber:
+                      String(
+                        item?.cdsNumber || ""
+                      ).trim(),
+                    connected: true,
+                    linked: true,
+                    status: "ACTIVE",
+                    defaultBroker:
+                      index === 0,
+                    connectionMode:
+                      "AUTHENTICATED_CLOUD_LINK",
+                    apiMode:
+                      "SERVER_CANONICAL",
+                    serverBrokerLinkId:
+                      String(
+                        item?.id || ""
+                      ).trim() || null,
+                    source: "CLOUD"
+                  };
+                })
+                .filter(
+                  (account) =>
+                    Boolean(
+                      account.brokerId &&
+                      account.clientNumber
+                    )
+                );
+          }
+        } catch (error) {
+          console.log(
+            "Sync Center cloud broker fallback unavailable:",
+            error?.message || error
+          );
+        }
+      }
 
       const selectedAccount =
         connectedAccounts.find(
@@ -266,7 +392,7 @@ export default function PortfolioSyncCenter() {
         source: portfolio?.priceSource || portfolio?.source || "",
         mirror,
         preview,
-        connectedRealBroker: hasConnectedRealBrokerAccount(loadedBrokerAccounts),
+        connectedRealBroker: hasConnectedRealBrokerAccount(connectedAccounts),
         lotHistory,
         canonicalTransactionHistory
       });
